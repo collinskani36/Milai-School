@@ -1,0 +1,72 @@
+import React, { useState } from 'react';
+import { Menu } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Sidebar from '../components/admin/Sidebar';
+import OverviewSection from '../components/admin/OverviewSection';
+import StudentsSection from '../components/admin/StudentsSection';
+import TeachersSection from '../components/admin/TeachersSection';
+import ClassesSection from '../components/admin/ClassesSection';
+import AssessmentsSection from '../components/admin/AssessmentsSection';
+import AssignmentsSection from '../components/admin/AssignmentsSection';
+import AttendanceSection from '../components/admin/AttendanceSection';
+import AnnouncementsSection from '../components/admin/AnnouncementsSection';
+
+export default function AdminDashboard() {
+  const [activeView, setActiveView] = useState('overview');
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const renderContent = () => {
+    switch (activeView) {
+      case 'overview':
+        return <OverviewSection />;
+      case 'students':
+        return <StudentsSection />;
+      case 'teachers':
+        return <TeachersSection />;
+      case 'classes':
+        return <ClassesSection />;
+      case 'assessments':
+        return <AssessmentsSection />;
+      case 'assignments':
+        return <AssignmentsSection />;
+      case 'attendance':
+        return <AttendanceSection />;
+      case 'announcements':
+        return <AnnouncementsSection />;
+      default:
+        return <OverviewSection />;
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar 
+        activeView={activeView} 
+        setActiveView={setActiveView}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
+      
+      <div className="flex-1 flex flex-col">
+        {/* Mobile Header */}
+        <header className="md:hidden bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-40">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold">Admin Portal</h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="w-6 h-6" />
+            </Button>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 p-6 md:p-8">
+          {renderContent()}
+        </main>
+      </div>
+    </div>
+  );
+}

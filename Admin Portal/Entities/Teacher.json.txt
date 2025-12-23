@@ -1,0 +1,42 @@
+{
+  "name": "Teacher",
+  "type": "object",
+  "properties": {
+    "teacher_code": {
+      "type": "string",
+      "description": "Unique teacher identifier code"
+    },
+    "first_name": {
+      "type": "string",
+      "description": "Teacher's first name"
+    },
+    "last_name": {
+      "type": "string",
+      "description": "Teacher's last name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Teacher's email address"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Teacher's phone number"
+    },
+    "is_admin": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this teacher has admin privileges"
+    },
+    "specialization": {
+      "type": "string",
+      "description": "Teacher's area of expertise"
+    }
+  },
+  "required": [
+    "teacher_code",
+    "first_name",
+    "last_name",
+    "email"
+  ]
+}

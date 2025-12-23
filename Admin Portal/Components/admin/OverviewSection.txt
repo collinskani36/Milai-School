@@ -1,0 +1,30 @@
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { Users, GraduationCap, BookOpen, ClipboardList, FileText, Bell, TrendingUp } from 'lucide-react';
+import StatsCard from './StatsCard';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { format } from 'date-fns';
+
+export default function OverviewSection() {
+  const { data: students, isLoading: loadingStudents } = useQuery({
+    queryKey: ['students'],
+    queryFn: () => base44.entities.Student.list(),
+    initialData: [],
+  });
+
+  const { data: teachers, isLoading: loadingTeachers } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: () => base44.entities.Teacher.list(),
+    initialData: [],
+  });
+
+  const { data: classes, isLoading: loadingClasses } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => base44.entities.Class.list(),
+    initialData: [],
+  });
+
+  const { data: subjects, isLoading: loadingSubjects } = useQuery({
+    queryKey: ['subjects'],

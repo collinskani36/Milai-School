@@ -1,0 +1,278 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Plus, Pencil, Trash2, BookOpen } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export default function ClassesSection() {
+  const [showClassModal, setShowClassModal] = useState(false);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [editingClass, setEditingClass] = useState(null);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: classes } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => base44.entities.Class.list(),
+    initialData: [],
+  });
+
+  const { data: subjects } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: () => base44.entities.Subject.list(),
+    initialData: [],
+  });
+
+  const { data: gradeLevels } = useQuery({
+    queryKey: ['gradeLevels'],
+    queryFn: () => base44.entities.GradeLevel.list(),
+    initialData: [],
+  });
+
+  const { data: teachers } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: () => base44.entities.Teacher.list(),
+    initialData: [],
+  });
+
+  const createClassMutation = useMutation({
+    mutationFn: (data) => base44.entities.Class.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['classes']);
+      setShowClassModal(false);
+      setEditingClass(null);
+    },
+  });
+
+  const createSubjectMutation = useMutation({
+    mutationFn: (data) => base44.entities.Subject.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['subjects']);
+      setShowSubjectModal(false);
+      setEditingSubject(null);
+    },
+  });
+
+  const deleteClassMutation = useMutation({
+    mutationFn: (id) => base44.entities.Class.delete(id),
+    onSuccess: () => queryClient.invalidateQueries(['classes']),
+  });
+
+  const deleteSubjectMutation = useMutation({
+    mutationFn: (id) => base44.entities.Subject.delete(id),
+    onSuccess: () => queryClient.invalidateQueries(['subjects']),
+  });
+
+  const handleClassSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    createClassMutation.mutate(data);
+  };
+
+  const handleSubjectSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    createSubjectMutation.mutate(data);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-green-600" />
+            Classes & Subjects Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="classes">
+            <TabsList className="mb-6">
+              <TabsTrigger value="classes">Classes</TabsTrigger>
+              <TabsTrigger value="subjects">Subjects</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="classes" className="space-y-4">
+              <div className="flex justify-end">
+                <Button onClick={() => {
+                  setEditingClass(null);
+                  setShowClassModal(true);
+                }} className="bg-green-600 hover:bg-green-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Class
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {classes.map(cls => (
+                  <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{cls.name}</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Capacity: {cls.capacity || 'Not set'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => deleteClassMutation.mutate(cls.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="subjects" className="space-y-4">
+              <div className="flex justify-end">
+                <Button onClick={() => {
+                  setEditingSubject(null);
+                  setShowSubjectModal(true);
+                }} className="bg-green-600 hover:bg-green-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Subject
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {subjects.map(subject => (
+                  <Card key={subject.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">{subject.name}</h3>
+                          <p className="text-sm text-gray-500 mt-1">Code: {subject.code}</p>
+                          {subject.description && (
+                            <p className="text-xs text-gray-400 mt-2">{subject.description}</p>
+                          )}
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => deleteSubjectMutation.mutate(subject.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Class Modal */}
+      <Dialog open={showClassModal} onOpenChange={setShowClassModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Class</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleClassSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Class Name</Label>
+                <Input name="name" placeholder="e.g., 9A" required />
+              </div>
+              <div className="space-y-2">
+                <Label>Grade Level</Label>
+                <Select name="grade_level_id" required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select grade level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gradeLevels.map(level => (
+                      <SelectItem key={level.id} value={level.id}>{level.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Class Teacher</Label>
+                <Select name="teacher_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select teacher (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.map(teacher => (
+                      <SelectItem key={teacher.id} value={teacher.id}>
+                        {`${teacher.first_name} ${teacher.last_name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Capacity</Label>
+                <Input name="capacity" type="number" placeholder="Max students" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowClassModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-green-600 hover:bg-green-700">
+                Create Class
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subject Modal */}
+      <Dialog open={showSubjectModal} onOpenChange={setShowSubjectModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Subject</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubjectSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Subject Name</Label>
+                <Input name="name" placeholder="e.g., Mathematics" required />
+              </div>
+              <div className="space-y-2">
+                <Label>Subject Code</Label>
+                <Input name="code" placeholder="e.g., MATH" required />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input name="description" placeholder="Brief description" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowSubjectModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-green-600 hover:bg-green-700">
+                Create Subject
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

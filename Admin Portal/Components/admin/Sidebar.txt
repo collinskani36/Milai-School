@@ -1,0 +1,30 @@
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  BookOpen,
+  ClipboardList,
+  FileText,
+  Calendar,
+  Bell,
+  X,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+const menuItems = [
+  { name: 'Dashboard', icon: LayoutDashboard, view: 'overview' },
+  { name: 'Students', icon: Users, view: 'students' },
+  { name: 'Teachers', icon: GraduationCap, view: 'teachers' },
+  { name: 'Classes & Subjects', icon: BookOpen, view: 'classes' },
+  { name: 'Assessments', icon: ClipboardList, view: 'assessments' },
+  { name: 'Assignments', icon: FileText, view: 'assignments' },
+  { name: 'Attendance', icon: Calendar, view: 'attendance' },
+  { name: 'Announcements', icon: Bell, view: 'announcements' },
+];
+
+export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobileOpen }) {
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-white border-r border-gray-100">

@@ -1,0 +1,227 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Plus, Search, Pencil, Trash2, Shield } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+
+export default function TeachersSection() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: teachers, isLoading } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: () => base44.entities.Teacher.list('-created_date'),
+    initialData: [],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data) => base44.entities.Teacher.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['teachers']);
+      setShowAddModal(false);
+      setEditingTeacher(null);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Teacher.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['teachers']);
+      setShowAddModal(false);
+      setEditingTeacher(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Teacher.delete(id),
+    onSuccess: () => queryClient.invalidateQueries(['teachers']),
+  });
+
+  const filteredTeachers = teachers.filter(teacher =>
+    `${teacher.first_name} ${teacher.last_name} ${teacher.teacher_code} ${teacher.email}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    data.is_admin = data.is_admin === 'on';
+    
+    if (editingTeacher) {
+      updateMutation.mutate({ id: editingTeacher.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <CardTitle className="text-2xl font-bold flex items-center gap-2">
+              <Shield className="w-6 h-6 text-purple-600" />
+              Teachers Management
+            </CardTitle>
+            <Button onClick={() => {
+              setEditingTeacher(null);
+              setShowAddModal(true);
+            }} className="bg-purple-600 hover:bg-purple-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Teacher
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
+                placeholder="Search teachers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Specialization</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTeachers.map((teacher) => (
+                    <TableRow key={teacher.id}>
+                      <TableCell className="font-medium">{teacher.teacher_code}</TableCell>
+                      <TableCell>{`${teacher.first_name} ${teacher.last_name}`}</TableCell>
+                      <TableCell>{teacher.email}</TableCell>
+                      <TableCell>{teacher.phone}</TableCell>
+                      <TableCell>{teacher.specialization}</TableCell>
+                      <TableCell>
+                        {teacher.is_admin ? (
+                          <Badge className="bg-purple-100 text-purple-700">Admin</Badge>
+                        ) : (
+                          <Badge variant="secondary">Teacher</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingTeacher(teacher);
+                              setShowAddModal(true);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate(teacher.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {filteredTeachers.length === 0 && (
+                <p className="text-center py-8 text-gray-500">No teachers found</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingTeacher ? 'Edit Teacher' : 'Add New Teacher'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Teacher Code</Label>
+                <Input name="teacher_code" defaultValue={editingTeacher?.teacher_code} required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input name="first_name" defaultValue={editingTeacher?.first_name} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input name="last_name" defaultValue={editingTeacher?.last_name} required />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input name="email" type="email" defaultValue={editingTeacher?.email} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input name="phone" defaultValue={editingTeacher?.phone} />
+              </div>
+              <div className="space-y-2">
+                <Label>Specialization</Label>
+                <Input name="specialization" defaultValue={editingTeacher?.specialization} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  name="is_admin" 
+                  id="is_admin"
+                  defaultChecked={editingTeacher?.is_admin}
+                />
+                <Label htmlFor="is_admin">Grant Admin Access</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
+                {editingTeacher ? 'Update' : 'Create'} Teacher
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

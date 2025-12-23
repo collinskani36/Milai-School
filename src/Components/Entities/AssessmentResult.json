@@ -1,0 +1,31 @@
+{
+  "name": "AssessmentResult",
+  "type": "object",
+  "properties": {
+    "assessment_id": {
+      "type": "string",
+      "description": "Reference to Assessment entity"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student entity"
+    },
+    "score": {
+      "type": "number",
+      "description": "Score achieved"
+    },
+    "grade": {
+      "type": "string",
+      "description": "Letter grade (A, B, C, etc.)"
+    },
+    "remarks": {
+      "type": "string",
+      "description": "Teacher's remarks"
+    }
+  },
+  "required": [
+    "assessment_id",
+    "student_id",
+    "score"
+  ]
+}

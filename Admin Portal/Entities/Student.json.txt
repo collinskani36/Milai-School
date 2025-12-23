@@ -1,0 +1,60 @@
+{
+  "name": "Student",
+  "type": "object",
+  "properties": {
+    "reg_no": {
+      "type": "string",
+      "description": "Student registration number"
+    },
+    "first_name": {
+      "type": "string",
+      "description": "Student's first name"
+    },
+    "last_name": {
+      "type": "string",
+      "description": "Student's last name"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "Male",
+        "Female",
+        "Other"
+      ],
+      "description": "Student's gender"
+    },
+    "class_id": {
+      "type": "string",
+      "description": "Reference to Class entity"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Student's email address"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Student's phone number"
+    },
+    "date_of_birth": {
+      "type": "string",
+      "format": "date",
+      "description": "Student's date of birth"
+    },
+    "guardian_name": {
+      "type": "string",
+      "description": "Guardian's full name"
+    },
+    "guardian_phone": {
+      "type": "string",
+      "description": "Guardian's phone number"
+    }
+  },
+  "required": [
+    "reg_no",
+    "first_name",
+    "last_name",
+    "gender",
+    "class_id"
+  ]
+}

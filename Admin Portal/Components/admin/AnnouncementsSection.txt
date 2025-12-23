@@ -1,0 +1,188 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Plus, Bell, Trash2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+
+export default function AnnouncementsSection() {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: announcements } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: () => base44.entities.Announcement.list('-created_date'),
+    initialData: [],
+  });
+
+  const { data: classes } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => base44.entities.Class.list(),
+    initialData: [],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data) => base44.entities.Announcement.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['announcements']);
+      setShowAddModal(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Announcement.delete(id),
+    onSuccess: () => queryClient.invalidateQueries(['announcements']),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    createMutation.mutate(data);
+  };
+
+  const getPriorityBadge = (priority) => {
+    const styles = {
+      urgent: 'bg-red-500 text-white',
+      high: 'bg-orange-500 text-white',
+      normal: 'bg-blue-500 text-white',
+      low: 'bg-gray-500 text-white',
+    };
+    return <Badge className={styles[priority]}>{priority}</Badge>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <CardTitle className="text-2xl font-bold flex items-center gap-2">
+              <Bell className="w-6 h-6 text-pink-600" />
+              Announcements Management
+            </CardTitle>
+            <Button onClick={() => setShowAddModal(true)} className="bg-pink-600 hover:bg-pink-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Announcement
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {announcements.map((announcement) => (
+              <Card key={announcement.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-bold text-gray-900">{announcement.title}</h3>
+                        {getPriorityBadge(announcement.priority)}
+                      </div>
+                      <p className="text-gray-600 mb-3">{announcement.content}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>
+                          {format(new Date(announcement.created_date), 'MMM d, yyyy')}
+                        </span>
+                        {announcement.class_id && (
+                          <span className="flex items-center gap-1">
+                            Target: {classes.find(c => c.id === announcement.class_id)?.name || 'Class'}
+                          </span>
+                        )}
+                        {announcement.expires_at && (
+                          <span>
+                            Expires: {format(new Date(announcement.expires_at), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate(announcement.id)}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {announcements.length === 0 && (
+              <p className="text-center py-8 text-gray-500">No announcements yet</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Announcement</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input name="title" placeholder="Announcement title" required />
+              </div>
+              <div className="space-y-2">
+                <Label>Content</Label>
+                <Textarea name="content" placeholder="Announcement details..." rows={4} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select name="priority" defaultValue="normal">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Target Class (Optional)</Label>
+                <Select name="class_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="All classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map(cls => (
+                      <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Expiration Date (Optional)</Label>
+                <Input name="expires_at" type="date" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-pink-600 hover:bg-pink-700">
+                Create Announcement
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

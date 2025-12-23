@@ -1,0 +1,26 @@
+{
+  "name": "Class",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Class name (e.g., '9A', '10B')"
+    },
+    "grade_level_id": {
+      "type": "string",
+      "description": "Reference to GradeLevel entity"
+    },
+    "teacher_id": {
+      "type": "string",
+      "description": "Class teacher (reference to Teacher entity)"
+    },
+    "capacity": {
+      "type": "number",
+      "description": "Maximum number of students"
+    }
+  },
+  "required": [
+    "name",
+    "grade_level_id"
+  ]
+}

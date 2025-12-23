@@ -1,0 +1,41 @@
+{
+  "name": "Assignment",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Assignment title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Assignment description"
+    },
+    "subject_id": {
+      "type": "string",
+      "description": "Reference to Subject entity"
+    },
+    "class_id": {
+      "type": "string",
+      "description": "Reference to Class entity"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Assignment due date"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "URL to assignment file"
+    },
+    "total_marks": {
+      "type": "number",
+      "description": "Total possible marks"
+    }
+  },
+  "required": [
+    "title",
+    "subject_id",
+    "class_id",
+    "due_date"
+  ]
+}
