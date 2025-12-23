@@ -1,0 +1,22 @@
+{
+  "name": "Subject",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Subject name (e.g., 'Mathematics', 'English')"
+    },
+    "code": {
+      "type": "string",
+      "description": "Subject code (e.g., 'MATH', 'ENG')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Subject description"
+    }
+  },
+  "required": [
+    "name",
+    "code"
+  ]
+}

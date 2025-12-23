@@ -1,0 +1,38 @@
+{
+  "name": "Announcement",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Announcement title"
+    },
+    "content": {
+      "type": "string",
+      "description": "Announcement content"
+    },
+    "class_id": {
+      "type": "string",
+      "description": "Target class (leave empty for all classes)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "urgent"
+      ],
+      "default": "normal",
+      "description": "Announcement priority"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Expiration date"
+    }
+  },
+  "required": [
+    "title",
+    "content"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "GradeLevel",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Grade level name (e.g., 'Grade 9', 'Grade 10')"
+    },
+    "level_code": {
+      "type": "string",
+      "description": "Short code for the grade level (e.g., 'G9', 'G10')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Additional details about this grade level"
+    }
+  },
+  "required": [
+    "name",
+    "level_code"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "ClassSubject",
+  "type": "object",
+  "properties": {
+    "class_id": {
+      "type": "string",
+      "description": "Reference to Class entity"
+    },
+    "subject_id": {
+      "type": "string",
+      "description": "Reference to Subject entity"
+    },
+    "teacher_id": {
+      "type": "string",
+      "description": "Teacher assigned to this subject for this class"
+    }
+  },
+  "required": [
+    "class_id",
+    "subject_id"
+  ]
+}

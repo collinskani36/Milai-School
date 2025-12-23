@@ -1,0 +1,102 @@
+<form onSubmit={handleSubmit} className="space-y-4">
+
+  <div className="grid grid-cols-2 gap-4">
+
+    {/* Registration Number */}
+    <Input
+      id="Reg_no"
+      name="Reg_no"
+      defaultValue={editingStudent?.profiles?.[0]?.Reg_no}
+      required
+    />
+
+    {/* First Name */}
+    <Input
+      id="first_name"
+      name="first_name"
+      defaultValue={editingStudent?.profiles?.[0]?.first_name}
+      required
+    />
+
+    {/* Last Name */}
+    <Input
+      id="last_name"
+      name="last_name"
+      defaultValue={editingStudent?.profiles?.[0]?.last_name}
+      required
+    />
+
+    {/* Gender */}
+    <select
+      id="gender"
+      name="gender"
+      defaultValue={editingStudent?.profiles?.[0]?.gender || ""}
+      required
+      className="border p-2 rounded"
+    >
+      <option value="">Select Gender</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+      <option value="Other">Other</option>
+    </select>
+
+    {/* Class ID */}
+    <select
+      id="class_id"
+      name="class_id"
+      required
+      className="border p-2 rounded"
+      defaultValue={editingStudent?.enrollments?.[0]?.class_id || ""}
+    >
+      <option value="">Select Class</option>
+      {classes?.map((cls) => (
+        <option key={cls.id} value={cls.id}>
+          {cls.class_name}
+        </option>
+      ))}
+    </select>
+
+    {/* Date of Birth */}
+    <Input
+      id="date_of_birth"
+      name="date_of_birth"
+      type="date"
+      defaultValue={editingStudent?.profiles?.[0]?.date_of_birth || ""}
+    />
+
+    {/* Email */}
+    <Input
+      id="email"
+      name="email"
+      type="email"
+      defaultValue={editingStudent?.profiles?.[0]?.email || ""}
+    />
+
+    {/* Phone */}
+    <Input
+      id="phone"
+      name="phone"
+      type="text"
+      defaultValue={editingStudent?.profiles?.[0]?.phone || ""}
+    />
+
+    {/* Guardian Name */}
+    <Input
+      id="guardian_name"
+      name="guardian_name"
+      defaultValue={editingStudent?.profiles?.[0]?.guardian_name || ""}
+    />
+
+    {/* Guardian Phone */}
+    <Input
+      id="guardian_phone"
+      name="guardian_phone"
+      defaultValue={editingStudent?.profiles?.[0]?.guardian_phone || ""}
+    />
+
+  </div>
+
+  <Button type="submit" className="bg-blue-600 text-white">
+    Update Student
+  </Button>
+</form>

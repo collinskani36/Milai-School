@@ -1,0 +1,91 @@
+{
+  "name": "StudentAssignment",
+  "type": "object",
+  "properties": {
+    "assignment_id": {
+      "type": "string",
+      "description": "Reference to Assignment entity"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student entity"
+    },
+    "submission_url": {
+      "type": "string",
+      "description": "URL to submitted file"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Submission timestamp"
+    },
+    "score": {
+      "type": "number",
+      "description": "Score received"
+    },
+    "feedback": {
+      "type": "string",
+      "description": "Teacher's feedback"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "submitted",
+        "graded",
+        "late"
+      ],
+      "default": "pending",
+      "description": "Submission status"
+    }
+  },
+  "required": [
+    "assignment_id",
+    "student_id"
+  ]
+}{
+  "name": "StudentAssignment",
+  "type": "object",
+  "properties": {
+    "assignment_id": {
+      "type": "string",
+      "description": "Reference to Assignment entity"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student entity"
+    },
+    "submission_url": {
+      "type": "string",
+      "description": "URL to submitted file"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Submission timestamp"
+    },
+    "score": {
+      "type": "number",
+      "description": "Score received"
+    },
+    "feedback": {
+      "type": "string",
+      "description": "Teacher's feedback"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "submitted",
+        "graded",
+        "late"
+      ],
+      "default": "pending",
+      "description": "Submission status"
+    }
+  },
+  "required": [
+    "assignment_id",
+    "student_id"
+  ]
+}
