@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Menu, Settings, Edit, Save, Eye, EyeOff, User, Mail, Phone } from 'lucide-react';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/Components/ui/dialog';
 import { supabase } from '@/lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,7 +16,7 @@ import AssessmentsSection from '../Components/admin/AssessmentsSection';
 import AssignmentsSection from '../Components/admin/AssignmentsSection';
 import AttendanceSection from '../Components/admin/AttendanceSection';
 import AnnouncementsSection from '../Components/admin/AnnouncementsSection';
-import AdminFees from '../Components/admin/AdminFees';
+import AdminFees from '../Components/admin/Adminfees';
 
 // Types for Admin Profile
 interface AdminProfile {
