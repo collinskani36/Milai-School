@@ -16,7 +16,7 @@ import AssessmentsSection from '../Components/admin/AssessmentsSection';
 import AssignmentsSection from '../Components/admin/AssignmentsSection';
 import AttendanceSection from '../Components/admin/AttendanceSection';
 import AnnouncementsSection from '../Components/admin/AnnouncementsSection';
-import AdminFees from '../Components/Admin/AdminFees';
+import AdminFees from '../Components/admin/AdminFees';
 
 // Types for Admin Profile
 interface AdminProfile {
