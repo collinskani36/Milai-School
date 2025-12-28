@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Navbar } from "@/components/Navbar";
+import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/Components/ui/button";
+import { Navbar } from "@/Components/Navbar";
 import { User, BookOpen, Bell, Calendar, BarChart3, Mail, Phone, Download, Printer, FileText, TrendingUp, Target, Settings, Award, CreditCard } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -10,10 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid,ReferenceLine, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/Components/ui/input";
 
 // Import the new Fees Dialog
-import StudentFeesDialog from "@/components/fees/StudentFeesDialog";
+import StudentFeesDialog from "@/Components/fees/StudentFeesDialog";
 
 interface AttendanceRecord {
   student_id: string;
