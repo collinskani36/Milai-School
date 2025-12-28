@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, Settings, Edit, Save, Eye, EyeOff, User, Mail, Phone } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
-import Sidebar from '../components/admin/Sidebar';
-import OverviewSection from '../components/admin/OverviewSection';
-import StudentsSection from '../components/admin/StudentsSection';
-import TeachersSection from '../components/admin/TeachersSection';
-import ClassesSection from '../components/admin/ClassesSection';
-import AssessmentsSection from '../components/admin/AssessmentsSection';
-import AssignmentsSection from '../components/admin/AssignmentsSection';
-import AttendanceSection from '../components/admin/AttendanceSection';
-import AnnouncementsSection from '../components/admin/AnnouncementsSection';
-import AdminFees from '../components/Admin/AdminFees';
+import Sidebar from '../Components/admin/Sidebar';
+import OverviewSection from '../Components/admin/OverviewSection';
+import StudentsSection from '../Components/admin/StudentsSection';
+import TeachersSection from '../Components/admin/TeachersSection';
+import ClassesSection from '../Components/admin/ClassesSection';
+import AssessmentsSection from '../Components/admin/AssessmentsSection';
+import AssignmentsSection from '../Components/admin/AssignmentsSection';
+import AttendanceSection from '../Components/admin/AttendanceSection';
+import AnnouncementsSection from '../Components/admin/AnnouncementsSection';
+import AdminFees from '../Components/Admin/AdminFees';
 
 // Types for Admin Profile
 interface AdminProfile {
