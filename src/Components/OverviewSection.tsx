@@ -9,9 +9,9 @@ import {
   Bell,
   TrendingUp,
 } from 'lucide-react';
-import StatsCard from './StatsCard';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import StatsCard from './Components/Admin/StatsCard';
+import { Skeleton } from '@/Components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { format } from 'date-fns';
 
 export default function OverviewSection() {

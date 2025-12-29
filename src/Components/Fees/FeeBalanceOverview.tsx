@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/Components/ui/card";
 import { Wallet, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface FeeRow {

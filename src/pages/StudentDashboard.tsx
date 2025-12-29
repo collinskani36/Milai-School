@@ -1,19 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Navbar } from "@/Components/Navbar";
 import { User, BookOpen, Bell, Calendar, BarChart3, Mail, Phone, Download, Printer, FileText, TrendingUp, Target, Settings, Award, CreditCard } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle } from "@/Components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid,ReferenceLine, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/Components/ui/input";
 
 // Import the new Fees Dialog
-import StudentFeesDialog from "@/Components/fees/StudentFeesDialog";
+import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
 
 interface AttendanceRecord {
   student_id: string;

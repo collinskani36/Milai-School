@@ -1,7 +1,7 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Badge } from "@/Components/ui/badge";
+import { ScrollArea } from "@/Components/ui/scroll-area";
 import { Calendar, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 
 export default function TermHistoryCard({ studentFees, onSelectTerm, selectedTerm, selectedYear }) {

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Badge } from "@/Components/ui/badge";
 import { AlertCircle, Circle } from "lucide-react";
 
 interface FeeItem {

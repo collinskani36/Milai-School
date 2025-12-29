@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Card } from '@/components/ui/card';
+import { Card } from '@/Components/ui/card';
 
 export default function StatsCard({ title, value, icon: Icon, color, trend, onClick }) {
   return (

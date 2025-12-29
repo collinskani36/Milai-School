@@ -1,21 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/Components/ui/dialog";
+import { Badge } from "@/Components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
 import { 
   Search, Plus, Users, Wallet, TrendingUp, AlertCircle, 
   Settings, Receipt, RefreshCw, FileText, Download, UserCheck
 } from "lucide-react";
 
-import FeeStructureForm from "@/components/fees/FeeStructureForm";
-import PaymentEntryForm from "@/components/fees/PaymentEntryForm";
-import PaymentHistory from "@/components/fees/PaymentHistory";
-import StudentFeeCard from "@/components/fees/StudentFeeCard";
+import FeeStructureForm from "@/Components/fees/FeeStructureForm";
+import PaymentEntryForm from "@/Components/fees/PaymentEntryForm";
+import PaymentHistory from "@/Components/Fees/PaymentHistory";
+import StudentFeeCard from "@/Components/fees/StudentFeeCard";
 
 import { supabase } from "@/lib/supabaseClient";
 

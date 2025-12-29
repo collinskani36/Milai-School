@@ -3,20 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/Components/ui/card";
+import { Badge } from "@/Components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
 import { 
   GraduationCap, Calendar, Clock, AlertTriangle,
   CheckCircle, Receipt, Building2, FileText, Loader2,
   X
 } from "lucide-react";
 
-import FeeBalanceOverview from "@/components/fees/FeeBalanceOverview";
-import PaymentHistory from "@/components/fees/PaymentHistory";
-import BankDetailsCard from "@/components/fees/BankDetailsCard";
-import FeeBreakdownCard from "@/components/fees/FeeBreakdownCard";
-import TermHistoryCard from "@/components/fees/TermHistoryCard";
+import FeeBalanceOverview from "@/Components/fees/FeeBalanceOverview";
+import PaymentHistory from "@/Components/fees/PaymentHistory";
+import BankDetailsCard from "@/Components/fees/BankDetailsCard";
+import FeeBreakdownCard from "@/Components/fees/FeeBreakdownCard";
+import TermHistoryCard from "@/Components/fees/TermHistoryCard";
 
 type Student = {
   id: string;

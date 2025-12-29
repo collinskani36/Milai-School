@@ -12,7 +12,7 @@ import {
   X,
   CreditCard, // Add this import for Fees
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 
 const menuItems = [
   { name: "Dashboard", icon: LayoutDashboard, view: "overview" },

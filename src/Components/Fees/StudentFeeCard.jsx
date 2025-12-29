@@ -1,7 +1,7 @@
 import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/Components/ui/card";
+import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/Components/ui/button";
 import { User, CreditCard, Calendar, TrendingUp, TrendingDown, BookOpen, Home, School } from "lucide-react";
 
 export default function StudentFeeCard({ studentFee, onRecordPayment, onViewDetails, showAggregated = false }) {
