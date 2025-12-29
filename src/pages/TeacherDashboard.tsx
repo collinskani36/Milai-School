@@ -4,7 +4,7 @@ import { Button } from "@/Components/ui/button";
 import { Badge } from "@/Components/ui/badge";
 import { Input } from "@/Components/ui/input";
 import { Textarea } from "@/Components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
 import { Navbar } from "@/Components/Navbar";
@@ -36,13 +36,23 @@ interface TeacherClass {
     name: string;
     grade_level: string;
     created_at: string;
-  };
+  } | {
+    id: string;
+    name: string;
+    grade_level: string;
+    created_at: string;
+  }[];
   subjects?: {
     id: string;
     name: string;
     code: string;
     created_at: string;
-  };
+  } | {
+    id: string;
+    name: string;
+    code: string;
+    created_at: string;
+  }[];
 }
 
 interface Assignment {
@@ -80,7 +90,10 @@ interface Student {
     classes: {
       name: string;
       grade_level: string;
-    };
+    } | {
+      name: string;
+      grade_level: string;
+    }[];
   }[];
   profiles?: {
     email: string;
@@ -88,7 +101,13 @@ interface Student {
     date_of_birth: string;
     guardian_name: string;
     guardian_phone: string;
-  };
+  } | {
+    email: string;
+    phone: string;
+    date_of_birth: string;
+    guardian_name: string;
+    guardian_phone: string;
+  }[];
 }
 
 interface ClassDetail {
@@ -166,6 +185,12 @@ const getKJSEAGradeColor = (grade: string) => {
   if (!level) return "bg-gray-100 text-gray-800 border-gray-200";
   
   return `bg-[${level.color}]/10 text-[${level.color.replace('#', '')}] border-[${level.color}]/20`;
+};
+
+// Helper to normalize relation fields returned by Supabase (may be object or single-item array)
+const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
+  if (!rel) return undefined;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
 };
 
 // ---------- Custom Hooks ----------
@@ -347,36 +372,34 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
         if (resultsError) throw resultsError;
 
         const subjectMap = teacherSubjectsForStudentClass.reduce((acc, tc) => {
-          if (tc.subjects) {
-            acc[tc.subject_id] = tc.subjects.name;
-          }
+          const subjName = firstRel(tc.subjects)?.name;
+          if (subjName) acc[tc.subject_id] = subjName;
           return acc;
         }, {} as Record<string, string>);
-
         const assessments: StudentAssessment[] = (assessmentResults || [])
           .filter(ar => ar.assessments && ar.subjects && subjectMap[ar.subject_id])
           .map(ar => ({
             id: ar.id,
-            title: ar.assessments.title,
+            title: firstRel(ar.assessments as any)?.title,
             score: parseFloat(ar.score),
             max_marks: ar.max_marks || 100,
             percentage: (parseFloat(ar.score) / (ar.max_marks || 100)) * 100,
             assessment_date: ar.assessment_date,
-            subject: ar.subjects.name,
-            term: ar.assessments.term,
-            year: ar.assessments.year
+            subject: firstRel(ar.subjects as any)?.name,
+            term: firstRel(ar.assessments as any)?.term,
+            year: firstRel(ar.assessments as any)?.year
           }))
           .slice(0, 10);
 
         const subjectAverages = teacherSubjectsForStudentClass.map(tc => {
           const subjectAssessments = assessments.filter(a => 
-            a.subject === tc.subjects?.name
+            a.subject === firstRel(tc.subjects)?.name
           );
           const average = subjectAssessments.length > 0 
             ? subjectAssessments.reduce((sum, a) => sum + a.percentage, 0) / subjectAssessments.length
             : 0;
           return {
-            subject: tc.subjects?.name || "Unknown",
+            subject: firstRel(tc.subjects)?.name || "Unknown",
             average: parseFloat(average.toFixed(1))
           };
         }).filter(sa => sa.average > 0);
@@ -1018,7 +1041,7 @@ const CreateAssignmentDialog: React.FC<CreateAssignmentDialogProps> = ({
             <SelectContent>
               {teacherClasses.map(tc => (
                 <SelectItem value={tc.class_id} key={tc.class_id}>
-                  {tc.classes?.name || tc.class_id}
+                  {firstRel(tc.classes)?.name || tc.class_id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1151,7 +1174,7 @@ const CreateAnnouncementDialog: React.FC<CreateAnnouncementDialogProps> = ({
             <SelectContent>
               {teacherClasses.map(tc => (
                 <SelectItem value={tc.class_id} key={tc.class_id}>
-                  {tc.classes?.name || tc.class_id}
+                  {firstRel(tc.classes)?.name || tc.class_id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1330,11 +1353,12 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
           .filter(tClass => tClass.class_id === tc.class_id)
           .length;
 
+        const classObj = firstRel(tc.classes);
         return {
           id: tc.class_id,
-          name: tc.classes?.name || "Unknown Class",
-          grade_level: tc.classes?.grade_level || "N/A",
-          created_at: tc.classes?.created_at || "",
+          name: classObj?.name || "Unknown Class",
+          grade_level: classObj?.grade_level || "N/A",
+          created_at: classObj?.created_at || "",
           student_count: studentCount || 0,
           subject_count: subjectCount,
         };
@@ -1387,11 +1411,13 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
 
         if (resultsData && resultsData.length > 0) {
           const mean = resultsData.reduce((sum, r) => sum + parseFloat(r.score), 0) / resultsData.length;
-          
+          const subj = firstRel(tc.subjects);
+          const cls = firstRel(tc.classes);
+
           results.push({
             assessment: assessment.title,
-            subject: tc.subjects?.name || "Unknown Subject",
-            class: tc.classes?.name || "Unknown Class",
+            subject: subj?.name || "Unknown Subject",
+            class: cls?.name || "Unknown Class",
             mean: parseFloat(mean.toFixed(2)),
           });
         }
@@ -1486,7 +1512,7 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
 
           performanceData.push({
             student_name: `${student.first_name} ${student.last_name}`,
-            subject: tc.subjects?.name || "Unknown",
+            subject: firstRel(tc.subjects)?.name || "Unknown",
             average_score: parseFloat(average.toFixed(1)),
             trend,
           });
@@ -2025,7 +2051,8 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
   }) => {
     const { student, assessments, averageScore, trend, subjectAverages, gradeDistribution, recentTrend } = performanceDetail;
 
-    const studentClass = student.enrollments?.classes?.name || classMap[student.enrollments?.class_id] || 'No Class';
+    const enrollment = student.enrollments?.[0];
+    const studentClass = firstRel(enrollment?.classes)?.name || classMap[enrollment?.class_id] || 'No Class';
 
     const performanceOverTime = assessments.map(assessment => ({
       name: assessment.title,
@@ -2397,7 +2424,7 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
                   <div className="flex items-center gap-2 mb-2">
                     <h4 className="font-semibold">{announcement.title}</h4>
                     <Badge variant="secondary" className="text-xs">
-                      {teacherClasses.find(tc => tc.class_id === announcement.class_id)?.classes?.name || "Class"}
+                      {firstRel(teacherClasses.find(tc => tc.class_id === announcement.class_id)?.classes)?.name || "Class"}
                     </Badge>
                     {announcement.priority !== 'normal' && (
                       <Badge variant={announcement.priority === 'high' ? 'destructive' : 'default'}>

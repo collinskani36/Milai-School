@@ -199,7 +199,7 @@ export default function StudentsSection() {
     },
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useMutation<any, any, Record<string, any>>({
     mutationFn: async (data) => {
       if (!editingStudent) throw new Error('No student selected for editing');
 
@@ -281,7 +281,7 @@ export default function StudentsSection() {
   });
 
   // Delete mutation
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutation<any, any, { studentId: string; authId?: string }>({
     mutationFn: async ({ studentId, authId }: { studentId: string; authId?: string }) => {
       const payload = { studentId, userId: authId };
       const res = await supabase.functions.invoke('delete-user', { 
@@ -316,6 +316,13 @@ export default function StudentsSection() {
       });
     },
   });
+
+  // Normalize mutation loading flags (react-query v5 typings differ)
+  const isDeleting = Boolean((deleteMutation as any)?.isLoading ?? (deleteMutation as any)?.status === 'loading');
+  const isCreatingOrUpdating = Boolean(
+    ((createMutation as any)?.isLoading ?? (createMutation as any)?.status === 'loading') ||
+    ((updateMutation as any)?.isLoading ?? (updateMutation as any)?.status === 'loading')
+  );
 
   // Add confirmation for delete
   const handleDelete = (student: any) => {
@@ -373,7 +380,7 @@ export default function StudentsSection() {
     setShowAddModal(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
     setCreationSuccess(null);
@@ -425,7 +432,7 @@ export default function StudentsSection() {
     }
   };
 
-  const handleOpenChange = (open) => {
+  const handleOpenChange = (open: boolean) => {
     setShowAddModal(open);
     if (!open) {
       setEditingStudent(null);
@@ -447,7 +454,7 @@ export default function StudentsSection() {
   };
 
   // Sort indicator component
-  const SortIndicator = ({ columnKey }) => {
+  const SortIndicator: React.FC<{ columnKey: string }> = ({ columnKey }) => {
     if (sortConfig.key !== columnKey) return null;
     return sortConfig.direction === 'asc' ? 
       <ChevronUp className="w-4 h-4 inline ml-1" /> : 
@@ -560,7 +567,7 @@ export default function StudentsSection() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(student)}
-                            disabled={deleteMutation.isLoading}
+                            disabled={isDeleting}
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
@@ -732,8 +739,8 @@ export default function StudentsSection() {
               <Button
                 type="submit"
                 className="bg-blue-600 hover:bg-blue-700"
-                loading={createMutation.isLoading || updateMutation.isLoading}
-                disabled={createMutation.isLoading || updateMutation.isLoading}
+                loading={isCreatingOrUpdating}
+                disabled={isCreatingOrUpdating}
               >
                 {editingStudent ? 'Update' : 'Create'} Student
               </Button>

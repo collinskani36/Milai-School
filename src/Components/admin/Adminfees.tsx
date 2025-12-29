@@ -19,6 +19,12 @@ import StudentFeeCard from "@/Components/fees/StudentFeeCard";
 
 import { supabase } from "@/lib/supabaseClient";
 
+// Helper to normalize relation fields returned by Supabase (may be object or single-item array)
+const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
+  if (!rel) return undefined;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
+};
+
 export default function AdminFeesDashboard() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,20 +127,20 @@ export default function AdminFeesDashboard() {
         const studentKey = studentId;
         
         if (!studentFeeMap.has(studentKey)) {
-          const student = studentsData.find(s => s.id === studentId);
+          const student = firstRel(studentsData.find(s => s.id === studentId)?.profiles ? studentsData.find(s => s.id === studentId) : studentsData.find(s => s.id === studentId));
           const enrollment = enrollmentsData.find(e => e.student_id === studentId);
 
           // Use DB value for consistency
-          const studentType = student?.profiles?.[0]?.student_type || "Day Scholar";
+          const studentType = firstRel(firstRel(studentsData.find(s => s.id === studentId)?.profiles as any) as any)?.student_type || firstRel((studentsData.find(s => s.id === studentId) as any)?.profiles as any)?.student_type || "Day Scholar";
 
           studentFeeMap.set(studentKey, {
             id: studentId,
             student_id: studentId,
-            student_name: student ? `${student.first_name} ${student.last_name}` : "Unknown",
-            admission_number: student?.Reg_no || "N/A",
+            student_name: student ? `${(student as any).first_name} ${(student as any).last_name}` : "Unknown",
+            admission_number: (student as any)?.Reg_no || "N/A",
             student_type: studentType,
             display_type: studentType,
-            class_name: enrollment?.classes?.name || "Not Assigned",
+            class_name: firstRel(enrollment?.classes as any)?.name || "Not Assigned",
             total_billed: 0,
             // Initialize total_paid from p_payments table
             total_paid: paymentsByStudent.get(studentId) || 0,
@@ -316,7 +322,7 @@ export default function AdminFeesDashboard() {
 
         // Filter students by the fee's student_type
         const matchingStudents = enrollmentsWithStudents.filter(item => 
-          item.students?.profiles?.[0]?.student_type === payload.student_type
+          firstRel(firstRel(item.students as any)?.profiles as any)?.student_type === payload.student_type
         );
 
         const matchingStudentIds = matchingStudents.map(item => item.student_id);
@@ -345,13 +351,13 @@ export default function AdminFeesDashboard() {
 
         for (const enrollment of matchingStudents) {
           const studentId = enrollment.student_id;
-          const student = enrollment.students;
+          const student = firstRel(enrollment.students as any);
           const existing = existingMap.get(studentId);
 
           // Get existing payments for this student from p_payments for this fee structure
           const { data: studentPayments, error: paymentsError } = await supabase
             .from('p_payments')
-            .select('amount_paid')
+            .select('amount_paid, payment_date')
             .eq('student_id', studentId)
             .eq('fee_id', feeId);
           
@@ -366,8 +372,8 @@ export default function AdminFeesDashboard() {
             status: existingPaid >= payload.amount ? "paid" : existingPaid > 0 ? "partial" : "pending",
             term: payload.term,
             academic_year: payload.academic_year,
-            student_name: student ? `${student.first_name} ${student.last_name}` : "Unknown",
-            admission_number: student?.Reg_no || "N/A",
+            student_name: student ? `${(student as any).first_name} ${(student as any).last_name}` : "Unknown",
+            admission_number: (student as any)?.Reg_no || "N/A",
             last_payment_date: studentPayments && studentPayments.length > 0 
               ? studentPayments[0].payment_date 
               : null,
@@ -463,7 +469,7 @@ export default function AdminFeesDashboard() {
       // Get all payments for this student to calculate new totals
       const { data: studentPayments, error: paymentsError } = await supabase
         .from('p_payments')
-        .select('amount_paid')
+        .select('amount_paid, payment_date')
         .eq('student_id', feeRecord.student_id);
       
       if (paymentsError) {
@@ -889,7 +895,7 @@ export default function AdminFeesDashboard() {
                 academic_year: data.academic_year
               })}
               onCancel={() => { setShowFeeForm(false); setSelectedFee(null); }}
-              isLoading={feeMutation.isLoading}
+              isLoading={(feeMutation as any).isLoading}
             />
           </DialogContent>
         </Dialog>
@@ -911,7 +917,7 @@ export default function AdminFeesDashboard() {
                   academic_year: selectedStudentFee.academic_year || "2024-2025"
                 })}
                 onCancel={() => { setShowPaymentForm(false); setSelectedStudentFee(null); }}
-                isLoading={paymentMutation.isLoading}
+                isLoading={(paymentMutation as any).isLoading}
               />
             )}
           </DialogContent>

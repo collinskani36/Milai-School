@@ -352,6 +352,23 @@ export default function TeachersSection() {
     },
   });
 
+  // Compatibility flags for mutation loading state (react-query v4 vs v5 typings)
+  const isDeleting = (() => {
+    const m: any = deleteMutation as any;
+    return Boolean(m?.isLoading ?? m?.status === 'loading');
+  })();
+
+  const isSaving = (() => {
+    const a: any = createMutation as any;
+    const b: any = updateMutation as any;
+    return Boolean((a?.isLoading ?? a?.status === 'loading') || (b?.isLoading ?? b?.status === 'loading'));
+  })();
+
+  const isAddingAssignments = (() => {
+    const m: any = addAssignmentsMutation as any;
+    return Boolean(m?.isLoading ?? m?.status === 'loading');
+  })();
+
   // Helper functions
   const resetForm = () => {
     setFormData({
@@ -636,7 +653,7 @@ export default function TeachersSection() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(teacher)}
-                            disabled={deleteMutation.isLoading}
+                            disabled={isDeleting}
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
@@ -744,10 +761,9 @@ export default function TeachersSection() {
               <Button
                 type="submit"
                 className="bg-purple-600 hover:bg-purple-700"
-                disabled={createMutation.isLoading || updateMutation.isLoading}
+                disabled={isSaving}
               >
-                {createMutation.isLoading || updateMutation.isLoading ? 'Loading...' : 
-                 editingTeacher ? 'Update Teacher' : 'Create Teacher'}
+                {isSaving ? 'Loading...' : editingTeacher ? 'Update Teacher' : 'Create Teacher'}
               </Button>
             </DialogFooter>
           </form>
@@ -821,9 +837,9 @@ export default function TeachersSection() {
               <Button
                 type="submit"
                 className="bg-purple-600 hover:bg-purple-700"
-                disabled={addAssignmentsMutation.isLoading}
+                disabled={isAddingAssignments}
               >
-                {addAssignmentsMutation.isLoading ? 'Adding...' : 'Add Assignments'}
+                {isAddingAssignments ? 'Adding...' : 'Add Assignments'}
               </Button>
             </DialogFooter>
           </form>

@@ -18,6 +18,12 @@ import { Textarea } from '@/Components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
 import { format } from 'date-fns';
 
+// Helper to normalize relation fields returned by Supabase (may be object or single-item array)
+const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
+  if (!rel) return undefined;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : (rel as T);
+};
+
 export default function AssignmentsSection() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -162,12 +168,12 @@ export default function AssignmentsSection() {
 
                     {/* ✅ Show subject name and code together */}
                     <TableCell>
-                      {assignment.subjects
-                        ? `${assignment.subjects.name} - ${assignment.subjects.code || 'N/A'}`
+                      {firstRel(assignment.subjects)
+                        ? `${firstRel(assignment.subjects)?.name} - ${firstRel(assignment.subjects)?.code || 'N/A'}`
                         : 'N/A'}
                     </TableCell>
 
-                    <TableCell>{assignment.classes?.name || 'N/A'}</TableCell>
+                    <TableCell>{firstRel(assignment.classes)?.name || 'N/A'}</TableCell>
 
                     <TableCell>
                       {assignment.due_date

@@ -11,9 +11,19 @@ interface FeeRow {
 
 interface FeeBalanceOverviewProps {
   studentFee: FeeRow | null;
+  isLoading?: boolean;
 }
 
 export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewProps) {
+
+  if ((arguments[0] as FeeBalanceOverviewProps)?.isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-20 bg-gray-100 rounded animate-pulse" />
+        <div className="h-40 bg-gray-100 rounded animate-pulse" />
+      </div>
+    );
+  }
 
   // ⭐ Safe fallback values
   const totalBilled = studentFee?.total_billed ?? 0;

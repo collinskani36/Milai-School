@@ -100,6 +100,12 @@ const getGradeColor = (grade: string) => {
   return "bg-gray-100 text-gray-800 border-gray-200";
 };
 
+// Helper to normalize relation fields returned by Supabase (may be object or single-item array)
+const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
+  if (!rel) return undefined;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
+};
+
 export default function StudentDashboard({ handleLogout }) {
   const [subjectAnalysis, setSubjectAnalysis] = useState<any[]>([]);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
@@ -496,8 +502,8 @@ export default function StudentDashboard({ handleLogout }) {
 
         const examTitles = Array.from(new Set(
           (allAssessments || [])
-            .filter(a => a.assessments?.title?.startsWith(className || ""))
-            .map(a => a.assessments?.title)
+            .filter(a => firstRel(a.assessments as any)?.title?.startsWith(className || ""))
+            .map(a => firstRel(a.assessments as any)?.title)
             .filter(Boolean)
         )).sort((a, b) => extractExamNumber(a) - extractExamNumber(b));
 
@@ -506,7 +512,7 @@ export default function StudentDashboard({ handleLogout }) {
         const examClassPositions: Record<string, Record<string, number>> = {};
         
         examTitles.forEach(title => {
-          const examAssessments = (allAssessments || []).filter(a => a.assessments?.title === title);
+          const examAssessments = (allAssessments || []).filter(a => firstRel(a.assessments as any)?.title === title);
           const studentTotals: Record<string, number> = {};
           
           examAssessments.forEach(assessment => {
@@ -527,14 +533,14 @@ export default function StudentDashboard({ handleLogout }) {
           examClassPositions[title] = sortedStudents;
 
           const subjects = new Set(
-            examAssessments.map(a => a.subjects?.name).filter(Boolean)
+            examAssessments.map(a => firstRel(a.subjects as any)?.name).filter(Boolean)
           );
           examMaxTotals[title] = Array.from(subjects).length * 100;
           
           examSubjects[title] = examAssessments
             .filter(a => a.student_id === studentId)
             .map(record => ({
-              subject: record.subjects?.name,
+              subject: firstRel(record.subjects as any)?.name,
               score: record.score,
               total_score: 100,
               percentage: Math.round((record.score / 100) * 100),
@@ -546,7 +552,7 @@ export default function StudentDashboard({ handleLogout }) {
         
         const performanceData: PerformanceRecord[] = examTitles.map(title => {
           const studentScores = studentAssessments.filter(
-            a => a.assessments?.title === title
+            a => firstRel(a.assessments as any)?.title === title
           );
           
           const totalScore = studentScores.reduce((sum, a) => sum + (a.score || 0), 0);
@@ -562,8 +568,8 @@ export default function StudentDashboard({ handleLogout }) {
           return {
             id: `${title}-${studentId}`,
             title: title,
-            term: studentScores[0]?.assessments?.term || "Unknown Term",
-            year: studentScores[0]?.assessments?.year || new Date().getFullYear(),
+            term: firstRel(studentScores[0]?.assessments as any)?.term || "Unknown Term",
+            year: firstRel(studentScores[0]?.assessments as any)?.year || new Date().getFullYear(),
             assessment_date: studentScores[0]?.assessment_date || new Date().toISOString(),
             subjects: {
               name: isEndYearExam ? "Overall" : "Multiple Subjects"
@@ -1063,7 +1069,7 @@ export default function StudentDashboard({ handleLogout }) {
         .single();
       if (enrollmentError) throw enrollmentError;
       const classId = enrollmentData?.class_id || null;
-      const className = enrollmentData?.classes?.name || "Unknown";
+      const className = firstRel(enrollmentData?.classes as any)?.name || "Unknown";
       setClassId(classId);
       setClassName(className);
 
@@ -1392,12 +1398,8 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar 
-        showLogout 
-        handleLogout={handleLogout} 
-        notificationCount={notificationCount}
-        onNotificationClick={markNotificationsAsRead}
-      />
+      // @ts-ignore - Navbar props include runtime notificationCount not declared in NavbarProps
+      <Navbar {...({ showLogout: true, handleLogout, notificationCount, onNotificationClick: markNotificationsAsRead } as any)} />
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         {/* Modern Welcome Header - UPDATED WITH FEES MANAGEMENT BUTTON */}
         <div className="bg-maroon-50 rounded-2xl p-8 border border-maroon-200 shadow-sm relative">

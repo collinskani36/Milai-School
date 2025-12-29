@@ -86,7 +86,7 @@ export default function AssessmentsSection() {
   });
 
   // --- Mutations ---
-  const createAssessmentMutation = useMutation({
+  const createAssessmentMutation = useMutation<any, Error, any>({
     mutationFn: async (data) => {
       const { data: res, error } = await supabase.from('assessments').insert([data]);
       if (error) throw error;
@@ -98,8 +98,8 @@ export default function AssessmentsSection() {
     },
   });
 
-  const deleteAssessmentMutation = useMutation({
-    mutationFn: async (assessmentId) => {
+  const deleteAssessmentMutation = useMutation<any, Error, any>({
+    mutationFn: async (assessmentId: any) => {
       const { error: err1 } = await supabase.from('assessment_results').delete().eq('assessment_id', assessmentId);
       if (err1) throw err1;
       const { error: err2 } = await supabase.from('assessments').delete().eq('id', assessmentId);
@@ -111,8 +111,8 @@ export default function AssessmentsSection() {
     },
   });
 
-  const bulkCreateResultsMutation = useMutation({
-    mutationFn: async (rows) => {
+  const bulkCreateResultsMutation = useMutation<any, Error, any[]>({
+    mutationFn: async (rows: any[]) => {
       const { data: res, error } = await supabase.from('assessment_results').insert(rows);
       if (error) throw error;
       return res;
@@ -285,12 +285,14 @@ export default function AssessmentsSection() {
           <DialogHeader>
             <DialogTitle>Create New Assessment</DialogTitle>
           </DialogHeader>
-          <form onSubmit={(e) => {
+          <form onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            data.term = parseInt(data.term);
-            data.year = parseInt(data.year);
+            const form = e.currentTarget as HTMLFormElement;
+            const formData = new FormData(form);
+            const entries = Object.fromEntries(formData.entries()) as Record<string, FormDataEntryValue>;
+            const data: Record<string, any> = { ...entries };
+            data.term = parseInt(String(entries.term));
+            data.year = parseInt(String(entries.year));
             createAssessmentMutation.mutate(data);
           }}>
             <div className="grid gap-4 py-4">

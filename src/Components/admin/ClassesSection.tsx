@@ -32,6 +32,12 @@ export default function ClassesSection() {
   const [optionalSubjects, setOptionalSubjects] = useState([]);
   const queryClient = useQueryClient();
 
+  // Helper to normalize Supabase relations which may come back as an object or a single-item array
+  function firstRel<T>(rel: T | T[] | null | undefined): T | undefined {
+    if (!rel) return undefined;
+    return Array.isArray(rel) ? rel[0] : (rel as T);
+  }
+
   // Fetch classes with student counts
   const { data: classes, isLoading: loadingClasses, error: classesError } = useQuery({
     queryKey: ['classes-with-details'],
@@ -176,15 +182,19 @@ export default function ClassesSection() {
 
       console.log('Enrollments data:', enrollments);
 
-      // Transform the data to get student details
-      const students = enrollments?.map(enrollment => ({
-        enrollmentId: enrollment.id,
-        id: enrollment.students.id,
-        reg_no: enrollment.students.Reg_no,
-        first_name: enrollment.students.first_name,
-        last_name: enrollment.students.last_name,
-        gender: enrollment.students.profiles?.gender || '-'
-      })) || [];
+      // Transform the data to get student details (normalize relation shapes)
+      const students = enrollments?.map(enrollment => {
+        const student = firstRel(enrollment.students as any);
+        const profile = firstRel(student?.profiles as any);
+        return {
+          enrollmentId: enrollment.id,
+          id: student?.id,
+          reg_no: student?.Reg_no,
+          first_name: student?.first_name,
+          last_name: student?.last_name,
+          gender: profile?.gender || '-'
+        };
+      }) || [];
 
       console.log('Transformed students:', students);
       return students;
@@ -222,7 +232,7 @@ export default function ClassesSection() {
   });
 
   // Create class mutation
-  const createClassMutation = useMutation({
+  const createClassMutation = useMutation<any, any, any>({
     mutationFn: async (data) => {
       const { data: res, error } = await supabase.from('classes').insert([data]);
       if (error) throw error;
@@ -236,7 +246,7 @@ export default function ClassesSection() {
   });
 
   // Create grade level mutation
-  const createGradeLevelMutation = useMutation({
+  const createGradeLevelMutation = useMutation<any, any, any>({
     mutationFn: async (data) => {
       console.log('Inserting grade level:', data);
       const { data: res, error } = await supabase.from('grade_levels').insert([data]).select();
@@ -258,7 +268,7 @@ export default function ClassesSection() {
   });
 
   // Update class mutation
-  const updateClassMutation = useMutation({
+  const updateClassMutation = useMutation<any, any, { id: any; data: any }>({
     mutationFn: async ({ id, data }) => {
       const { error } = await supabase.from('classes').update(data).eq('id', id);
       if (error) throw error;
@@ -271,7 +281,7 @@ export default function ClassesSection() {
   });
 
   // Create subject mutation
-  const createSubjectMutation = useMutation({
+  const createSubjectMutation = useMutation<any, any, any>({
     mutationFn: async (data) => {
       const { data: res, error } = await supabase.from('subjects').insert([data]);
       if (error) throw error;
@@ -285,7 +295,7 @@ export default function ClassesSection() {
   });
 
   // Update subject mutation
-  const updateSubjectMutation = useMutation({
+  const updateSubjectMutation = useMutation<any, any, { id: any; data: any }>({
     mutationFn: async ({ id, data }) => {
       const { error } = await supabase.from('subjects').update(data).eq('id', id);
       if (error) throw error;
@@ -298,7 +308,7 @@ export default function ClassesSection() {
   });
 
   // Assign subjects to class mutation - UPDATED to handle optional subjects
-  const assignSubjectsMutation = useMutation({
+  const assignSubjectsMutation = useMutation<any, any, { classId: any; subjects: any[]; optionalSubjects: any[] }>({
     mutationFn: async ({ classId, subjects, optionalSubjects }) => {
       // First, remove existing subjects for this class
       const { error: deleteError } = await supabase
@@ -333,7 +343,7 @@ export default function ClassesSection() {
   });
 
   // Remove subject from class
-  const removeSubjectMutation = useMutation({
+  const removeSubjectMutation = useMutation<any, any, any>({
     mutationFn: async (assignmentId) => {
       const { error } = await supabase
         .from('classes_subjects')
@@ -349,7 +359,7 @@ export default function ClassesSection() {
   });
 
   // Remove student from class
-  const removeStudentMutation = useMutation({
+  const removeStudentMutation = useMutation<any, any, any>({
     mutationFn: async (enrollmentId) => {
       const { error } = await supabase
         .from('enrollments')
@@ -364,7 +374,7 @@ export default function ClassesSection() {
     },
   });
 
-  const deleteClassMutation = useMutation({
+  const deleteClassMutation = useMutation<any, any, any>({
     mutationFn: async (id) => {
       const { error } = await supabase.from('classes').delete().eq('id', id);
       if (error) throw error;
@@ -372,7 +382,7 @@ export default function ClassesSection() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['classes-with-details'] }),
   });
 
-  const deleteSubjectMutation = useMutation({
+  const deleteSubjectMutation = useMutation<any, any, any>({
     mutationFn: async (id) => {
       const { error } = await supabase.from('subjects').delete().eq('id', id);
       if (error) throw error;
@@ -380,7 +390,7 @@ export default function ClassesSection() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['subjects'] }),
   });
 
-  const deleteGradeLevelMutation = useMutation({
+  const deleteGradeLevelMutation = useMutation<any, any, any>({
     mutationFn: async (id) => {
       const { error } = await supabase.from('grade_levels').delete().eq('id', id);
       if (error) throw error;
@@ -388,12 +398,13 @@ export default function ClassesSection() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gradeLevels'] }),
   });
 
-  const handleClassSubmit = (e) => {
+  const handleClassSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const data = {
-      name: formData.get('name'),
-      grade_level: formData.get('grade_level'),
+      name: String(formData.get('name') || ''),
+      grade_level: String(formData.get('grade_level') || ''),
     };
 
     if (editingClass) {
@@ -403,12 +414,13 @@ export default function ClassesSection() {
     }
   };
 
-  const handleSubjectSubmit = (e) => {
+  const handleSubjectSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const data = {
-      name: formData.get('name'),
-      code: formData.get('code'),
+      name: String(formData.get('name') || ''),
+      code: String(formData.get('code') || ''),
     };
 
     if (editingSubject) {
@@ -418,12 +430,13 @@ export default function ClassesSection() {
     }
   };
 
-  const handleGradeLevelSubmit = (e) => {
+  const handleGradeLevelSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const data = {
-      stage: formData.get('stage'),
-      grade: formData.get('grade'),
+      stage: String(formData.get('stage') || ''),
+      grade: String(formData.get('grade') || ''),
     };
 
     console.log('Submitting grade level:', data);
@@ -490,6 +503,9 @@ export default function ClassesSection() {
   const getGradeLevelDisplayName = (gradeLevel) => {
     return gradeLevel; // Just return the stage name as stored
   };
+
+  // Normalize mutation loading status for compatibility across react-query versions
+  const isCreatingGradeLevel = Boolean((createGradeLevelMutation as any)?.isLoading ?? ((createGradeLevelMutation as any)?.status === 'loading'));
 
   return (
     <div className="space-y-6">
@@ -910,9 +926,9 @@ export default function ClassesSection() {
               <Button 
                 type="submit" 
                 className="bg-green-600 hover:bg-green-700"
-                disabled={createGradeLevelMutation.isPending}
+                disabled={isCreatingGradeLevel}
               >
-                {createGradeLevelMutation.isPending ? 'Creating...' : 'Create Grade Level'}
+                {isCreatingGradeLevel ? 'Creating...' : 'Create Grade Level'}
               </Button>
             </DialogFooter>
           </form>
@@ -1147,16 +1163,18 @@ export default function ClassesSection() {
               <CardContent>
                 {assignedSubjects?.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {assignedSubjects.map((assignment) => (
+                    {assignedSubjects.map((assignment) => {
+                      const subj = firstRel(assignment.subjects as any);
+                      return (
                       <Card key={assignment.id} className="relative">
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-semibold text-gray-900">
-                                {assignment.subjects.name}
+                                {subj?.name}
                               </h4>
                               <p className="text-sm text-gray-500">
-                                Code: {assignment.subjects.code}
+                                Code: {subj?.code}
                               </p>
                               {assignment.is_optional && (
                                 <Badge className="bg-blue-100 text-blue-700 text-xs mt-1">
@@ -1169,7 +1187,7 @@ export default function ClassesSection() {
                               size="icon"
                               onClick={() => handleRemoveSubject(
                                 assignment.id, 
-                                assignment.subjects.name
+                                subj?.name || ''
                               )}
                             >
                               <X className="w-4 h-4 text-red-500" />
@@ -1177,7 +1195,8 @@ export default function ClassesSection() {
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8">

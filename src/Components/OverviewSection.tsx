@@ -9,7 +9,7 @@ import {
   Bell,
   TrendingUp,
 } from 'lucide-react';
-import StatsCard from './Components/Admin/StatsCard';
+import StatsCard from '@/Components/Admin/StatsCard';
 import { Skeleton } from '@/Components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { format } from 'date-fns';
@@ -116,6 +116,7 @@ export default function OverviewSection() {
                 new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             ).length
           } new this month`}
+          onClick={() => {}}
         />
         <StatsCard
           title="Total Teachers"
@@ -123,18 +124,23 @@ export default function OverviewSection() {
           icon={GraduationCap}
           color="bg-purple-500"
           trend={`${teachers.filter((t) => t.is_admin).length} admins`}
+          onClick={() => {}}
         />
         <StatsCard
           title="Active Classes"
           value={classes.length}
           icon={BookOpen}
           color="bg-green-500"
+          trend={''}
+          onClick={() => {}}
         />
         <StatsCard
           title="Subjects"
           value={subjects.length}
           icon={ClipboardList}
           color="bg-orange-500"
+          trend={''}
+          onClick={() => {}}
         />
       </div>
 

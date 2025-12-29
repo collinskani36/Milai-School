@@ -11,18 +11,27 @@ import { format } from "date-fns";
 // ======================
 export interface PaymentRecord {
   id: string | number;
-  amount: number;
+  // canonical fields
+  amount?: number;
   date?: string | null;
   reference_no?: string | null;
   method?: string | null;
   term?: string | null;
   academic_year?: string | null;
+  // legacy/alternate fields used elsewhere in the app
+  amount_paid?: number;
+  payment_date?: string | null;
+  reference_number?: string | null;
+  transaction_reference?: string | null;
+  payment_method?: string | null;
 }
 
 interface PaymentHistoryProps {
   payments: PaymentRecord[];
   isLoading?: boolean;
   showStudentInfo?: boolean;
+  selectedTerm?: string;
+  selectedYear?: string;
 }
 
 // =====================================================
@@ -58,7 +67,7 @@ export default function PaymentHistory({
       </CardHeader>
 
       <CardContent className="pt-4">
-        <ScrollArea className="h-[290px] pr-2">
+          <ScrollArea className="h-[290px] pr-2">
           {payments.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-8">
               No payments recorded yet
@@ -73,22 +82,22 @@ export default function PaymentHistory({
     <div className="flex justify-between items-center mb-2">
       <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
         <CreditCard className="w-3 h-3 mr-1" />
-        {pay.payment_method || "Unknown"}
+        {(pay.payment_method || pay.method) ?? "Unknown"}
       </Badge>
 
       <p className="font-semibold text-gray-900">
-        KES {pay.amount_paid?.toLocaleString() || 0}
+        KES {(pay.amount_paid ?? pay.amount ?? 0).toLocaleString()}
       </p>
     </div>
 
     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
       <div className="flex items-center gap-1">
         <Calendar className="w-3 h-3" />
-        {pay.payment_date ? format(new Date(pay.payment_date), "dd MMM yyyy") : "No Date"}
+        {(pay.payment_date ?? pay.date) ? format(new Date((pay.payment_date ?? pay.date) as string), "dd MMM yyyy") : "No Date"}
       </div>
       <div className="flex items-center gap-1">
         <Hash className="w-3 h-3" />
-        Ref: {pay.transaction_reference || pay.reference_number || "-"}
+        Ref: {pay.transaction_reference || pay.reference_number || pay.reference_no || "-"}
       </div>
       {pay.term && (
         <div className="flex items-center gap-1">

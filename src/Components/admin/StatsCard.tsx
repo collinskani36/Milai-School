@@ -2,7 +2,16 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@/Components/ui/card';
 
-export default function StatsCard({ title, value, icon: Icon, color, trend, onClick }) {
+type StatsCardProps = {
+  title: React.ReactNode;
+  value: React.ReactNode;
+  icon?: React.ComponentType<any>;
+  color?: string;
+  trend?: React.ReactNode;
+  onClick?: () => void;
+};
+
+export default function StatsCard({ title, value, icon: Icon, color = 'bg-gray-200', trend, onClick }: StatsCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

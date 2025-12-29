@@ -12,11 +12,11 @@ import {
   X
 } from "lucide-react";
 
-import FeeBalanceOverview from "@/Components/fees/FeeBalanceOverview";
-import PaymentHistory from "@/Components/fees/PaymentHistory";
-import BankDetailsCard from "@/Components/fees/BankDetailsCard";
-import FeeBreakdownCard from "@/Components/fees/FeeBreakdownCard";
-import TermHistoryCard from "@/Components/fees/TermHistoryCard";
+import FeeBalanceOverview from "@/Components/Fees/FeeBalanceOverview";
+import PaymentHistory from "@/Components/Fees/PaymentHistory";
+import BankDetailsCard from "@/Components/Fees/BankDetailsCard";
+import FeeBreakdownCard from "@/Components/Fees/FeeBreakdownCard";
+import TermHistoryCard from "@/Components/Fees/TermHistoryCard";
 
 type Student = {
   id: string;
@@ -42,7 +42,7 @@ type StudentFee = {
   fee_structure_id?: string;
 };
 
-type FeeStructure = {
+type Feestructure = {
   id: string;
   name: string;
   term: string;
@@ -126,24 +126,27 @@ export default function StudentFeesDialog({
   }, [currentUser]);
 
   useEffect(() => {
-    console.log("Student data in fees dialog:", studentData);
+    console.log("Student data in Fees dialog:", studentData);
     setStudent(studentData);
   }, [studentData]);
 
-  // Fetch all student fees
+  // Fetch all student Fees
   const { data: allStudentFees = [], isLoading: loadingFees } = useQuery({
     queryKey: ['allStudentFees', student?.id],
     queryFn: async () => {
       if (!student?.id) return [];
-      const { data, error } = await supabase
-        .from<StudentFee>('student_fees')
+      const resp = await (supabase as any)
+        .from('student_Fees')
         .select('*')
         .eq('student_id', student.id)
         .order('academic_year', { ascending: false })
         .order('term', { ascending: false });
       
+      const data = resp.data as StudentFee[] | null;
+      const error = resp.error;
+
       if (error) {
-        console.error("Error fetching student fees:", error);
+        console.error("Error fetching student Fees:", error);
         throw error;
       }
       return data || [];
@@ -156,7 +159,7 @@ export default function StudentFeesDialog({
     sf => sf.term === selectedTerm && sf.academic_year === selectedYear
   );
 
-  // Generate term options from available fees
+  // Generate term options from available Fees
   const termOptions: TermOption[] = allStudentFees.map(sf => ({
     term: sf.term,
     year: sf.academic_year,
@@ -178,8 +181,8 @@ export default function StudentFeesDialog({
     queryFn: async () => {
       if (!student?.id) return [];
       
-      const { data, error } = await supabase
-        .from('student_fees')
+      const resp = await (supabase as any)
+        .from('student_Fees')
         .select(`
           id,
           fee_structure_id,
@@ -201,14 +204,17 @@ export default function StudentFeesDialog({
         .eq('term', selectedTerm)
         .eq('academic_year', selectedYear);
       
+      const data = resp.data as any[] | null;
+      const error = resp.error;
+
       if (error) {
         console.error("Error fetching student fee items:", error);
         throw error;
       }
-      
+
       console.log('Fee items raw data:', data);
-      
-      return data.map((sf: any) => ({
+
+      return (data || []).map((sf: any) => ({
         id: sf.id,
         name: sf.fee_structure?.name || 'Unnamed Fee',
         amount: sf.fee_structure?.amount || 0,
@@ -236,7 +242,7 @@ export default function StudentFeesDialog({
       console.log(`Querying payments with: student_id=${student.id}, term=${selectedTerm}, academic_year=${selectedYear}`);
       console.log('Fetching payments for student:', student.id);
       
-      const { data, error } = await supabase
+      const resp = await (supabase as any)
         .from('p_payments')
         .select(`
           id,
@@ -257,11 +263,14 @@ export default function StudentFeesDialog({
         .eq('student_id', student.id)
         .order('payment_date', { ascending: false });
       
+      const data = resp.data as Payment[] | null;
+      const error = resp.error;
+
       if (error) {
         console.error("Error fetching payments:", error);
         throw error;
       }
-      
+
       console.log('Raw payments data from Supabase:', data);
       
       return (data as Payment[]) || [];
@@ -305,7 +314,7 @@ export default function StudentFeesDialog({
 
   const getStatusConfig = (status: string) => {
     const configs: Record<string, any> = {
-      'Paid': { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle, message: 'All fees cleared!' },
+      'Paid': { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle, message: 'All Fees cleared!' },
       'Partial': { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock, message: 'Partial payment made' },
       'Unpaid': { color: 'bg-red-50 text-red-700 border-red-200', icon: AlertTriangle, message: 'Payment pending' },
       'Overpaid': { color: 'bg-blue-50 text-blue-700 border-blue-200', icon: CheckCircle, message: 'Overpayment recorded' }
@@ -358,7 +367,7 @@ export default function StudentFeesDialog({
 };
 
   const handleClose = () => {
-    const container = document.querySelector('.fees-dialog-container');
+    const container = document.querySelector('.Fees-dialog-container');
     if (container) {
       container.classList.add('animate-pop-out');
     }
@@ -377,7 +386,7 @@ export default function StudentFeesDialog({
   }
 
   return (
-    <div className="fees-dialog-container animate-pop-in">
+    <div className="Fees-dialog-container animate-pop-in">
       {/* Header with Close Button */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -453,7 +462,7 @@ export default function StudentFeesDialog({
             <TabsTrigger value="overview" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
               Overview
             </TabsTrigger>
-            <TabsTrigger value="fees" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+            <TabsTrigger value="Fees" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-2" />
               Fee Breakdown
             </TabsTrigger>
@@ -532,7 +541,7 @@ export default function StudentFeesDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="fees" className="space-y-6">
+          <TabsContent value="Fees" className="space-y-6">
             {loadingFeeItems ? (
               <div className="flex justify-center items-center h-48">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-600"></div>

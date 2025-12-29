@@ -73,7 +73,7 @@ export default function AnnouncementsSection() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['announcements']);
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
       setShowAddModal(false);
       // ✅ Reset form state
       setPriority('normal');
@@ -91,7 +91,7 @@ export default function AnnouncementsSection() {
       const { error } = await supabase.from('announcements').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries(['announcements']),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['announcements'] }),
   });
 
   // === Handle Form Submit ===
@@ -190,7 +190,7 @@ export default function AnnouncementsSection() {
                         variant="ghost"
                         size="icon"
                         onClick={() => deleteMutation.mutate(a.id)}
-                        disabled={deleteMutation.isLoading}
+                        disabled={(deleteMutation as any).isLoading}
                       >
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </Button>
@@ -284,9 +284,9 @@ export default function AnnouncementsSection() {
               <Button 
                 type="submit" 
                 className="bg-pink-600 hover:bg-pink-700"
-                disabled={createMutation.isLoading}
+                disabled={(createMutation as any).isLoading}
               >
-                {createMutation.isLoading ? 'Creating...' : 'Create Announcement'}
+                {(createMutation as any).isLoading ? 'Creating...' : 'Create Announcement'}
               </Button>
             </DialogFooter>
           </form>

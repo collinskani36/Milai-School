@@ -4,7 +4,24 @@ import { Badge } from "@/Components/ui/badge";
 import { ScrollArea } from "@/Components/ui/scroll-area";
 import { Calendar, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 
-export default function TermHistoryCard({ studentFees, onSelectTerm, selectedTerm, selectedYear }) {
+export default function TermHistoryCard({ studentFees, onSelectTerm, selectedTerm, selectedYear, isLoading }: any & { isLoading?: boolean }) {
+  if (isLoading) {
+    return (
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-violet-400 via-purple-500 to-indigo-500" />
+        <CardHeader className="pb-3 border-b border-gray-100">
+          <CardTitle className="text-lg font-semibold text-gray-900">Term History</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="space-y-2">
+            <div className="h-12 bg-gray-100 rounded animate-pulse"></div>
+            <div className="h-12 bg-gray-100 rounded animate-pulse"></div>
+            <div className="h-12 bg-gray-100 rounded animate-pulse"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   const getStatusConfig = (status) => {
     const configs = {
       'Paid': { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
