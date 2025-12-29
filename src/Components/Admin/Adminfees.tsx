@@ -12,10 +12,10 @@ import {
   Settings, Receipt, RefreshCw, FileText, Download, UserCheck
 } from "lucide-react";
 
-import FeeStructureForm from "@/Components/fees/FeeStructureForm";
-import PaymentEntryForm from "@/Components/fees/PaymentEntryForm";
+import FeeStructureForm from "@/Components/Fees/FeeStructureForm";
+import PaymentEntryForm from "@/Components/Fees/PaymentEntryForm";
 import PaymentHistory from "@/Components/Fees/PaymentHistory";
-import StudentFeeCard from "@/Components/fees/StudentFeeCard";
+import StudentFeeCard from "@/Components/Fees/StudentFeeCard";
 
 import { supabase } from "@/lib/supabaseClient";
 
