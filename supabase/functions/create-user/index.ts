@@ -1,5 +1,12 @@
+// The function runs in Supabase Edge (Deno). For local TypeScript checks we
+// suppress unresolved URL imports and provide a minimal Deno stub.
+// @ts-ignore: URL import used in Deno runtime
 import { serve } from "https://deno.land/std/http/server.ts";
+// @ts-ignore: URL import used in Deno runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Minimal Deno global stub for editor type-checking
+declare const Deno: any;
 
 // CORS headers
 const corsHeaders = {
@@ -8,7 +15,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

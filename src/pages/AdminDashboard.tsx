@@ -7,16 +7,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabase } from '@/lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
-import Sidebar from '../Components/admin/Sidebar';
-import OverviewSection from '../Components/admin/OverviewSection';
-import StudentsSection from '../Components/admin/StudentsSection';
-import TeachersSection from '../Components/admin/TeachersSection';
-import ClassesSection from '../Components/admin/ClassesSection';
-import AssessmentsSection from '../Components/admin/AssessmentsSection';
-import AssignmentsSection from '../Components/admin/AssignmentsSection';
-import AttendanceSection from '../Components/admin/AttendanceSection';
-import AnnouncementsSection from '../Components/admin/AnnouncementsSection';
-import AdminFees from '../Components/admin/Adminfees';
+import Sidebar from '../Components/Admin/Sidebar';
+import OverviewSection from '../Components/Admin/OverviewSection';
+import StudentsSection from '../Components/Admin/StudentsSection';
+import TeachersSection from '../Components/Admin/TeachersSection';
+import ClassesSection from '../Components/Admin/ClassesSection';
+import AssessmentsSection from '../Components/Admin/AssessmentsSection';
+import AssignmentsSection from '../Components/Admin/AssignmentsSection';
+import AttendanceSection from '../Components/Admin/AttendanceSection';
+import AnnouncementsSection from '../Components/Admin/AnnouncementsSection';
+import AdminFees from '../Components/Admin/Adminfees';
 
 // Types for Admin Profile
 interface AdminProfile {
@@ -28,7 +28,7 @@ interface AdminProfile {
   email: string;
   phone: string;
   created_at: string;
-  is_admin: boolean;
+  is_Admin: boolean;
 }
 
 // Settings Modal Component
@@ -489,7 +489,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
   );
 };
 
-// Custom hook to fetch admin profile
+// Custom hook to fetch Admin profile
 const useAdminProfile = () => {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -504,18 +504,18 @@ const useAdminProfile = () => {
           throw new Error(userError?.message || "No user found");
         }
 
-        const { data: admin, error: adminError } = await supabase
+        const { data: Admin, error: AdminError } = await supabase
           .from('teachers')
           .select('*')
           .eq('auth_id', user.id)
-          .eq('is_admin', true)
+          .eq('is_Admin', true)
           .single();
 
-        if (adminError) throw new Error(adminError.message);
+        if (AdminError) throw new Error(AdminError.message);
         
-        setProfile(admin);
+        setProfile(Admin);
       } catch (err) {
-        console.error("Error fetching admin profile:", err);
+        console.error("Error fetching Admin profile:", err);
         setError(err instanceof Error ? err.message : "Failed to load profile");
       } finally {
         setLoading(false);
@@ -550,13 +550,13 @@ export default function AdminDashboard() {
     if (!profile?.id) return;
     
     try {
-      const { data: admin, error: adminError } = await supabase
+      const { data: Admin, error: AdminError } = await supabase
         .from('teachers')
         .select('*')
         .eq('id', profile.id)
         .single();
 
-      if (adminError) throw adminError;
+      if (AdminError) throw AdminError;
       
       window.location.reload(); // Simple solution to refresh data
     } catch (err) {
