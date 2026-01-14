@@ -161,7 +161,9 @@ export default function TeachersSection() {
         is_admin: data.is_admin
       };
       
-      const res = await supabase.functions.invoke('create-teacher', { body: JSON.stringify(payload) });
+      const res = await supabase.functions.invoke('create-teacher', {
+  body: payload,
+});
 
       if (res.error) {
         throw new Error(`Failed to create teacher: ${res.error.message}`);

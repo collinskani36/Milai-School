@@ -110,6 +110,12 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
+         <p
+  className="text-sm text-center text-gray-600 cursor-pointer hover:underline mt-3"
+  onClick={() => navigate("/teacher-forgot-password")}
+>
+  Forgot password?
+</p>
 
       </div>
     </div>

@@ -28,7 +28,7 @@ interface AdminProfile {
   email: string;
   phone: string;
   created_at: string;
-  is_Admin: boolean;
+  is_admin: boolean;
 }
 
 // Settings Modal Component
@@ -508,7 +508,7 @@ const useAdminProfile = () => {
           .from('teachers')
           .select('*')
           .eq('auth_id', user.id)
-          .eq('is_Admin', true)
+          .eq('is_admin', true)
           .single();
 
         if (AdminError) throw new Error(AdminError.message);

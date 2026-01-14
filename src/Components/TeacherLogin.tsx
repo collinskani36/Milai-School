@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
+
 
 export default function TeacherLogin({ onLogin }: { onLogin: (teacher: any) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -75,6 +79,14 @@ export default function TeacherLogin({ onLogin }: { onLogin: (teacher: any) => v
           {loading ? "Logging in..." : "Login"}
         </button>
         {error && <p className="text-red-600">{error}</p>}
+        <button
+  type="button"
+  onClick={() => navigate("/")}
+  className="border border-gray-300 text-gray-700 py-2 rounded hover:bg-gray-100"
+>
+  Back
+</button>
+
       </form>
     </div>
   );

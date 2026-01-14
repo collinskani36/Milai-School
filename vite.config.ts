@@ -5,19 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: true,     // allows local network access if needed
     port: 8080,
-
-    // Allow new ngrok domain
-    allowedHosts: [
-      "2917e9fcac2f.ngrok-free.app"
-    ],
-
-    // Fix HMR through ngrok
-    hmr: {
-      host: "2917e9fcac2f.ngrok-free.app",
-      protocol: "wss"
-    }
   },
 
   plugins: [

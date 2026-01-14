@@ -11,6 +11,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid,ReferenceLine, Tooltip, Re
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/Components/ui/input";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 // Import the new Fees Dialog
 import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
@@ -143,10 +144,6 @@ export default function StudentDashboard({ handleLogout }) {
   const [isFeesDialogOpen, setIsFeesDialogOpen] = useState(false);
   const [feesStudentData, setFeesStudentData] = useState<any>(null);
 
-  // Add new state for notification tracking
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [lastViewedTimestamp, setLastViewedTimestamp] = useState<Date | null>(null);
-
   // Function to handle fees management - NOW AS POPUP
   const handleFeesManagement = () => {
   // Pass student data to the fees dialog
@@ -160,81 +157,7 @@ export default function StudentDashboard({ handleLogout }) {
   setIsFeesDialogOpen(true);
 };
 
-  // Initialize last viewed timestamp from localStorage
-  useEffect(() => {
-    const storedTimestamp = localStorage.getItem('lastViewedNotifications');
-    if (storedTimestamp) {
-      setLastViewedTimestamp(new Date(storedTimestamp));
-    } else {
-      // If no timestamp stored, set it to now so only future notifications count as new
-      const now = new Date();
-      setLastViewedTimestamp(now);
-      localStorage.setItem('lastViewedNotifications', now.toISOString());
-    }
-  }, []);
-
-  // Calculate notification count whenever assignments or announcements change
-  useEffect(() => {
-    if (!lastViewedTimestamp) return;
-
-    let count = 0;
-
-    // Count new assignments (created after last viewed)
-    assignments.forEach(assignment => {
-      if (assignment.created_at) {
-        const assignmentDate = new Date(assignment.created_at);
-        if (assignmentDate > lastViewedTimestamp) {
-          count++;
-        }
-      }
-    });
-
-    // Count new announcements (created after last viewed)
-    announcements.forEach(announcement => {
-      if (announcement.created_at) {
-        const announcementDate = new Date(announcement.created_at);
-        if (announcementDate > lastViewedTimestamp) {
-          count++;
-        }
-      }
-    });
-
-    setNotificationCount(count);
-  }, [assignments, announcements, lastViewedTimestamp]);
-
-  // Function to mark notifications as read
-  const markNotificationsAsRead = () => {
-    const now = new Date();
-    console.log('Marking notifications as read at:', now);
-    setLastViewedTimestamp(now);
-    localStorage.setItem('lastViewedNotifications', now.toISOString());
-    setNotificationCount(0);
-  };
-
-  // Add debug useEffect to see what's happening with notifications
-  useEffect(() => {
-    console.log('Notification Debug:');
-    console.log('Notification Count:', notificationCount);
-    console.log('Last Viewed:', lastViewedTimestamp);
-    console.log('Assignments count:', assignments.length);
-    console.log('Announcements count:', announcements.length);
-    
-    if (lastViewedTimestamp) {
-      const newAssignments = assignments.filter(a => 
-        a.created_at && new Date(a.created_at) > lastViewedTimestamp
-      );
-      const newAnnouncements = announcements.filter(a => 
-        a.created_at && new Date(a.created_at) > lastViewedTimestamp
-      );
-      
-      console.log('New assignments since last view:', newAssignments.length);
-      console.log('New announcements since last view:', newAnnouncements.length);
-      console.log('New assignments:', newAssignments);
-      console.log('New announcements:', newAnnouncements);
-    }
-  }, [notificationCount, assignments, announcements, lastViewedTimestamp]);
-
-  // Update the fetchAssignments function to be reusable
+  // Update the fetchAssignments function to filter by class
   const fetchAssignments = async () => {
     setAssignmentsLoading(true);
 
@@ -247,6 +170,7 @@ export default function StudentDashboard({ handleLogout }) {
         return;
       }
 
+      // First, get the student's class ID
       const { data: studentData, error: studentError } = await supabase
         .from("students")
         .select("id")
@@ -259,12 +183,31 @@ export default function StudentDashboard({ handleLogout }) {
         return;
       }
 
+      // Get the student's enrollment to find their class
+      const { data: enrollmentData, error: enrollmentError } = await supabase
+        .from("enrollments")
+        .select("class_id")
+        .eq("student_id", studentData.id)
+        .single();
+
+      if (enrollmentError || !enrollmentData) {
+        console.error("Error fetching enrollment:", enrollmentError);
+        setAssignments([]);
+        setAssignmentsLoading(false);
+        return;
+      }
+
+      const studentClassId = enrollmentData.class_id;
+      
+      // Now fetch assignments ONLY for the student's class
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("assignments")
         .select("*")
+        .eq('class_id', studentClassId)  // ADDED: Filter by class ID
         .order('created_at', { ascending: false });
 
       if (assignmentsError) {
+        console.error("Error fetching assignments:", assignmentsError);
         setAssignments([]);
         setAssignmentsLoading(false);
         return;
@@ -344,7 +287,7 @@ export default function StudentDashboard({ handleLogout }) {
   useEffect(() => {
     if (!classId) return;
 
-    // Subscribe to new assignments
+    // Subscribe to new assignments for THIS CLASS ONLY
     const assignmentsSubscription = supabase
       .channel('assignments-changes')
       .on(
@@ -353,6 +296,7 @@ export default function StudentDashboard({ handleLogout }) {
           event: 'INSERT',
           schema: 'public',
           table: 'assignments',
+          filter: `class_id=eq.${classId}`,  // ADDED: Filter by class ID
         },
         (payload) => {
           console.log('New assignment received:', payload.new);
@@ -1056,8 +1000,7 @@ export default function StudentDashboard({ handleLogout }) {
       if (!profileData) throw new Error("No student profile found");
       setProfile(profileData);
 
-      // Log to verify guardian_phone is available
-      console.log("Profile loaded - Guardian Phone:", profileData.guardian_phone);
+      
 
       const { data: enrollmentData, error: enrollmentError } = await supabase
         .from("enrollments")
@@ -1235,8 +1178,10 @@ const handlePasswordUpdate = async () => {
 
   // Update the existing assignments useEffect to use the new function
   useEffect(() => {
-    fetchAssignments();
-  }, []);
+    if (classId) {
+      fetchAssignments();
+    }
+  }, [classId]); // ADDED: Run when classId changes
 
   // Update the existing announcements useEffect to use the new function  
   useEffect(() => {
@@ -1398,84 +1343,74 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-white">
-      // @ts-ignore - Navbar props include runtime notificationCount not declared in NavbarProps
-      <Navbar {...({ showLogout: true, handleLogout, notificationCount, onNotificationClick: markNotificationsAsRead } as any)} />
+     
+      <Navbar {...({ showLogout: true, handleLogout } as any)} />
       <div className="max-w-7xl mx-auto p-6 space-y-8">
-        {/* Modern Welcome Header - UPDATED WITH FEES MANAGEMENT BUTTON */}
-        <div className="bg-maroon-50 rounded-2xl p-8 border border-maroon-200 shadow-sm relative">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900">
-                Welcome, {profile.first_name} {profile.last_name}
-              </h1>
-              <p className="text-gray-600 mt-2">Ready to achieve your academic goals today</p>
-              <div className="flex gap-6 mt-4 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  <span>ID: {profile?.reg_no}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4" />
-                  <span>Class: {className}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Award className="h-4 w-4" />
-                  <span>KJSEA Level: {calculateGPA()}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-4 ml-6">
-              {/* Attendance */}
-              <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-24 border border-maroon/10">
-                <div className="text-2xl font-bold text-maroon">{attendanceData?.attendanceRate.toFixed(1)}%</div>
-                <div className="text-sm text-gray-600">Attendance</div>
-              </div>
-
-              {/* Notification Bell */}
-              <div className="relative">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={markNotificationsAsRead}
-                  className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors relative"
-                >
-                  <Bell className="h-4 w-4" />
-                  Notifications
-                  {notificationCount > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
-                      {notificationCount}
-                    </span>
-                  )}
-                </Button>
-              </div>
-
-              {/* Fees Management Button - NOW OPENS POPUP */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFeesManagement}
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-              >
-                <CreditCard className="h-4 w-4" />
-                Fee Statement
-              </Button>
-
-              {/* Settings Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  console.log("Settings button clicked");
-                  setIsSettingsOpen(true);
-                }}
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Button>
-            </div>
-          </div>
+       {/* Modern Welcome Header - UPDATED WITH HORIZONTAL BUTTONS (Notifications Removed) */}
+<div className="bg-maroon-50 rounded-2xl p-8 border border-maroon-200 shadow-sm relative">
+  <div className="flex justify-between items-start">
+    <div className="flex-1">
+      {/* 1. Welcome and Primary Details (Unchanged) */}
+      <h1 className="text-3xl font-bold text-gray-900">
+        Welcome, {profile.first_name} {profile.last_name}
+      </h1>
+      <p className="text-gray-600 mt-2">Ready to achieve your academic goals today</p>
+      
+      {/* Student Details (ID, Class, GPA) (Unchanged) */}
+      <div className="flex flex-wrap gap-6 mt-4 text-sm text-gray-600 pb-4 border-b border-maroon-100">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-maroon" />
+          <span>ID: **{profile?.reg_no}**</span>
         </div>
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-maroon" />
+          <span>Class: **{className}**</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Award className="h-4 w-4 text-maroon" />
+          <span>KJSEA Level: **{calculateGPA()}**</span>
+        </div>
+      </div>
+      
+      {/* 2. HORIZONTAL ACTION BUTTONS (Only Fees and Settings remain) */}
+      <div className="flex flex-wrap gap-4 mt-4">
+        
+        {/* Fee Statement Button */}
+        <Button
+          variant="outline"
+          size="default"
+          onClick={handleFeesManagement}
+          className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors"
+        >
+          <CreditCard className="h-4 w-4" />
+          Fee Statement
+        </Button>
+
+        {/* Settings Button */}
+        <Button
+          variant="outline"
+          size="default"
+          onClick={() => {
+            console.log("Settings button clicked");
+            setIsSettingsOpen(true);
+          }}
+          className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors"
+        >
+          <Settings className="h-4 w-4" />
+          Settings
+        </Button>
+      </div>
+    </div>
+    
+    {/* 3. Attendance Card (Unchanged) */}
+    <div className="flex flex-col items-end gap-4 ml-6 flex-shrink-0">
+      <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-28 border border-maroon/10 shadow-lg">
+        <div className="text-3xl font-extrabold text-maroon">{attendanceData?.attendanceRate.toFixed(1)}%</div>
+        <div className="text-sm text-gray-600 mt-1">Attendance Rate</div>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Tabs for Dashboard and Performance History */}
         <Tabs defaultValue="dashboard" className="space-y-8">
@@ -1737,7 +1672,7 @@ useEffect(() => {
         <div className="text-center py-8">
           <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 text-sm">
-            No assignments have been uploaded yet.
+            No assignments have been uploaded for your class yet.
           </p>
         </div>
       ) : (
@@ -2104,78 +2039,59 @@ useEffect(() => {
         </div>
       ) : (
         <>
-          {/* Teacher Information Card */}
-          {/* Teacher Information Card - Compact Vertical Layout */}
+          {/* Teacher Information Card - Compact Horizontal Layout with Native Actions */}
 {teacherInfo && (
-  <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20 shadow-sm">
+  <Card className="bg-white dark:bg-gray-900 border-l-4 border-maroon shadow-2xl shadow-maroon/10 transition-shadow duration-300">
     <CardContent className="p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center mb-4">
-            <div className="w-10 h-10 bg-maroon/10 rounded-full flex items-center justify-center mr-3">
-              <User className="h-5 w-5 text-maroon" />
-            </div>
-            <div>
-              <h4 className="font-bold text-lg text-gray-900">
-                {selectedSubject} Teacher
-              </h4>
-              <p className="text-sm text-gray-600">Your subject instructor</p>
-            </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        
+        {/* Left Section: Header and Icon */}
+        <div className="flex items-center mb-4 sm:mb-0 sm:pr-6 border-b sm:border-b-0 sm:border-r pb-4 sm:pb-0 sm:border-gray-100 dark:sm:border-gray-800">
+          <div className="w-12 h-12 bg-maroon rounded-lg flex items-center justify-center mr-4 shadow-md flex-shrink-0">
+            <User className="h-6 w-6 text-white" />
           </div>
-          
-          {/* Contact Information - Compact Vertical Layout */}
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <User className="h-4 w-4 text-maroon mt-0.5 flex-shrink-0" />
-              <div>
-                <div className="font-medium text-gray-700 text-sm">Name</div>
-                <div className="text-gray-900">{teacherInfo.first_name} {teacherInfo.last_name}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Mail className="h-4 w-4 text-maroon mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-700 text-sm">Email</div>
-                <div className="text-gray-900 truncate">{teacherInfo.email}</div>
-              </div>
-            </div>
-
-            {teacherInfo.phone && (
-              <div className="flex items-start gap-3">
-                <Phone className="h-4 w-4 text-maroon mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-700 text-sm">Phone</div>
-                  <div className="text-gray-900 font-mono">{teacherInfo.phone}</div>
-                </div>
-              </div>
-            )}
+          <div>
+            <h4 className="font-extrabold text-xl tracking-tight text-gray-900 dark:text-white">
+              {selectedSubject} Teacher
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+              /Teacher Contact
+            </p>
           </div>
         </div>
         
-        {/* Contact Action Buttons */}
-        {teacherInfo.phone && (
-          <div className="flex flex-col items-end gap-3 ml-6">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-maroon text-maroon hover:bg-maroon hover:text-white transition-colors whitespace-nowrap"
-              onClick={() => {
-                navigator.clipboard.writeText(teacherInfo.phone);
-                alert(`Phone number ${teacherInfo.phone} copied to clipboard!`);
-              }}
-            >
-              <Phone className="h-4 w-4 mr-2" />
-              Copy Phone
-            </Button>
-            <a 
-              href={`tel:${teacherInfo.phone}`}
-              className="text-xs text-maroon hover:text-maroon/80 transition-colors text-center"
-            >
-              Tap to call
+        {/* Right Section: Contact Information - Horizontal (Flex-wrap for responsiveness) */}
+        <div className="flex-1 min-w-0 pt-4 sm:pt-0 pl-0 sm:pl-6">
+          <div className="flex flex-wrap gap-y-4 gap-x-6 justify-start">
+            
+            {/* 1. Name */}
+            <div className="flex-shrink-0">
+              <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Name</div>
+              <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
+                {teacherInfo.first_name} {teacherInfo.last_name}
+              </div>
+            </div>
+
+            {/* 2. Email (Actionable) */}
+            <a href={`mailto:${teacherInfo.email}`} className="flex-shrink-0 group hover:underline underline-offset-2 transition-colors">
+              <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Email</div>
+              <div className="text-base text-maroon font-medium dark:text-maroon/80 group-hover:text-maroon/90 mt-0.5 truncate">
+                {teacherInfo.email}
+              </div>
             </a>
+
+            {/* 3. Phone (Actionable, Conditional) */}
+            {teacherInfo.phone && (
+              <a href={`tel:${teacherInfo.phone}`} className="flex-shrink-0 group hover:underline underline-offset-2 transition-colors">
+                <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Phone</div>
+                <div className="text-base text-maroon font-medium dark:text-maroon/80 group-hover:text-maroon/90 font-mono mt-0.5">
+                  {teacherInfo.phone}
+                </div>
+              </a>
+            )}
+
           </div>
-        )}
+        </div>
       </div>
     </CardContent>
   </Card>
@@ -2486,17 +2402,25 @@ useEffect(() => {
   </DialogContent>
 </Dialog>
 
-      {/* Fees Dialog - NEW POPUP MODAL */}
-      <Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0 border-maroon/20 bg-white">
-          <StudentFeesDialog 
-            onClose={() => setIsFeesDialogOpen(false)}
-            studentData={feesStudentData}
-            classId={classId}
-            className={className}
-          />
-        </DialogContent>
-      </Dialog>
+     {/* Fees Dialog - NEW POPUP MODAL */}
+<Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
+  <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0 border-maroon/20 bg-white">
+    <VisuallyHidden>
+      <DialogTitle>Student Fee Statement</DialogTitle>
+      <DialogDescription>
+        View student fee balance, payment history, and fee breakdown
+      </DialogDescription>
+    </VisuallyHidden>
+
+    <StudentFeesDialog 
+      onClose={() => setIsFeesDialogOpen(false)}
+      studentData={feesStudentData}
+      classId={classId}
+      className={className}
+    />
+  </DialogContent>
+</Dialog>
+
 
       {/* Settings Modal for Password Update - SCROLLABLE */}
 <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>

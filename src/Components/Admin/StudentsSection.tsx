@@ -7,13 +7,7 @@ import { Input } from '@/Components/ui/input';
 import { Plus, Search, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/Components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from '@/Components/ui/dialog';
 import { Label } from '@/Components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
 import { Skeleton } from '@/Components/ui/skeleton';
@@ -26,12 +20,8 @@ export default function StudentsSection() {
   const { toast } = useToast();
   const [formError, setFormError] = useState<string | null>(null);
   const [creationSuccess, setCreationSuccess] = useState<string | null>(null);
-  
   // Add sort state
-  const [sortConfig, setSortConfig] = useState({
-    key: 'reg_no',
-    direction: 'asc'
-  });
+  const [sortConfig, setSortConfig] = useState({ key: 'reg_no', direction: 'asc' });
 
   // State for form values
   const [formData, setFormData] = useState({
@@ -44,12 +34,14 @@ export default function StudentsSection() {
     date_of_birth: '',
     guardian_name: '',
     guardian_phone: '',
+    guardian_email: '',
     password: '',
     student_type: 'Day Scholar' // Default to 'Day Scholar'
   });
 
   // helper: convert camelCase keys to snake_case
   const camelToSnake = (s: string) => s.replace(/([A-Z])/g, '_$1').toLowerCase();
+
   const normalizeFormKeys = (obj: Record<string, any>) => {
     const out: Record<string, any> = {};
     Object.keys(obj).forEach((k) => {
@@ -77,11 +69,26 @@ export default function StudentsSection() {
           auth_id,
           created_at,
           profiles (
-            id, student_id, reg_no, first_name, last_name, 
-            date_of_birth, gender, phone, email, guardian_name, 
-            guardian_phone, student_type, created_at, updated_at
+            id,
+            student_id,
+            reg_no,
+            first_name,
+            last_name,
+            date_of_birth,
+            gender,
+            phone,
+            email,
+            guardian_name,
+            guardian_phone,
+            student_type,
+            guardian_email,
+            created_at,
+            updated_at
           ),
-          enrollments ( id, class_id )
+          enrollments (
+            id,
+            class_id
+          )
         `);
       if (error) throw error;
       const rows = data || [];
@@ -100,6 +107,7 @@ export default function StudentsSection() {
             email: '',
             guardian_name: '',
             guardian_phone: '',
+            guardian_email: '',
             student_type: 'Day Scholar',
           };
         }
@@ -121,49 +129,51 @@ export default function StudentsSection() {
   });
 
   // Sort and filter students
-  const filteredStudents = students
-    .filter((student) => {
-      const p = student.profile || {};
-      return `${p.first_name || ''} ${p.last_name || ''} ${p.reg_no || ''} ${p.email || ''}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-    })
-    .sort((a, b) => {
-      const aValue = a.profile?.[sortConfig.key] || '';
-      const bValue = b.profile?.[sortConfig.key] || '';
-      
-      if (sortConfig.direction === 'asc') {
-        return aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
-      } else {
-        return bValue.localeCompare(aValue, undefined, { numeric: true, sensitivity: 'base' });
-      }
-    });
+  const filteredStudents = (students || [])
+  .filter((student) => {
+    if (!student || !student.profile) return false; // skip invalid entries
+    const p = student.profile;
+    return `${p.first_name || ''} ${p.last_name || ''} ${p.reg_no || ''} ${p.email || ''}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+  })
+  .sort((a, b) => {
+    const aValue = a.profile?.[sortConfig.key] || '';
+    const bValue = b.profile?.[sortConfig.key] || '';
+    if (sortConfig.direction === 'asc') {
+      return aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+    } else {
+      return bValue.localeCompare(aValue, undefined, { numeric: true, sensitivity: 'base' });
+    }
+  });
 
   const createMutation = useMutation<any, any, Record<string, any>, unknown>({
     mutationFn: async (data) => {
       const constructedEmail = `${data.reg_no}@school.local`;
-      const { class_id, reg_no, first_name, last_name, date_of_birth, gender, phone, password, student_type } = data;
-      
-      const payload = { 
-        email: constructedEmail, 
-        password, 
-        reg_no, 
-        first_name, 
-        last_name, 
-        date_of_birth, 
-        gender, 
-        phone, 
+      const { class_id, reg_no, first_name, last_name, date_of_birth, gender, phone, password, student_type, guardian_email } = data;
+      const payload = {
+        email: guardian_email, // Changed from constructedEmail to guardian_email
+        password,
+        reg_no,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        guardian_email, // Added guardian_email to payload
         class_id,
-        student_type 
+        student_type
       };
-      
-      const res = await supabase.functions.invoke('create-user', { body: JSON.stringify(payload) });
-
+      const res = await supabase.functions.invoke('create-user', {
+        body: JSON.stringify(payload)
+      });
       let parsed = res.data ?? null;
       if (typeof parsed === "string") {
-        try { parsed = JSON.parse(parsed); } catch (e) { }
+        try {
+          parsed = JSON.parse(parsed);
+        } catch (e) {
+        }
       }
-
       if (parsed && (parsed.ok === true || parsed.ok === "true" || parsed.ok == 1 || !!parsed.ok)) {
         setCreationSuccess("Student was successfully created!");
         return parsed;
@@ -184,10 +194,14 @@ export default function StudentsSection() {
         date_of_birth: '',
         guardian_name: '',
         guardian_phone: '',
+        guardian_email: '',
         password: '',
         student_type: 'Day Scholar'
       });
-      toast({ title: 'Student created', description: 'The student was added successfully.' });
+      toast({
+        title: 'Student created',
+        description: 'The student was added successfully.'
+      });
       setCreationSuccess("Student was successfully created!");
       setTimeout(() => setCreationSuccess(null), 3500);
     },
@@ -195,17 +209,18 @@ export default function StudentsSection() {
       console.error('Create student error', err);
       const message = String(err?.message || err);
       setFormError(message);
-      toast({ title: 'Create failed', description: message });
+      toast({
+        title: 'Create failed',
+        description: message
+      });
     },
   });
 
   const updateMutation = useMutation<any, any, Record<string, any>>({
     mutationFn: async (data) => {
       if (!editingStudent) throw new Error('No student selected for editing');
-
       const updates = [];
-      
-      // Update profiles table
+      // Update profiles table if (editingStudent.profile?.id)
       if (editingStudent.profile?.id) {
         const profileUpdate = supabase
           .from('profiles')
@@ -218,14 +233,13 @@ export default function StudentsSection() {
             phone: data.phone,
             guardian_name: data.guardian_name,
             guardian_phone: data.guardian_phone,
+            guardian_email: data.guardian_email, // Added guardian_email update
             student_type: data.student_type,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingStudent.profile.id);
-
         updates.push(profileUpdate);
       }
-
       // Update enrollments table if class_id changed and enrollment exists
       if (data.class_id && editingStudent.enrollment?.id) {
         const enrollmentUpdate = supabase
@@ -234,16 +248,12 @@ export default function StudentsSection() {
             class_id: data.class_id,
           })
           .eq('id', editingStudent.enrollment.id);
-
         updates.push(enrollmentUpdate);
       }
-
       const results = await Promise.all(updates);
-      
       for (const result of results) {
         if (result.error) throw result.error;
       }
-
       return true;
     },
     onSuccess: () => {
@@ -260,20 +270,21 @@ export default function StudentsSection() {
         date_of_birth: '',
         guardian_name: '',
         guardian_phone: '',
+        guardian_email: '',
         password: '',
         student_type: 'Day Scholar'
       });
-      toast({ 
-        title: 'Student updated', 
-        description: 'The student was updated successfully.' 
+      toast({
+        title: 'Student updated',
+        description: 'The student was updated successfully.'
       });
     },
     onError: (err: any) => {
       console.error('Update student error', err);
       const message = String(err?.message || err);
       setFormError(message);
-      toast({ 
-        title: 'Update failed', 
+      toast({
+        title: 'Update failed',
         description: message,
         variant: 'destructive'
       });
@@ -284,20 +295,16 @@ export default function StudentsSection() {
   const deleteMutation = useMutation<any, any, { studentId: string; authId?: string }>({
     mutationFn: async ({ studentId, authId }: { studentId: string; authId?: string }) => {
       const payload = { studentId, userId: authId };
-      const res = await supabase.functions.invoke('delete-user', { 
-        body: JSON.stringify(payload) 
+      const res = await supabase.functions.invoke('delete-user', {
+        body: JSON.stringify(payload)
       });
-      
       if (res.error) {
         throw new Error(`Failed to invoke delete function: ${res.error.message}`);
       }
-
       const data = res.data;
-      
       if (!data || !data.success) {
         throw new Error(data?.error || 'Delete operation failed');
       }
-
       return data;
     },
     onSuccess: (data) => {
@@ -327,19 +334,13 @@ export default function StudentsSection() {
   // Add confirmation for delete
   const handleDelete = (student: any) => {
     if (window.confirm(`Are you sure you want to delete ${student.profile?.first_name} ${student.profile?.last_name}? This action cannot be undone.`)) {
-      deleteMutation.mutate({ 
-        studentId: student.id, 
-        authId: student.auth_id 
-      });
+      deleteMutation.mutate({ studentId: student.id, authId: student.auth_id });
     }
   };
 
   // Handle form input changes
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   // Reset form when opening for new student
@@ -355,6 +356,7 @@ export default function StudentsSection() {
       date_of_birth: '',
       guardian_name: '',
       guardian_phone: '',
+      guardian_email: '',
       password: '',
       student_type: 'Day Scholar'
     });
@@ -374,6 +376,7 @@ export default function StudentsSection() {
       date_of_birth: student.profile?.date_of_birth || '',
       guardian_name: student.profile?.guardian_name || '',
       guardian_phone: student.profile?.guardian_phone || '',
+      guardian_email: student.profile?.guardian_email || '',
       student_type: student.profile?.student_type || 'Day Scholar',
       password: ''
     });
@@ -384,15 +387,29 @@ export default function StudentsSection() {
     e.preventDefault();
     setFormError(null);
     setCreationSuccess(null);
-    
     const data = normalizeFormKeys(formData);
-    
     // Validate required fields
     if (!data.reg_no || String(data.reg_no).trim() === '') {
       setFormError('Registration number is required');
       return;
     }
     data.reg_no = String(data.reg_no).trim();
+    
+    // Validate guardian_email for new students
+    if (!editingStudent && (!data.guardian_email || String(data.guardian_email).trim() === '')) {
+      setFormError('Guardian email is required for password recovery');
+      return;
+    }
+    
+    // Validate guardian_email format if provided
+    if (data.guardian_email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.guardian_email.trim())) {
+        setFormError('Please enter a valid guardian email address');
+        return;
+      }
+      data.guardian_email = String(data.guardian_email).trim();
+    }
 
     // Validate phone if provided
     const phone = data.phone ? String(data.phone).trim() : '';
@@ -404,7 +421,6 @@ export default function StudentsSection() {
       }
       data.phone = phone;
     }
-
     // Validate date of birth if provided
     const dob = data.date_of_birth ? String(data.date_of_birth).trim() : '';
     if (dob) {
@@ -424,7 +440,6 @@ export default function StudentsSection() {
       }
       data.date_of_birth = dob;
     }
-
     if (editingStudent) {
       updateMutation.mutate(data);
     } else {
@@ -447,6 +462,7 @@ export default function StudentsSection() {
         date_of_birth: '',
         guardian_name: '',
         guardian_phone: '',
+        guardian_email: '',
         password: '',
         student_type: 'Day Scholar'
       });
@@ -456,9 +472,7 @@ export default function StudentsSection() {
   // Sort indicator component
   const SortIndicator: React.FC<{ columnKey: string }> = ({ columnKey }) => {
     if (sortConfig.key !== columnKey) return null;
-    return sortConfig.direction === 'asc' ? 
-      <ChevronUp className="w-4 h-4 inline ml-1" /> : 
-      <ChevronDown className="w-4 h-4 inline ml-1" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp className="w-4 h-4 inline ml-1" /> : <ChevronDown className="w-4 h-4 inline ml-1" />;
   };
 
   return (
@@ -487,15 +501,9 @@ export default function StudentsSection() {
           <div className="mb-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <Input
-                placeholder="Search by name, reg no, or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+              <Input placeholder="Search by name, reg no, or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
           </div>
-
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
@@ -505,34 +513,19 @@ export default function StudentsSection() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50" 
-                      onClick={() => handleSort('reg_no')}
-                    >
+                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('reg_no')}>
                       Reg No <SortIndicator columnKey="reg_no" />
                     </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50" 
-                      onClick={() => handleSort('first_name')}
-                    >
+                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('first_name')}>
                       Name <SortIndicator columnKey="first_name" />
                     </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50" 
-                      onClick={() => handleSort('gender')}
-                    >
+                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('gender')}>
                       Gender <SortIndicator columnKey="gender" />
                     </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50" 
-                      onClick={() => handleSort('student_type')}
-                    >
+                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('student_type')}>
                       Student Type <SortIndicator columnKey="student_type" />
                     </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50" 
-                      onClick={() => handleSort('email')}
-                    >
+                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('email')}>
                       Email <SortIndicator columnKey="email" />
                     </TableHead>
                     <TableHead>Actions</TableHead>
@@ -546,9 +539,7 @@ export default function StudentsSection() {
                       <TableCell>{student.profile?.gender}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          student.profile?.student_type === 'Boarding' 
-                            ? 'bg-purple-100 text-purple-800' 
-                            : 'bg-green-100 text-green-800'
+                          student.profile?.student_type === 'Boarding' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
                         }`}>
                           {student.profile?.student_type || 'Day Scholar'}
                         </span>
@@ -556,19 +547,10 @@ export default function StudentsSection() {
                       <TableCell>{student.profile?.email}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(student)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(student)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(student)}
-                            disabled={isDeleting}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(student)} disabled={isDeleting}>
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
                         </div>
@@ -584,7 +566,6 @@ export default function StudentsSection() {
           )}
         </CardContent>
       </Card>
-
       <Dialog open={showAddModal} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -594,42 +575,19 @@ export default function StudentsSection() {
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="reg_no">Registration Number</Label>
-                <Input 
-                  id="reg_no"
-                  name="reg_no"
-                  value={formData.reg_no}
-                  onChange={(e) => handleInputChange('reg_no', e.target.value)}
-                  required 
-                />
+                <Input id="reg_no" name="reg_no" value={formData.reg_no} onChange={(e) => handleInputChange('reg_no', e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="first_name">First Name</Label>
-                <Input 
-                  id="first_name"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={(e) => handleInputChange('first_name', e.target.value)}
-                  required 
-                />
+                <Input id="first_name" name="first_name" value={formData.first_name} onChange={(e) => handleInputChange('first_name', e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="last_name">Last Name</Label>
-                <Input 
-                  id="last_name"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={(e) => handleInputChange('last_name', e.target.value)}
-                  required 
-                />
+                <Input id="last_name" name="last_name" value={formData.last_name} onChange={(e) => handleInputChange('last_name', e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gender">Gender</Label>
-                <Select 
-                  name="gender"
-                  value={formData.gender}
-                  onValueChange={(value) => handleInputChange('gender', value)}
-                  required
-                >
+                <Select name="gender" value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} required >
                   <SelectTrigger id="gender">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
@@ -642,12 +600,7 @@ export default function StudentsSection() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="class_id">Class</Label>
-                <Select 
-                  name="class_id"
-                  value={formData.class_id}
-                  onValueChange={(value) => handleInputChange('class_id', value)}
-                  required
-                >
+                <Select name="class_id" value={formData.class_id} onValueChange={(value) => handleInputChange('class_id', value)} required >
                   <SelectTrigger id="class_id">
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
@@ -660,11 +613,7 @@ export default function StudentsSection() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="student_type">Student Type</Label>
-                <Select 
-                  name="student_type"
-                  value={formData.student_type}
-                  onValueChange={(value) => handleInputChange('student_type', value)}
-                >
+                <Select name="student_type" value={formData.student_type} onValueChange={(value) => handleInputChange('student_type', value)} >
                   <SelectTrigger id="student_type">
                     <SelectValue placeholder="Select student type" />
                   </SelectTrigger>
@@ -674,74 +623,55 @@ export default function StudentsSection() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Add guardian_email field */}
+              <div className="space-y-2">
+                <Label htmlFor="guardian_email">
+                  Guardian Email {!editingStudent && <span className="text-red-500">*</span>}
+                </Label>
+                <Input
+                  id="guardian_email"
+                  name="guardian_email"
+                  type="email"
+                  value={formData.guardian_email}
+                  onChange={(e) => handleInputChange('guardian_email', e.target.value)}
+                  required={!editingStudent}
+                  placeholder="guardian@example.com"
+                />
+                <p className="text-xs text-gray-500">
+                  Used for password recovery. Students can still login with registration number.
+                </p>
+              </div>
               {!editingStudent && (
                 <div className="space-y-2">
                   <Label htmlFor="password">Password (optional)</Label>
-                  <Input 
-                    id="password"
-                    name="password"
-                    type="password" 
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
-                    placeholder="Set a password or leave blank" 
-                  />
+                  <Input id="password" name="password" type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="Set a password or leave blank" />
                 </div>
               )}
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input 
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                />
+                <Input id="phone" name="phone" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date_of_birth">Date of Birth</Label>
-                <Input 
-                  id="date_of_birth"
-                  name="date_of_birth"
-                  type="date" 
-                  value={formData.date_of_birth}
-                  onChange={(e) => handleInputChange('date_of_birth', e.target.value)}
-                />
+                <Input id="date_of_birth" name="date_of_birth" type="date" value={formData.date_of_birth} onChange={(e) => handleInputChange('date_of_birth', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guardian_name">Guardian Name</Label>
-                <Input 
-                  id="guardian_name"
-                  name="guardian_name"
-                  value={formData.guardian_name}
-                  onChange={(e) => handleInputChange('guardian_name', e.target.value)}
-                />
+                <Input id="guardian_name" name="guardian_name" value={formData.guardian_name} onChange={(e) => handleInputChange('guardian_name', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guardian_phone">Guardian Phone</Label>
-                <Input 
-                  id="guardian_phone"
-                  name="guardian_phone"
-                  value={formData.guardian_phone}
-                  onChange={(e) => handleInputChange('guardian_phone', e.target.value)}
-                />
+                <Input id="guardian_phone" name="guardian_phone" value={formData.guardian_phone} onChange={(e) => handleInputChange('guardian_phone', e.target.value)} />
               </div>
             </div>
             <DialogFooter>
               {formError && (
                 <div className="text-sm text-red-600 mr-auto">{formError}</div>
               )}
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setShowAddModal(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700"
-                loading={isCreatingOrUpdating}
-                disabled={isCreatingOrUpdating}
-              >
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" loading={isCreatingOrUpdating} disabled={isCreatingOrUpdating}>
                 {editingStudent ? 'Update' : 'Create'} Student
               </Button>
             </DialogFooter>

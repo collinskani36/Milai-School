@@ -1,22 +1,9 @@
-"use client";
 import React from "react";
 import { Card, CardContent } from "@/Components/ui/card";
-import { Wallet, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Wallet, TrendingUp, AlertCircle, CheckCircle2, DollarSign, CreditCard } from "lucide-react";
 
-interface FeeRow {
-  total_billed: number | null;
-  total_paid: number | null;
-  outstanding_balance: number | null;
-}
-
-interface FeeBalanceOverviewProps {
-  studentFee: FeeRow | null;
-  isLoading?: boolean;
-}
-
-export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewProps) {
-
-  if ((arguments[0] as FeeBalanceOverviewProps)?.isLoading) {
+export default function FeeBalanceOverview({ studentFee, isLoading = false }) {
+  if (isLoading) {
     return (
       <div className="space-y-4">
         <div className="h-20 bg-gray-100 rounded animate-pulse" />
@@ -25,10 +12,19 @@ export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewPro
     );
   }
 
-  // ⭐ Safe fallback values
+  // Safe fallback values from database
   const totalBilled = studentFee?.total_billed ?? 0;
   const totalPaid = studentFee?.total_paid ?? 0;
-  const outstanding = studentFee?.outstanding_balance ?? (totalBilled - totalPaid);
+  const outstandingBalance = studentFee?.outstanding_balance ?? 0;
+  const creditCarried = studentFee?.credit_carried ?? 0;
+
+  // Calculate progress based on database values
+  const progressPercent = totalBilled > 0
+    ? Math.min((totalPaid / totalBilled) * 100, 100)
+    : 0;
+
+  // Determine if student has credit
+  const hasCredit = creditCarried > 0;
 
   const stats = [
     {
@@ -49,22 +45,18 @@ export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewPro
     },
     {
       label: "Outstanding Balance",
-      value: outstanding,
-      icon: outstanding > 0 ? AlertCircle : CheckCircle2,
-      color: outstanding > 0 ? "from-red-500 to-rose-600" : "from-emerald-500 to-green-600",
-      bgColor: outstanding > 0 ? "bg-red-50" : "bg-emerald-50",
-      iconColor: outstanding > 0 ? "text-red-600" : "text-emerald-600",
+      value: outstandingBalance,
+      icon: outstandingBalance > 0 ? AlertCircle : CheckCircle2,
+      color: outstandingBalance > 0 ? "from-red-500 to-rose-600" : "from-emerald-500 to-green-600",
+      bgColor: outstandingBalance > 0 ? "bg-red-50" : "bg-emerald-50",
+      iconColor: outstandingBalance > 0 ? "text-red-600" : "text-emerald-600",
     },
   ];
-
-  const progressPercent = totalBilled > 0
-    ? Math.min((totalPaid / totalBilled) * 100, 100)
-    : 0;
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -91,13 +83,45 @@ export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewPro
             </Card>
           );
         })}
+
+        {/* Credit Carried Card */}
+        <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden group hover:shadow-2xl transition-all duration-300">
+          <div className={`h-1 bg-gradient-to-r ${hasCredit ? "from-amber-500 to-orange-600" : "from-gray-400 to-gray-500"}`} />
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                  Credit Available
+                </p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  KES {creditCarried.toLocaleString()}
+                </p>
+              </div>
+              <div className={`p-3 rounded-xl ${hasCredit ? "bg-amber-50" : "bg-gray-50"}`}>
+                <CreditCard className={`w-6 h-6 ${hasCredit ? "text-amber-600" : "text-gray-400"}`} />
+              </div>
+            </div>
+            {hasCredit && (
+              <p className="text-xs text-amber-600 mt-2">
+                Will be automatically applied to future fees
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Progress Bar */}
       <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-700">Payment Progress</span>
+            <div>
+              <span className="text-sm font-medium text-gray-700">Payment Progress</span>
+              {hasCredit && (
+                <span className="text-xs text-amber-600 ml-2">
+                  (KES {creditCarried.toLocaleString()} credit available)
+                </span>
+              )}
+            </div>
             <span className="text-sm font-bold text-emerald-600">
               {progressPercent.toFixed(1)}%
             </span>
@@ -112,8 +136,52 @@ export default function FeeBalanceOverview({ studentFee }: FeeBalanceOverviewPro
             <span>KES 0</span>
             <span>KES {totalBilled.toLocaleString()}</span>
           </div>
+          
+          {/* Credit Indicator on Progress Bar */}
+          {hasCredit && (
+            <div className="mt-2 relative">
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>Credit Available</span>
+                <span>KES {creditCarried.toLocaleString()}</span>
+              </div>
+              <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-300 to-orange-400 rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${Math.min((creditCarried / totalBilled) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-amber-600 mt-1">
+                Credit will be automatically applied when next term fees are uploaded
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Database Notice */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start">
+          <div className="p-2 rounded-lg bg-blue-100 mr-3">
+            <CreditCard className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-blue-800">Credit System Notice</h4>
+            <p className="text-sm text-blue-600 mt-1">
+              All calculations are handled by the database system. Overpayments are automatically stored as credit and applied to future terms.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-xs text-blue-500">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span>Outstanding balance includes any available credit</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                <span>Credit is applied automatically to new term fees</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

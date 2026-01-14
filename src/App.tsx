@@ -10,7 +10,10 @@ import Index from "./pages/Index";
 import StudentAuth from "./Components/StudentAuth";
 import TeacherAuth from "./Components/TeacherAuth";
 import StudentSignup from "./pages/StudentSignup";
-// Remove StudentFeePage import since it will be a popup in StudentDashboard
+import StudentForgotPassword from "./pages/StudentForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import TeacherForgotPassword from "./pages/TeacherForgotPassword";
+
 
 const queryClient = new QueryClient();
 
@@ -19,14 +22,34 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ✅ Check current session
+  // -------------------------
+  // Check if logged-in teacher is admin
+  // -------------------------
+  const checkIfAdmin = async (authId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("teachers")
+        .select("is_admin")
+        .eq("auth_id", authId)
+        .maybeSingle(); // <-- prevents 406 if user is not in teachers table
+
+      setIsAdmin(!error && data?.is_admin === true);
+    } catch (err) {
+      console.warn("checkIfAdmin failed:", err);
+      setIsAdmin(false);
+    }
+  };
+
+  // -------------------------
+  // Initial session + listener
+  // -------------------------
   useEffect(() => {
     const getSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
-        console.log("Initial session:", data, error);
         const sessionUser = data?.session?.user ?? null;
         setUser(sessionUser);
+
         if (sessionUser) {
           checkIfAdmin(sessionUser.id).catch((err) =>
             console.warn("checkIfAdmin error:", err)
@@ -38,12 +61,12 @@ function App() {
         setLoading(false);
       }
     };
+
     getSession();
 
     const { data: listenerData } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_, session) => {
         try {
-          console.log("Auth state changed:", event, session);
           const sessionUser = session?.user ?? null;
           setUser(sessionUser);
           if (sessionUser) {
@@ -61,40 +84,16 @@ function App() {
 
     return () => {
       try {
-        if (
-          listenerData &&
-          (listenerData as any).subscription &&
-          typeof (listenerData as any).subscription.unsubscribe === "function"
-        ) {
-          (listenerData as any).subscription.unsubscribe();
-        }
+        listenerData.subscription?.unsubscribe?.();
       } catch (err) {
         console.warn("Error unsubscribing auth listener:", err);
       }
     };
   }, []);
 
-  // ✅ Check if logged-in user is admin
-  const checkIfAdmin = async (authId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("teachers")
-        .select("is_admin")
-        .eq("auth_id", authId)
-        .single();
-      setIsAdmin(
-        !error &&
-          (data?.is_admin === true ||
-            data?.is_admin === "true" ||
-            data?.is_admin === 1)
-      );
-    } catch (err) {
-      console.warn("checkIfAdmin failed:", err);
-      setIsAdmin(false);
-    }
-  };
-
-  // ✅ Dev-only click debugger
+  // -------------------------
+  // Dev-only click debugger
+  // -------------------------
   useEffect(() => {
     if (!(typeof import.meta !== "undefined" && (import.meta as any).env?.DEV))
       return;
@@ -140,28 +139,27 @@ function App() {
 
   if (loading) return <p>Loading...</p>;
 
-  // ✅ Logout handler
+  // -------------------------
+  // Logout handler
+  // -------------------------
   const handleLogout = async () => {
     const fallback = () => {
       try {
         setUser(null);
         setIsAdmin(false);
       } catch {}
-      // Redirect to appropriate login page depending on current route
       try {
-        const p = (window.location && window.location.pathname) || '';
-        if (p.startsWith('/student')) {
-          window.location.href = '/login';
+        const p = (window.location && window.location.pathname) || "";
+        if (p.startsWith("/student")) {
+          window.location.href = "/login";
           return;
         }
-        if (p.startsWith('/teacher') || p.startsWith('/admin')) {
-          window.location.href = '/teacher-login';
+        if (p.startsWith("/teacher") || p.startsWith("/admin")) {
+          window.location.href = "/teacher-login";
           return;
         }
-      } catch (e) {
-        // fall through
-      }
-      window.location.href = '/login';
+      } catch {}
+      window.location.href = "/login";
     };
 
     try {
@@ -188,12 +186,14 @@ function App() {
     }
   };
 
-  // ✅ Main routes (moved inside final return)
+  // -------------------------
+  // Routes
+  // -------------------------
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
+          {/* Public */}
           <Route path="/" element={<Index />} />
 
           {/* Student login */}
@@ -201,12 +201,23 @@ function App() {
             path="/login"
             element={
               user ? (
-                <Navigate to="/student-dashboard" replace />
+                isAdmin ? (
+                  <Navigate to="/admin-dashboard" replace />
+                ) : (
+                  <Navigate to="/student-dashboard" replace />
+                )
               ) : (
                 <StudentAuth />
               )
             }
           />
+
+          {/* Student forgot password */}
+           <Route path="/forgot-password" element={<StudentForgotPassword />} />
+
+           <Route path="/reset-password" element={<ResetPassword />} />
+
+
 
           {/* Student signup */}
           <Route path="/student-signup" element={<StudentSignup />} />
@@ -226,22 +237,27 @@ function App() {
               )
             }
           />
+           {/* Teacher forgot password */}
+           <Route path="/teacher-forgot-password" element={<TeacherForgotPassword />} />
 
-          {/* Protected student dashboard - NOW INCLUDES FEES AS POPUP */}
+
+          {/* Student dashboard */}
           <Route
             path="/student-dashboard"
             element={
               user ? (
-                <StudentDashboard handleLogout={handleLogout} />
+                isAdmin ? (
+                  <Navigate to="/admin-dashboard" replace />
+                ) : (
+                  <StudentDashboard handleLogout={handleLogout} />
+                )
               ) : (
                 <Navigate to="/login" replace />
               )
             }
           />
 
-          {/* REMOVED: Protected student fees page (now part of dashboard popup) */}
-
-          {/* Protected teacher dashboard */}
+          {/* Teacher dashboard */}
           <Route
             path="/teacher-dashboard"
             element={
@@ -257,7 +273,7 @@ function App() {
             }
           />
 
-          {/* Admin dashboard route */}
+          {/* Admin dashboard */}
           <Route
             path="/admin-dashboard"
             element={

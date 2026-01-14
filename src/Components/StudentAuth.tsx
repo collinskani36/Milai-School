@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 type StudentAuthProps = {
-  onLogin?: (profile: any) => void; // make optional so it won't crash
+  onLogin?: (profile: any) => void;
 };
 
 export default function StudentAuth({ onLogin }: StudentAuthProps) {
@@ -20,56 +20,75 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
     setError(null);
 
     try {
-      // 1) Build synthetic email (lowercase is safest)
-      const reg = registration.trim().toLowerCase();
-      const email = `${reg}@school.local`;
+      const reg = registration.trim().toUpperCase();
       const password = pin.trim();
 
-      // 2) Auth sign-in
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      console.log("[DEBUG] Registration entered:", reg);
+      console.log("[DEBUG] PIN entered:", password ? "***" : "(empty)");
+
+      if (!reg || !password) {
+        setError("Please enter registration number and PIN");
+        return;
+      }
+
+      // 1️⃣ Lookup student profile by registration number
+      const { data: profileData, error: lookupError } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          reg_no,
+          guardian_email,
+          student_id
+        `)
+        .eq("reg_no", reg)
+        .maybeSingle();
+
+      console.log("[DEBUG] Profile lookup result:", profileData, "Error:", lookupError);
+
+      if (lookupError) throw lookupError;
+
+      if (!profileData) {
+        setError("Registration number not found");
+        console.warn("[WARN] No profile found for reg_no:", reg);
+        return;
+      }
+
+      const guardianEmail = profileData.guardian_email;
+
+      if (!guardianEmail) {
+        setError("Guardian email not set for this student");
+        console.warn("[WARN] Profile exists but guardian_email is missing:", profileData);
+        return;
+      }
+
+      console.log("[DEBUG] Guardian email found:", guardianEmail);
+
+      // 2️⃣ Authenticate using Supabase auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: guardianEmail,
         password,
       });
 
-      if (error || !data?.user) {
-        setError(error?.message || "Invalid registration number or PIN");
+      console.log("[DEBUG] Auth result:", authData, "Auth error:", authError);
+
+      if (authError || !authData?.user) {
+        setError("Invalid registration number or PIN");
+        console.warn("[WARN] Auth failed for email:", guardianEmail);
         return;
       }
 
-      // 3) Fetch profile linked to this auth user
-      const { data: profile, error: profileError } = await supabase
-  .from("profiles")
-  .select(`
-    id,
-    reg_no,
-    role,
-    students:reg_no (
-      student_id,
-      first_name,
-      last_name,
-      dob,
-      gender,
-      created_at
-    )
-  `)
-  .eq("id", data.user.id)
-  .single();
+      console.log("[INFO] Login successful for:", guardianEmail);
 
-
-      if (profileError) {
-        // Helpful message if you forgot to create profiles row
-        setError(
-          "Logged in, but profile not found. Make sure a row exists in `profiles` with id = auth.users.id."
-        );
-        console.error(profileError);
-        return;
+      // 3️⃣ Hand over profile to parent if callback exists
+      if (typeof onLogin === "function") {
+        onLogin(profileData);
       }
 
-      // 4) Hand over to parent if provided
-      if (typeof onLogin === "function") onLogin(profile);
+      // 4️⃣ Navigate to student dashboard
+      navigate("/student-dashboard");
     } catch (err: any) {
-      console.error("Login runtime error:", err);
-      setError(err?.message || "Something went wrong. Try again.");
+      console.error("[ERROR] Login runtime error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -79,14 +98,22 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <img src="/logo.png" alt="School Logo" className="w-28 h-28 object-contain" />
+          <img
+            src="/logo.png"
+            alt="School Logo"
+            className="w-28 h-28 object-contain"
+          />
         </div>
 
         <h2 className="text-2xl font-bold text-center text-[#800000] mb-6">
           Student Login
         </h2>
 
-        {error && <div className="bg-red-100 text-red-700 p-2 rounded mb-4">{error}</div>}
+        {error && (
+          <div className="bg-red-100 text-red-700 p-2 rounded mb-4">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input
@@ -94,7 +121,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
             placeholder="Registration Number (e.g., REG1001)"
             value={registration}
             onChange={(e) => setRegistration(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:outline-none"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             required
           />
           <input
@@ -102,16 +129,23 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
             placeholder="PIN"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:outline-none"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             required
           />
           <button
             type="submit"
-            className="w-full bg-[#800000] text-white py-2 rounded-lg font-semibold hover:bg-[#660000] transition"
             disabled={loading}
+            className="w-full bg-[#800000] text-white py-2 rounded-lg font-semibold"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
+          <p
+  className="text-sm text-center text-maroon-700 cursor-pointer hover:underline mt-3"
+  onClick={() => (window.location.href = "/forgot-password")}
+>
+  Forgot password?
+</p>
+
         </form>
       </div>
     </div>

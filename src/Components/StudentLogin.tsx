@@ -74,6 +74,14 @@ export default function StudentLogin() {
         >
           {loading ? "Logging in..." : "Login"}
         </button>
+        <button
+  type="button"
+  onClick={() => navigate("/")}
+  className="w-full border border-gray-300 text-gray-700 py-2 rounded hover:bg-gray-100 transition"
+>
+  Back
+</button>
+
 
         
       </form>

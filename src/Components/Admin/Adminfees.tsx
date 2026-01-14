@@ -9,7 +9,7 @@ import { Badge } from "@/Components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
 import { 
   Search, Plus, Users, Wallet, TrendingUp, AlertCircle, 
-  Settings, Receipt, RefreshCw, FileText, Download, UserCheck
+  Settings, Receipt, RefreshCw, FileText, Download, UserCheck, CreditCard
 } from "lucide-react";
 
 import FeeStructureForm from "@/Components/Fees/FeeStructureForm";
@@ -19,7 +19,7 @@ import StudentFeeCard from "@/Components/Fees/StudentFeeCard";
 
 import { supabase } from "@/lib/supabaseClient";
 
-// Helper to normalize relation fields returned by Supabase (may be object or single-item array)
+// Helper to normalize relation fields returned by Supabase
 const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
   if (!rel) return undefined;
   return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
@@ -36,8 +36,7 @@ export default function AdminFeesDashboard() {
   const [selectedStudentFee, setSelectedStudentFee] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('students');
   
-
-  // FETCH ALL PAYMENTS from p_payments table
+  // FETCH ALL PAYMENTS
   const { data: allPayments = [], isLoading: loadingPayments } = useQuery({
     queryKey: ['allPayments'],
     queryFn: async () => {
@@ -52,19 +51,18 @@ export default function AdminFeesDashboard() {
         throw error;
       }
       
-      console.log(`Fetched ${data?.length || 0} payments from p_payments`);
+      console.log(`Fetched ${data?.length || 0} payments`);
       return data || [];
     }
   });
 
-  // FETCH STUDENT FEES - AGGREGATED BY STUDENT WITH STUDENT TYPE
-  // UPDATED: Now calculates total_paid from p_payments table instead of student_fees
+  // FETCH STUDENT FEES WITH CREDIT_CARRIED
   const { data: studentFees = [], isLoading: loadingStudentFees } = useQuery({
-    queryKey: ["studentFees", allPayments],
+    queryKey: ["studentFees"],
     queryFn: async () => {
-      console.log("Fetching student fees from Supabase...");
+      console.log("Fetching student fees with credits...");
 
-      // Fetch student fees
+      // Fetch student fees including credit_carried
       const { data: feesData, error: feesError } = await supabase
         .from("student_fees")
         .select("*")
@@ -75,7 +73,7 @@ export default function AdminFeesDashboard() {
         throw feesError;
       }
 
-      // Fetch students with their profiles
+      // Fetch students with profiles
       const { data: studentsData, error: studentsError } = await supabase
         .from("students")
         .select(`
@@ -97,7 +95,6 @@ export default function AdminFeesDashboard() {
       const { data: enrollmentsData, error: enrollmentsError } = await supabase
         .from("enrollments")
         .select(`
-          id,
           student_id,
           class_id,
           classes (id, name)
@@ -108,109 +105,148 @@ export default function AdminFeesDashboard() {
         throw enrollmentsError;
       }
 
-      // Create a map to store payments by student_id for quick lookup
-      const paymentsByStudent = new Map();
-      if (allPayments && allPayments.length > 0) {
-        allPayments.forEach((payment: any) => {
-          const studentId = payment.student_id;
-          const currentTotal = paymentsByStudent.get(studentId) || 0;
-          paymentsByStudent.set(studentId, currentTotal + Number(payment.amount_paid || 0));
-        });
-        console.log("Payments by student map created:", paymentsByStudent.size, "students");
+      // Fetch fee structures for term/year info
+      const { data: feeStructures, error: feeStructureError } = await supabase
+        .from("fee_structure")
+        .select("id, term, academic_year");
+      
+      if (feeStructureError) {
+        console.error("Error fetching fee structures:", feeStructureError);
+        throw feeStructureError;
       }
 
-      // Aggregate student fees
+      // Create student map
+      const studentMap = new Map();
+      studentsData.forEach((student: any) => {
+        const profile = firstRel(student.profiles);
+        studentMap.set(student.id, {
+          ...student,
+          student_type: profile?.student_type || "Day Scholar"
+        });
+      });
+
+      // Create enrollment map
+      const enrollmentMap = new Map();
+      enrollmentsData.forEach((enrollment: any) => {
+        enrollmentMap.set(enrollment.student_id, enrollment);
+      });
+
+      // Create fee structure map
+      const feeStructureMap = new Map();
+      feeStructures?.forEach((fs: any) => {
+        feeStructureMap.set(fs.id, fs);
+      });
+
+      // Aggregate student fees by student
       const studentFeeMap = new Map();
 
-      feesData.forEach((fee) => {
+      feesData.forEach((fee: any) => {
         const studentId = fee.student_id;
         const studentKey = studentId;
         
         if (!studentFeeMap.has(studentKey)) {
-          const student = firstRel(studentsData.find(s => s.id === studentId)?.profiles ? studentsData.find(s => s.id === studentId) : studentsData.find(s => s.id === studentId));
-          const enrollment = enrollmentsData.find(e => e.student_id === studentId);
-
-          // Use DB value for consistency
-          const studentType = firstRel(firstRel(studentsData.find(s => s.id === studentId)?.profiles as any) as any)?.student_type || firstRel((studentsData.find(s => s.id === studentId) as any)?.profiles as any)?.student_type || "Day Scholar";
+          const student = studentMap.get(studentId);
+          const enrollment = enrollmentMap.get(studentId);
+          const studentType = student?.student_type || "Day Scholar";
 
           studentFeeMap.set(studentKey, {
             id: studentId,
             student_id: studentId,
-            student_name: student ? `${(student as any).first_name} ${(student as any).last_name}` : "Unknown",
-            admission_number: (student as any)?.Reg_no || "N/A",
+            student_name: student ? `${student.first_name} ${student.last_name}` : "Unknown",
+            admission_number: student?.Reg_no || "N/A",
             student_type: studentType,
             display_type: studentType,
-            class_name: firstRel(enrollment?.classes as any)?.name || "Not Assigned",
+            class_name: firstRel(enrollment?.classes)?.name || "Not Assigned",
             total_billed: 0,
-            // Initialize total_paid from p_payments table
-            total_paid: paymentsByStudent.get(studentId) || 0,
+            total_paid: 0,
             outstanding_balance: 0,
+            total_credit_carried: 0,
             fee_records: [],
             last_payment_date: null,
             academic_years: new Set(),
-            payments: [] // Store individual payments for this student
+            current_term_fee: null,
+            payments: []
           });
         }
 
         const studentFee = studentFeeMap.get(studentKey);
+        
+        // Get fee structure info
+        const feeStructure = feeStructureMap.get(fee.fee_structure_id);
+        const feeWithStructure = {
+          ...fee,
+          term: fee.term || feeStructure?.term,
+          academic_year: fee.academic_year || feeStructure?.academic_year
+        };
+
+        // Update totals
         studentFee.total_billed += Number(fee.total_billed) || 0;
+        studentFee.total_paid += Number(fee.total_paid) || 0;
+        studentFee.total_credit_carried += Number(fee.credit_carried) || 0;
         
         // Add fee record
-        studentFee.fee_records.push(fee);
-        studentFee.academic_years.add(fee.academic_year);
+        studentFee.fee_records.push(feeWithStructure);
+        
+        if (fee.academic_year) {
+          studentFee.academic_years.add(fee.academic_year);
+        }
 
-        // Update last payment date if this fee has one
+        // Update last payment date
         if (fee.last_payment_date) {
-          if (!studentFee.last_payment_date || new Date(fee.last_payment_date) > new Date(studentFee.last_payment_date)) {
+          const feeDate = new Date(fee.last_payment_date);
+          if (!studentFee.last_payment_date || feeDate > new Date(studentFee.last_payment_date)) {
             studentFee.last_payment_date = fee.last_payment_date;
           }
         }
+
+        // Set current term fee (most recent term/year)
+        const currentTerm = `${fee.term || feeStructure?.term}-${fee.academic_year || feeStructure?.academic_year}`;
+        if (!studentFee.current_term_fee || currentTerm > `${studentFee.current_term_fee.term}-${studentFee.current_term_fee.academic_year}`) {
+          studentFee.current_term_fee = feeWithStructure;
+        }
       });
 
-      // After processing all fees, calculate outstanding balance and status
+      // Calculate outstanding balance and status
       const aggregatedData = Array.from(studentFeeMap.values()).map(student => {
-        // Recalculate outstanding balance using total_paid from p_payments
-        student.outstanding_balance = student.total_billed - student.total_paid;
+        // Calculate effective outstanding balance (considering credit)
+        const effectiveOutstanding = Math.max(0, student.total_billed - student.total_paid);
         
-        // Determine status based on calculated balances
-        if (student.outstanding_balance <= 0) {
-          student.status = "Paid";
+        // Determine status
+        let status = "Pending";
+        if (student.total_paid >= student.total_billed) {
+          status = "Paid";
         } else if (student.total_paid > 0) {
-          student.status = "Partial";
-        } else {
-          student.status = "Unpaid";
+          status = "Partial";
         }
+
+        // Get payments for this student
+        const studentPayments = allPayments.filter((p: any) => p.student_id === student.student_id);
         
-        // Get payments for this student from allPayments
-        student.payments = allPayments.filter((p: any) => p.student_id === student.student_id);
-        
-        // Find the most recent payment date from p_payments if not set from student_fees
-        if (!student.last_payment_date && student.payments.length > 0) {
-          const latestPayment = student.payments.reduce((latest: any, current: any) => {
+        // Update last payment date from payments if available
+        if (studentPayments.length > 0 && !student.last_payment_date) {
+          const latestPayment = studentPayments.reduce((latest: any, current: any) => {
             return new Date(current.payment_date) > new Date(latest.payment_date) ? current : latest;
-          }, student.payments[0]);
+          }, studentPayments[0]);
           student.last_payment_date = latestPayment.payment_date;
         }
-        
+
         return {
           ...student,
+          outstanding_balance: student.total_billed - student.total_paid,
+          effective_outstanding: effectiveOutstanding,
+          status,
+          payments: studentPayments,
           academic_years: Array.from(student.academic_years)
         };
       });
 
-      console.log("Aggregated student fees with payments from p_payments:", aggregatedData.length, "students");
-      console.log("Sample student:", aggregatedData[0] ? {
-        name: aggregatedData[0].student_name,
-        total_billed: aggregatedData[0].total_billed,
-        total_paid: aggregatedData[0].total_paid,
-        outstanding_balance: aggregatedData[0].outstanding_balance,
-        status: aggregatedData[0].status,
-        payment_count: aggregatedData[0].payments?.length || 0
-      } : "No data");
+      console.log("Aggregated student fees:", aggregatedData.length, "students");
+      console.log("Total credit carried across all students:", 
+        aggregatedData.reduce((sum, sf) => sum + (sf.total_credit_carried || 0), 0));
       
       return aggregatedData;
     },
-    enabled: true, // Always enabled since we need this for the dashboard
+    enabled: true,
   });
 
   // FETCH FEE STRUCTURE
@@ -232,7 +268,7 @@ export default function AdminFeesDashboard() {
     }
   });
 
-  // Fee Mutation - FIXED: Now properly filters by both class AND student type
+  // Fee Mutation - Updated to handle credit_carried
   const feeMutation = useMutation({
     mutationFn: async (data: any) => {
       const classes = data.classes || [];
@@ -241,6 +277,7 @@ export default function AdminFeesDashboard() {
       const payload = {
         ...data,
         student_type: data.student_type,
+        amount: Number(data.amount)
       };
 
       let feeId = selectedFee?.id;
@@ -253,16 +290,16 @@ export default function AdminFeesDashboard() {
           .eq("id", feeId);
         if (feeError) throw feeError;
 
-        // clear previous class mappings
+        // Clear previous class mappings
         const { error: delErr } = await supabase
           .from("fee_structure_classes")
           .delete()
           .eq("fee_structure_id", feeId);
         if (delErr) throw delErr;
 
-        // re-insert class mappings if provided
+        // Re-insert class mappings
         if (classes.length > 0) {
-          const classMapping = classes.map(class_id => ({
+          const classMapping = classes.map((class_id: string) => ({
             fee_structure_id: feeId,
             class_id,
           }));
@@ -282,7 +319,7 @@ export default function AdminFeesDashboard() {
         feeId = inserted.id;
 
         if (classes.length > 0) {
-          const classMapping = classes.map(class_id => ({
+          const classMapping = classes.map((class_id: string) => ({
             fee_structure_id: feeId,
             class_id,
           }));
@@ -293,9 +330,9 @@ export default function AdminFeesDashboard() {
         }
       }
 
-      // 2) If there are classes mapped, ONLY create student_fees for students in those classes with matching student_type
+      // 2) If classes mapped, create/update student_fees
       if (classes.length > 0) {
-        // Get students in the selected classes with their profiles
+        // Get students in selected classes with profiles
         const { data: enrollmentsWithStudents, error: enrollmentsError } = await supabase
           .from("enrollments")
           .select(`
@@ -320,21 +357,23 @@ export default function AdminFeesDashboard() {
           return { success: true };
         }
 
-        // Filter students by the fee's student_type
-        const matchingStudents = enrollmentsWithStudents.filter(item => 
-          firstRel(firstRel(item.students as any)?.profiles as any)?.student_type === payload.student_type
-        );
+        // Filter students by student_type
+        const matchingStudents = enrollmentsWithStudents.filter((item: any) => {
+          const student = firstRel(item.students);
+          const profile = firstRel(student?.profiles);
+          return profile?.student_type === payload.student_type;
+        });
 
-        const matchingStudentIds = matchingStudents.map(item => item.student_id);
+        const matchingStudentIds = matchingStudents.map((item: any) => item.student_id);
 
         if (matchingStudentIds.length === 0) {
           console.log(`No ${payload.student_type} students found in selected classes`);
           return { success: true };
         }
 
-        console.log(`Found ${matchingStudentIds.length} ${payload.student_type} students in selected classes`, matchingStudentIds);
+        console.log(`Found ${matchingStudentIds.length} ${payload.student_type} students`);
 
-        // 3) Fetch existing student_fees for this fee_structure
+        // 3) Get existing student_fees for this fee_structure
         const { data: existingFees = [], error: existingErr } = await supabase
           .from("student_fees")
           .select("*")
@@ -345,48 +384,53 @@ export default function AdminFeesDashboard() {
         const existingMap = new Map();
         existingFees.forEach((ef: any) => existingMap.set(ef.student_id, ef));
 
-        // 4) Prepare batch inserts and updates - ONLY for matching students
+        // 4) Prepare batch operations with credit_carried logic
         const toInsert: any[] = [];
         const toUpdate: any[] = [];
 
         for (const enrollment of matchingStudents) {
-          const studentId = enrollment.student_id;
-          const student = firstRel(enrollment.students as any);
-          const existing = existingMap.get(studentId);
+  const studentId = enrollment.student_id;
+  const student = firstRel(enrollment.students);
+  const existing = existingMap.get(studentId);
 
-          // Get existing payments for this student from p_payments for this fee structure
-          const { data: studentPayments, error: paymentsError } = await supabase
-            .from('p_payments')
-            .select('amount_paid, payment_date')
-            .eq('student_id', studentId)
-            .eq('fee_id', feeId);
-          
-          const existingPaid = studentPayments?.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0) || 0;
+  // Get existing payments for this student and fee structure
+  const { data: studentPayments, error: paymentsError } = await supabase
+    .from('p_payments')
+    .select('amount_paid, payment_date')
+    .eq('student_id', studentId)
+    .eq('fee_id', feeId)
+    .order('payment_date', { ascending: false });
+  
+  if (paymentsError) throw paymentsError;
 
-          const feePayload = {
-            student_id: studentId,
-            fee_structure_id: feeId,
-            total_billed: payload.amount,
-            total_paid: existingPaid, // Use actual payments from p_payments
-            outstanding_balance: payload.amount - existingPaid,
-            status: existingPaid >= payload.amount ? "paid" : existingPaid > 0 ? "partial" : "pending",
-            term: payload.term,
-            academic_year: payload.academic_year,
-            student_name: student ? `${(student as any).first_name} ${(student as any).last_name}` : "Unknown",
-            admission_number: (student as any)?.Reg_no || "N/A",
-            last_payment_date: studentPayments && studentPayments.length > 0 
-              ? studentPayments[0].payment_date 
-              : null,
-          };
+  const existingPaid = studentPayments?.reduce((sum: number, p: any) => 
+    sum + Number(p.amount_paid || 0), 0) || 0;
 
-          if (existing) {
-            toUpdate.push({ id: existing.id, payload: feePayload });
-          } else {
-            toInsert.push(feePayload);
-          }
-        }
+  // Create the student fee record - trigger will handle credit application
+  const feePayload: any = {
+    student_id: studentId,
+    fee_structure_id: feeId,
+    total_billed: payload.amount,
+    total_paid: existingPaid, // Start with existing payments
+    outstanding_balance: Math.max(0, payload.amount - existingPaid),
+    // DO NOT set credit_carried here - let trigger handle it
+    status: existingPaid >= payload.amount ? "paid" : existingPaid > 0 ? "partial" : "pending",
+    term: payload.term,
+    academic_year: payload.academic_year,
+    student_name: student ? `${student.first_name} ${student.last_name}` : "Unknown",
+    admission_number: student?.Reg_no || "N/A",
+    last_payment_date: studentPayments && studentPayments.length > 0 
+      ? studentPayments[0].payment_date 
+      : null,
+  };
 
-        console.log(`Inserting ${toInsert.length} new student fees, updating ${toUpdate.length} existing fees`);
+  if (existing) {
+    toUpdate.push({ id: existing.id, payload: feePayload });
+  } else {
+    toInsert.push(feePayload);
+  }
+}
+        console.log(`Insert: ${toInsert.length}, Update: ${toUpdate.length}`);
 
         // 5) Batch insert new student_fees
         if (toInsert.length > 0) {
@@ -412,7 +456,6 @@ export default function AdminFeesDashboard() {
 
       return { success: true };
     },
-
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fees"] });
       queryClient.invalidateQueries({ queryKey: ["studentFees"] });
@@ -422,32 +465,30 @@ export default function AdminFeesDashboard() {
     },
   });
 
-  // Record payment mutation - Using selectedStudentFee directly
+  // Payment Mutation - Handles overpayment and credit_carried
   const paymentMutation = useMutation({
     mutationFn: async (data: any) => {
       console.log("Starting payment mutation...", { data, selectedStudentFee });
 
       if (!selectedStudentFee) {
-        console.error("No student fee record selected!");
         throw new Error("No student fee record selected");
       }
 
-      // Find the specific fee record to apply payment to
-      const feeRecord = selectedStudentFee;
+      const feeRecord = selectedStudentFee.current_term_fee || selectedStudentFee;
       const amount = parseFloat(data.amount) || 0;
 
-      console.log("Preparing to insert payment for student:", {
+      console.log("Inserting payment for student:", {
         student_id: feeRecord.student_id,
+        fee_id: feeRecord.id || feeRecord.fee_structure_id,
         amount_paid: amount,
-        payment_method: data.payment_method,
       });
 
-      // Insert payment into p_payments table
+      // Insert payment - triggers will handle credit_carried logic
       const { data: paymentInserted, error: paymentError } = await supabase
         .from("p_payments")
         .insert({
           student_id: feeRecord.student_id,
-          fee_id: feeRecord.fee_structure_id, // Use fee_structure_id if available
+          fee_id: feeRecord.id || feeRecord.fee_structure_id,
           amount_paid: amount,
           payment_method: data.payment_method || "mpesa",
           payment_date: data.payment_date || new Date().toISOString(),
@@ -455,6 +496,8 @@ export default function AdminFeesDashboard() {
           status: "completed",
           academic_year: data.academic_year || feeRecord.academic_year || "2024-2025",
           term: data.term || feeRecord.term || "Term 1",
+          reference_number: data.reference_number || null,
+          notes: data.notes || null
         })
         .select()
         .single();
@@ -464,57 +507,12 @@ export default function AdminFeesDashboard() {
         throw paymentError;
       }
 
-      console.log("Payment inserted successfully:", paymentInserted);
-
-      // Get all payments for this student to calculate new totals
-      const { data: studentPayments, error: paymentsError } = await supabase
-        .from('p_payments')
-        .select('amount_paid, payment_date')
-        .eq('student_id', feeRecord.student_id);
-      
-      if (paymentsError) {
-        console.error("Error fetching student payments:", paymentsError);
-        throw paymentsError;
-      }
-
-      // Calculate total paid from p_payments
-      const totalPaidFromPayments = studentPayments?.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0) || 0;
-      
-      // Update ALL student_fees records for this student
-      const { data: studentFeeRecords, error: feeRecordsError } = await supabase
-        .from('student_fees')
-        .select('*')
-        .eq('student_id', feeRecord.student_id);
-      
-      if (feeRecordsError) {
-        console.error("Error fetching student fee records:", feeRecordsError);
-        throw feeRecordsError;
-      }
-
-      // Update each student fee record
-      const updatePromises = studentFeeRecords?.map(async (record) => {
-        const newBalance = Number(record.total_billed || 0) - totalPaidFromPayments;
-        const status = newBalance <= 0 ? "paid" : totalPaidFromPayments > 0 ? "partial" : "pending";
-        
-        return supabase
-          .from("student_fees")
-          .update({
-            total_paid: totalPaidFromPayments,
-            outstanding_balance: newBalance,
-            last_payment_date: data.payment_date || new Date().toISOString(),
-            status,
-          })
-          .eq("id", record.id);
-      }) || [];
-
-      await Promise.all(updatePromises);
-
-      console.log("All student fee records updated successfully");
+      console.log("Payment inserted successfully");
 
       return paymentInserted;
     },
     onSuccess: () => {
-      console.log("Payment mutation successful, invalidating queries...");
+      console.log("Payment successful, refreshing data...");
       queryClient.invalidateQueries({ queryKey: ["studentFees"] });
       queryClient.invalidateQueries({ queryKey: ["allPayments"] });
       setShowPaymentForm(false);
@@ -532,7 +530,7 @@ export default function AdminFeesDashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fees'] })
   });
 
-  // Filter student fees based on search and filters
+  // Filter student fees
   const filteredStudentFees = useMemo(() => {
     return (studentFees || []).filter((sf: any) => {
       const matchesSearch = !searchQuery || 
@@ -540,7 +538,6 @@ export default function AdminFeesDashboard() {
         (sf.admission_number && sf.admission_number.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesYear = selectedYear === 'all' || sf.academic_years?.includes(selectedYear);
       
-      // FIXED: Use correct student_type values from your data
       const matchesStudentType = selectedStudentType === 'all' || 
         (selectedStudentType === 'day' && sf.student_type === 'Day Scholar') ||
         (selectedStudentType === 'boarder' && sf.student_type === 'Boarding');
@@ -549,7 +546,7 @@ export default function AdminFeesDashboard() {
     });
   }, [studentFees, searchQuery, selectedYear, selectedStudentType]);
 
-  // Calculate summary statistics - UPDATED to use payments from p_payments table
+  // Calculate statistics including credit carried
   const stats = useMemo(() => {
     const filtered = filteredStudentFees || [];
     const totalStudents = filtered.length;
@@ -558,19 +555,16 @@ export default function AdminFeesDashboard() {
       return sum + Number(sf.total_billed ?? 0);
     }, 0);
     
-    // Total collected from p_payments table (sum of total_paid from studentFees which now comes from p_payments)
     const totalCollected = filtered.reduce((sum: number, sf: any) => {
       return sum + Number(sf.total_paid ?? 0);
     }, 0);
     
-    // Total outstanding calculated from the data
     const totalOutstanding = filtered.reduce((sum: number, sf: any) => {
       return sum + Number(sf.outstanding_balance ?? 0);
     }, 0);
 
-    // Also calculate total collected from allPayments for verification
-    const totalFromPaymentsTable = allPayments.reduce((sum: number, p: any) => {
-      return sum + Number(p.amount_paid || 0);
+    const totalCreditCarried = filtered.reduce((sum: number, sf: any) => {
+      return sum + Number(sf.total_credit_carried ?? 0);
     }, 0);
 
     console.log("Dashboard Stats:", {
@@ -578,13 +572,11 @@ export default function AdminFeesDashboard() {
       totalBilled,
       totalCollected,
       totalOutstanding,
-      totalFromPaymentsTable,
-      filteredCount: filtered.length,
-      allPaymentsCount: allPayments.length
+      totalCreditCarried
     });
 
-    return { totalStudents, totalBilled, totalCollected, totalOutstanding };
-  }, [filteredStudentFees, allPayments]);
+    return { totalStudents, totalBilled, totalCollected, totalOutstanding, totalCreditCarried };
+  }, [filteredStudentFees]);
 
   const handleRecordPayment = (studentFee: any) => {
     setSelectedStudentFee(studentFee);
@@ -597,7 +589,6 @@ export default function AdminFeesDashboard() {
   };
 
   const handleEditFee = (fee: any) => {
-    // Transform the fee data to include classes array for the form
     const feeWithClasses = {
       ...fee,
       classes: fee.fee_structure_classes?.map((fsc: any) => fsc.class_id) || []
@@ -638,8 +629,8 @@ export default function AdminFeesDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards - IMPROVED with payment source info */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Cards - Added Credit Carried */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {[
             { 
               label: 'Total Students', 
@@ -664,20 +655,44 @@ export default function AdminFeesDashboard() {
               value: `KES ${stats.totalOutstanding.toLocaleString()}`, 
               icon: AlertCircle, 
               color: 'red',
+            },
+            { 
+              label: 'Credit Carried', 
+              value: `KES ${stats.totalCreditCarried.toLocaleString()}`, 
+              icon: CreditCard, 
+              color: 'amber',
             }
           ].map((stat, i) => {
             const Icon = stat.icon;
             return (
               <Card key={i} className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden hover:shadow-xl transition-shadow">
-                <div className={`h-1 bg-${stat.color}-500`} />
+                <div className={`h-1 ${{
+                  'blue': 'bg-blue-500',
+                  'purple': 'bg-purple-500',
+                  'emerald': 'bg-emerald-500',
+                  'red': 'bg-red-500',
+                  'amber': 'bg-amber-500'
+                }[stat.color]}`} />
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-500">{stat.label}</p>
                       <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
                     </div>
-                    <div className={`p-3 rounded-xl bg-${stat.color}-50`}>
-                      <Icon className={`w-5 h-5 text-${stat.color}-600`} />
+                    <div className={`p-3 rounded-xl ${{
+                      'blue': 'bg-blue-50',
+                      'purple': 'bg-purple-50',
+                      'emerald': 'bg-emerald-50',
+                      'red': 'bg-red-50',
+                      'amber': 'bg-amber-50'
+                    }[stat.color]}`}>
+                      <Icon className={`w-5 h-5 ${{
+                        'blue': 'text-blue-600',
+                        'purple': 'text-purple-600',
+                        'emerald': 'text-emerald-600',
+                        'red': 'text-red-600',
+                        'amber': 'text-amber-600'
+                      }[stat.color]}`} />
                     </div>
                   </div>
                 </CardContent>
@@ -740,7 +755,7 @@ export default function AdminFeesDashboard() {
               </CardContent>
             </Card>
 
-            {/* Student Fee Cards - ONE CARD PER STUDENT */}
+            {/* Student Fee Cards */}
             {loadingStudentFees ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -761,15 +776,15 @@ export default function AdminFeesDashboard() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredStudentFees.map((studentFee) => (
+                {filteredStudentFees.map((studentFee: any) => (
                   <StudentFeeCard
                     key={studentFee.student_id}
                     studentFee={studentFee}
                     onRecordPayment={handleRecordPayment}
                     onViewDetails={handleViewDetails}
                     showAggregated={true}
-                    // Pass payments count for display
                     paymentCount={studentFee.payments?.length || 0}
+                    creditCarried={studentFee.total_credit_carried || 0}
                   />
                 ))}
               </div>
@@ -803,55 +818,55 @@ export default function AdminFeesDashboard() {
                   </CardContent>
                 </Card>
               ) : (
-                 fees.map((fee: any) => (
-    <Card key={fee.id} className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden hover:shadow-xl transition-all">
-      <div className={`h-1 ${fee.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h3 className="font-semibold text-gray-900">{fee.name}</h3>
-            <p className="text-sm text-gray-500">{fee.term} • {fee.academic_year}</p>
-            <div className="text-xs text-gray-400 mt-1">
-              Student Type: <Badge variant="outline" className="ml-1">
-                {fee.student_type}
-              </Badge>
-            </div>
-            {fee.fee_structure_classes && fee.fee_structure_classes.length > 0 && (
-              <div className="text-xs text-gray-400 mt-1">
-                Classes: {fee.fee_structure_classes.map((fsc: any) => fsc.classes?.name).join(', ')}
-              </div>
-            )}
-          </div>
-          <Badge variant="outline" className={fee.category === 'Mandatory' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'}>
-            {fee.category}
-          </Badge>
-        </div>
-        <p className="text-2xl font-bold text-gray-900 mb-3">
-          KES {Number(fee.amount ?? 0).toLocaleString()}
-        </p>
-        {fee.description && (
-          <p className="text-sm text-gray-500 mb-4 line-clamp-2">{fee.description}</p>
-        )}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleEditFee(fee)}
-            className="flex-1"
-          >
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => deleteFee.mutate(fee.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            Delete
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+                fees.map((fee: any) => (
+                  <Card key={fee.id} className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden hover:shadow-xl transition-all">
+                    <div className={`h-1 ${fee.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{fee.name}</h3>
+                          <p className="text-sm text-gray-500">{fee.term} • {fee.academic_year}</p>
+                          <div className="text-xs text-gray-400 mt-1">
+                            Student Type: <Badge variant="outline" className="ml-1">
+                              {fee.student_type}
+                            </Badge>
+                          </div>
+                          {fee.fee_structure_classes && fee.fee_structure_classes.length > 0 && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              Classes: {fee.fee_structure_classes.map((fsc: any) => fsc.classes?.name).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant="outline" className={fee.category === 'Mandatory' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'}>
+                          {fee.category}
+                        </Badge>
+                      </div>
+                      <p className="text-2xl font-bold text-gray-900 mb-3">
+                        KES {Number(fee.amount ?? 0).toLocaleString()}
+                      </p>
+                      {fee.description && (
+                        <p className="text-sm text-gray-500 mb-4 line-clamp-2">{fee.description}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditFee(fee)}
+                          className="flex-1"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteFee.mutate(fee.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))
               )}
             </div>
@@ -885,7 +900,6 @@ export default function AdminFeesDashboard() {
             <DialogHeader>
               <DialogTitle>{selectedFee ? "Update Fee Structure" : "Create Fee Structure"}</DialogTitle>
             </DialogHeader>
-
             <FeeStructureForm
               fee={selectedFee}
               onSave={(data: any) => feeMutation.mutate({
@@ -906,18 +920,18 @@ export default function AdminFeesDashboard() {
             <DialogHeader>
               <DialogTitle>Record Payment</DialogTitle>
             </DialogHeader>
-
             {selectedStudentFee && (
               <PaymentEntryForm
                 studentFee={selectedStudentFee}
                 onSave={(data: any) => paymentMutation.mutate({
                   ...data,
                   student_id: selectedStudentFee.student_id,
-                  term: selectedStudentFee.term || "Term 1",
-                  academic_year: selectedStudentFee.academic_year || "2024-2025"
+                  term: selectedStudentFee.current_term_fee?.term || selectedStudentFee.term || "Term 1",
+                  academic_year: selectedStudentFee.current_term_fee?.academic_year || selectedStudentFee.academic_year || "2024-2025"
                 })}
                 onCancel={() => { setShowPaymentForm(false); setSelectedStudentFee(null); }}
                 isLoading={(paymentMutation as any).isLoading}
+                availableCredit={selectedStudentFee.total_credit_carried || 0}
               />
             )}
           </DialogContent>
