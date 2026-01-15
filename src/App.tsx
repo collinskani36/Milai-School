@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
 import { supabase } from "./lib/supabaseClient";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -14,10 +20,11 @@ import StudentForgotPassword from "./pages/StudentForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import TeacherForgotPassword from "./pages/TeacherForgotPassword";
 
-
 const queryClient = new QueryClient();
 
-function App() {
+function AppRoutes() {
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -31,7 +38,7 @@ function App() {
         .from("teachers")
         .select("is_admin")
         .eq("auth_id", authId)
-        .maybeSingle(); // <-- prevents 406 if user is not in teachers table
+        .maybeSingle();
 
       setIsAdmin(!error && data?.is_admin === true);
     } catch (err) {
@@ -46,14 +53,12 @@ function App() {
   useEffect(() => {
     const getSession = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data } = await supabase.auth.getSession();
         const sessionUser = data?.session?.user ?? null;
         setUser(sessionUser);
 
         if (sessionUser) {
-          checkIfAdmin(sessionUser.id).catch((err) =>
-            console.warn("checkIfAdmin error:", err)
-          );
+          await checkIfAdmin(sessionUser.id);
         }
       } catch (err) {
         console.warn("getSession failed:", err);
@@ -66,123 +71,43 @@ function App() {
 
     const { data: listenerData } = supabase.auth.onAuthStateChange(
       async (_, session) => {
-        try {
-          const sessionUser = session?.user ?? null;
-          setUser(sessionUser);
-          if (sessionUser) {
-            checkIfAdmin(sessionUser.id).catch((err) =>
-              console.warn("checkIfAdmin error:", err)
-            );
-          } else {
-            setIsAdmin(false);
-          }
-        } catch (err) {
-          console.warn("onAuthStateChange handler error:", err);
+        const sessionUser = session?.user ?? null;
+        setUser(sessionUser);
+
+        if (sessionUser) {
+          await checkIfAdmin(sessionUser.id);
+        } else {
+          setIsAdmin(false);
         }
       }
     );
 
     return () => {
-      try {
-        listenerData.subscription?.unsubscribe?.();
-      } catch (err) {
-        console.warn("Error unsubscribing auth listener:", err);
-      }
-    };
-  }, []);
-
-  // -------------------------
-  // Dev-only click debugger
-  // -------------------------
-  useEffect(() => {
-    if (!(typeof import.meta !== "undefined" && (import.meta as any).env?.DEV))
-      return;
-
-    const onClick = (e: MouseEvent) => {
-      try {
-        console.debug("[DEBUG] click target:", e.target, {
-          x: e.clientX,
-          y: e.clientY,
-        });
-      } catch {}
-    };
-    window.addEventListener("click", onClick, true);
-
-    const interval = setInterval(() => {
-      try {
-        const x = Math.round(window.innerWidth / 2);
-        const y = Math.round(window.innerHeight / 2);
-        const el = document.elementFromPoint(x, y);
-        console.debug("[DEBUG] center element", { x, y, el });
-        if (el instanceof Element) {
-          const style = window.getComputedStyle(el);
-          if (
-            +style.zIndex > 0 ||
-            style.pointerEvents === "auto" ||
-            style.position === "fixed"
-          ) {
-            console.debug("[DEBUG] center element styles", {
-              zIndex: style.zIndex,
-              pointerEvents: style.pointerEvents,
-              position: style.position,
-            });
-          }
-        }
-      } catch {}
-    }, 3000);
-
-    return () => {
-      window.removeEventListener("click", onClick, true);
-      clearInterval(interval);
+      listenerData.subscription.unsubscribe();
     };
   }, []);
 
   if (loading) return <p>Loading...</p>;
 
   // -------------------------
-  // Logout handler
+  // Logout handler (FIXED)
   // -------------------------
   const handleLogout = async () => {
-    const fallback = () => {
-      try {
-        setUser(null);
-        setIsAdmin(false);
-      } catch {}
-      try {
-        const p = (window.location && window.location.pathname) || "";
-        if (p.startsWith("/student")) {
-          window.location.href = "/login";
-          return;
-        }
-        if (p.startsWith("/teacher") || p.startsWith("/admin")) {
-          window.location.href = "/teacher-login";
-          return;
-        }
-      } catch {}
-      window.location.href = "/login";
-    };
-
     try {
-      const session = await supabase.auth.getSession();
-      if (!session?.data?.session) {
-        fallback();
-        return;
-      }
-
-      const signOutPromise = supabase.auth.signOut();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("signOut timeout")), 5000)
-      );
-      try {
-        await Promise.race([signOutPromise, timeoutPromise]);
-      } catch (err) {
-        console.warn("signOut failed or timed out:", err);
-      }
-
-      fallback();
+      await supabase.auth.signOut();
     } catch (err) {
-      console.warn("logout error:", err);
-      fallback();
+      console.warn("Logout error:", err);
+    } finally {
+      setUser(null);
+      setIsAdmin(false);
+
+      const path = window.location.pathname;
+
+      if (path.startsWith("/teacher") || path.startsWith("/admin")) {
+        navigate("/teacher-login", { replace: true });
+      } else {
+        navigate("/login", { replace: true });
+      }
     }
   };
 
@@ -190,104 +115,108 @@ function App() {
   // Routes
   // -------------------------
   return (
+    <Routes>
+      {/* Public */}
+      <Route path="/" element={<Index />} />
+
+      {/* Student login */}
+      <Route
+        path="/login"
+        element={
+          user ? (
+            isAdmin ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <Navigate to="/student-dashboard" replace />
+            )
+          ) : (
+            <StudentAuth />
+          )
+        }
+      />
+
+      {/* Student forgot password */}
+      <Route path="/forgot-password" element={<StudentForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Student signup */}
+      <Route path="/student-signup" element={<StudentSignup />} />
+
+      {/* Teacher login */}
+      <Route
+        path="/teacher-login"
+        element={
+          user ? (
+            isAdmin ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <Navigate to="/teacher-dashboard" replace />
+            )
+          ) : (
+            <TeacherAuth />
+          )
+        }
+      />
+
+      {/* Teacher forgot password */}
+      <Route
+        path="/teacher-forgot-password"
+        element={<TeacherForgotPassword />}
+      />
+
+      {/* Student dashboard */}
+      <Route
+        path="/student-dashboard"
+        element={
+          user ? (
+            isAdmin ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <StudentDashboard handleLogout={handleLogout} />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* Teacher dashboard */}
+      <Route
+        path="/teacher-dashboard"
+        element={
+          user ? (
+            isAdmin ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <TeacherDashboard handleLogout={handleLogout} />
+            )
+          ) : (
+            <Navigate to="/teacher-login" replace />
+          )
+        }
+      />
+
+      {/* Admin dashboard */}
+      <Route
+        path="/admin-dashboard"
+        element={
+          user && isAdmin ? (
+            <AdminPanel handleLogout={handleLogout} />
+          ) : (
+            <Navigate to="/teacher-login" replace />
+          )
+        }
+      />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<Index />} />
-
-          {/* Student login */}
-          <Route
-            path="/login"
-            element={
-              user ? (
-                isAdmin ? (
-                  <Navigate to="/admin-dashboard" replace />
-                ) : (
-                  <Navigate to="/student-dashboard" replace />
-                )
-              ) : (
-                <StudentAuth />
-              )
-            }
-          />
-
-          {/* Student forgot password */}
-           <Route path="/forgot-password" element={<StudentForgotPassword />} />
-
-           <Route path="/reset-password" element={<ResetPassword />} />
-
-
-
-          {/* Student signup */}
-          <Route path="/student-signup" element={<StudentSignup />} />
-
-          {/* Teacher login */}
-          <Route
-            path="/teacher-login"
-            element={
-              user ? (
-                isAdmin ? (
-                  <Navigate to="/admin-dashboard" replace />
-                ) : (
-                  <Navigate to="/teacher-dashboard" replace />
-                )
-              ) : (
-                <TeacherAuth />
-              )
-            }
-          />
-           {/* Teacher forgot password */}
-           <Route path="/teacher-forgot-password" element={<TeacherForgotPassword />} />
-
-
-          {/* Student dashboard */}
-          <Route
-            path="/student-dashboard"
-            element={
-              user ? (
-                isAdmin ? (
-                  <Navigate to="/admin-dashboard" replace />
-                ) : (
-                  <StudentDashboard handleLogout={handleLogout} />
-                )
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-
-          {/* Teacher dashboard */}
-          <Route
-            path="/teacher-dashboard"
-            element={
-              user ? (
-                isAdmin ? (
-                  <Navigate to="/admin-dashboard" replace />
-                ) : (
-                  <TeacherDashboard handleLogout={handleLogout} />
-                )
-              ) : (
-                <Navigate to="/teacher-login" replace />
-              )
-            }
-          />
-
-          {/* Admin dashboard */}
-          <Route
-            path="/admin-dashboard"
-            element={
-              user && isAdmin ? (
-                <AdminPanel handleLogout={handleLogout} />
-              ) : (
-                <Navigate to="/teacher-login" replace />
-              )
-            }
-          />
-        </Routes>
+        <AppRoutes />
       </BrowserRouter>
     </QueryClientProvider>
   );
 }
-
-export default App;
