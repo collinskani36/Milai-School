@@ -15,7 +15,7 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import Index from "./pages/Index";
 import StudentAuth from "./Components/StudentAuth";
 import TeacherAuth from "./Components/TeacherAuth";
-import StudentSignup from "./pages/StudentSignup";
+
 import StudentForgotPassword from "./pages/StudentForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import TeacherForgotPassword from "./pages/TeacherForgotPassword";
@@ -139,8 +139,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<StudentForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      {/* Student signup */}
-      <Route path="/student-signup" element={<StudentSignup />} />
+      
 
       {/* Teacher login */}
       <Route
