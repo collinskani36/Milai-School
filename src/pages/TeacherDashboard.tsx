@@ -2043,64 +2043,66 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
   };
 
   const StudentPerformanceDetailView = ({ 
-    performanceDetail, 
-    classMap 
-  }: { 
-    performanceDetail: StudentPerformanceDetail;
-    classMap: Record<string, string>;
-  }) => {
-    const { student, assessments, averageScore, trend, subjectAverages, gradeDistribution, recentTrend } = performanceDetail;
+  performanceDetail, 
+  classMap 
+}: { 
+  performanceDetail: StudentPerformanceDetail;
+  classMap: Record<string, string>;
+}) => {
+  const { student, assessments, averageScore, trend, subjectAverages, gradeDistribution, recentTrend } = performanceDetail;
 
-    const enrollment = student.enrollments?.[0];
-    const studentClass = firstRel(enrollment?.classes)?.name || classMap[enrollment?.class_id] || 'No Class';
+  const enrollment = student.enrollments?.[0];
+  const studentClass = firstRel(enrollment?.classes)?.name || classMap[enrollment?.class_id] || 'No Class';
 
-    const performanceOverTime = assessments.map(assessment => ({
-      name: assessment.title,
-      score: assessment.percentage,
-      date: new Date(assessment.assessment_date).toLocaleDateString(),
-      subject: assessment.subject
-    })).reverse();
+  const performanceOverTime = assessments.map(assessment => ({
+    name: assessment.title,
+    score: assessment.percentage,
+    date: new Date(assessment.assessment_date).toLocaleDateString(),
+    subject: assessment.subject
+  })).reverse();
 
-    const subjectPerformanceData = subjectAverages.map(subject => ({
-      subject: subject.subject,
-      average: subject.average,
-      fill: KJSEA_LEVELS.find(l => subject.average >= l.min && subject.average <= l.max)?.color || "#6B7280"
-    }));
+  const subjectPerformanceData = subjectAverages.map(subject => ({
+    subject: subject.subject,
+    average: subject.average,
+    fill: KJSEA_LEVELS.find(l => subject.average >= l.min && subject.average <= l.max)?.color || "#6B7280"
+  }));
 
-    const getPerformanceInsights = () => {
-      const insights = [];
-      
-      // KJSEA Level based insights
-      const kjseaLevel = KJSEA_LEVELS.find(level => averageScore >= level.min && averageScore <= level.max);
-      
-      if (kjseaLevel) {
-        insights.push({
-          icon: <Target className="h-5 w-5 mt-0.5" style={{ color: kjseaLevel.color }} />,
-          title: `${kjseaLevel.description} Performance (${kjseaLevel.label})`,
-          description: `Student achieves ${kjseaLevel.description} level. ${averageScore >= 58 ? 'Maintain current strategies.' : 'Consider targeted interventions.'}`
-        });
-      }
+  const getPerformanceInsights = () => {
+    const insights = [];
+    
+    // KJSEA Level based insights
+    const kjseaLevel = KJSEA_LEVELS.find(level => averageScore >= level.min && averageScore <= level.max);
+    
+    if (kjseaLevel) {
+      insights.push({
+        icon: <Target className="h-5 w-5 mt-0.5" style={{ color: kjseaLevel.color }} />,
+        title: `${kjseaLevel.description} Performance (${kjseaLevel.label})`,
+        description: `Student achieves ${kjseaLevel.description} level. ${averageScore >= 58 ? 'Maintain current strategies.' : 'Consider targeted interventions.'}`
+      });
+    }
 
-      if (trend === 'improving') {
-        insights.push({
-          icon: <TrendingUp className="h-5 w-5 text-green-600 mt-0.5" />,
-          title: "Positive Momentum",
-          description: `Performance is improving by approximately ${Math.abs(recentTrend)} points. Current teaching strategies are effective - maintain this approach.`
-        });
-      } else if (trend === 'declining') {
-        insights.push({
-          icon: <TrendingDown className="h-5 w-5 text-red-600 mt-0.5" />,
-          title: "Declining Performance",
-          description: `Scores have decreased by approximately ${Math.abs(recentTrend)} points. Review recent topics and consider additional support.`
-        });
-      } else {
-        insights.push({
-          icon: <Minus className="h-5 w-5 text-gray-600 mt-0.5" />,
-          title: "Stable Performance",
-          description: "Performance remains consistent. Focus on gradual improvement through targeted practice and feedback."
-        });
-      }
+    if (trend === 'improving') {
+      insights.push({
+        icon: <TrendingUp className="h-5 w-5 text-green-600 mt-0.5" />,
+        title: "Positive Momentum",
+        description: `Performance is improving by approximately ${Math.abs(recentTrend)} points. Current teaching strategies are effective - maintain this approach.`
+      });
+    } else if (trend === 'declining') {
+      insights.push({
+        icon: <TrendingDown className="h-5 w-5 text-red-600 mt-0.5" />,
+        title: "Declining Performance",
+        description: `Scores have decreased by approximately ${Math.abs(recentTrend)} points. Review recent topics and consider additional support.`
+      });
+    } else {
+      insights.push({
+        icon: <Minus className="h-5 w-5 text-gray-600 mt-0.5" />,
+        title: "Stable Performance",
+        description: "Performance remains consistent. Focus on gradual improvement through targeted practice and feedback."
+      });
+    }
 
+    // Check if subjectAverages has data before trying to find strongest/weakest
+    if (subjectAverages.length > 0) {
       const strongestSubject = subjectAverages.reduce((prev, current) => 
         prev.average > current.average ? prev : current
       );
@@ -2108,240 +2110,133 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
         prev.average < current.average ? prev : current
       );
 
-      if (strongestSubject.average - weakestSubject.average > 15) {
+      // Only add variation insight if there's a significant difference
+      if (subjectAverages.length >= 2 && strongestSubject.average - weakestSubject.average > 15) {
         insights.push({
           icon: <BookOpen className="h-5 w-5 text-purple-600 mt-0.5" />,
           title: "Significant Subject Variation",
           description: `Strong in ${strongestSubject.subject} (${strongestSubject.average}%) but needs support in ${weakestSubject.subject} (${weakestSubject.average}%). Consider cross-subject learning strategies.`
         });
       }
+    }
 
-      if (assessments.length < 3) {
-        insights.push({
-          icon: <Calendar className="h-5 w-5 text-orange-600 mt-0.5" />,
-          title: "Limited Assessment Data",
-          description: "Only a few assessments available. More data needed for accurate trend analysis and performance insights."
-        });
-      }
+    if (assessments.length < 3) {
+      insights.push({
+        icon: <Calendar className="h-5 w-5 text-orange-600 mt-0.5" />,
+        title: "Limited Assessment Data",
+        description: "Only a few assessments available. More data needed for accurate trend analysis and performance insights."
+      });
+    }
 
-      return insights;
-    };
+    // If no insights were added (e.g., completely new student), add a general insight
+    if (insights.length === 0) {
+      insights.push({
+        icon: <Calendar className="h-5 w-5 text-blue-600 mt-0.5" />,
+        title: "New Student Analysis",
+        description: "This student is new to the system. As assessments are completed, more detailed insights will become available."
+      });
+    }
 
-    const insights = getPerformanceInsights();
+    return insights;
+  };
 
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold">
-                    {student.first_name} {student.last_name}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {student.Reg_no} • {studentClass}
-                  </p>
-                  {student.profiles?.[0]?.guardian_phone && (
-                    <p className="text-sm text-muted-foreground flex items-center">
-                      <Phone className="h-4 w-4 mr-2" />
-                      Guardian: {student.profiles[0].guardian_phone}
-                    </p>
-                  )}
-                </div>
+  // Call the function to get insights
+  const insights = getPerformanceInsights();
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                <User className="h-8 w-8 text-primary" />
               </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-primary">{averageScore}%</div>
-                <div className="flex items-center justify-end space-x-2">
-                  <div className={trend === 'improving' ? 'text-green-600' : trend === 'declining' ? 'text-red-600' : 'text-yellow-600'}>
-                    {trend === 'improving' ? <TrendingUp className="h-5 w-5" /> : 
-                     trend === 'declining' ? <TrendingDown className="h-5 w-5" /> : 
-                     <Minus className="h-5 w-5" />}
-                  </div>
-                  <span className="text-sm capitalize">{trend}</span>
-                  {recentTrend !== 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      ({recentTrend > 0 ? '+' : ''}{recentTrend})
-                    </span>
-                  )}
-                </div>
-                <Badge 
-                  className="mt-2"
-                  style={{ 
-                    backgroundColor: KJSEA_LEVELS.find(l => averageScore >= l.min && averageScore <= l.max)?.color || "#6B7280",
-                    color: "white"
-                  }}
-                >
-                  {calculateKJSEAGrade(averageScore)}
-                </Badge>
+              <div>
+                <h3 className="text-2xl font-bold">
+                  {student.first_name} {student.last_name}
+                </h3>
+                <p className="text-muted-foreground">
+                  {student.Reg_no} • {studentClass}
+                </p>
+                {student.profiles?.[0]?.guardian_phone && (
+                  <p className="text-sm text-muted-foreground flex items-center">
+                    <Phone className="h-4 w-4 mr-2" />
+                    Guardian: {student.profiles[0].guardian_phone}
+                  </p>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Trend</CardTitle>
-              <CardDescription>Last {assessments.length} assessments over time</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {performanceOverTime.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={performanceOverTime}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      domain={[0, 100]}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "hsl(var(--card))", 
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px"
-                      }}
-                      formatter={(value: number) => [`${value}%`, 'Score']}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="score" 
-                      stroke="hsl(var(--primary))" 
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: "hsl(var(--primary))", strokeWidth: 2 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  No assessment data available
+            <div className="text-right">
+              <div className="text-3xl font-bold text-primary">{averageScore}%</div>
+              <div className="flex items-center justify-end space-x-2">
+                <div className={trend === 'improving' ? 'text-green-600' : trend === 'declining' ? 'text-red-600' : 'text-yellow-600'}>
+                  {trend === 'improving' ? <TrendingUp className="h-5 w-5" /> : 
+                   trend === 'declining' ? <TrendingDown className="h-5 w-5" /> : 
+                   <Minus className="h-5 w-5" />}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <span className="text-sm capitalize">{trend}</span>
+                {recentTrend !== 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    ({recentTrend > 0 ? '+' : ''}{recentTrend})
+                  </span>
+                )}
+              </div>
+              <Badge 
+                className="mt-2"
+                style={{ 
+                  backgroundColor: KJSEA_LEVELS.find(l => averageScore >= l.min && averageScore <= l.max)?.color || "#6B7280",
+                  color: "white"
+                }}
+              >
+                {calculateKJSEAGrade(averageScore)}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Subject Performance</CardTitle>
-              <CardDescription>Average scores by subject</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {subjectPerformanceData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={subjectPerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="subject" 
-                      stroke="hsl(var(--muted-foreground))"
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      domain={[0, 100]}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "hsl(var(--card))", 
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px"
-                      }}
-                      formatter={(value: number) => [`${value}%`, 'Average']}
-                    />
-                    <Bar 
-                      dataKey="average" 
-                      radius={[4, 4, 0, 0]}
-                    >
-                      {subjectPerformanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  No subject data available
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Assessments</CardTitle>
-            <CardDescription>Last {assessments.length} exam results</CardDescription>
+            <CardTitle>Performance Trend</CardTitle>
+            <CardDescription>Last {assessments.length} assessments over time</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Assessment</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Percentage</TableHead>
-                  <TableHead>KJSEA Level</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assessments.map((assessment) => {
-                  const grade = calculateKJSEAGrade(assessment.percentage);
-                  const level = KJSEA_LEVELS.find(l => l.label === grade);
-                  
-                  return (
-                    <TableRow key={assessment.id}>
-                      <TableCell className="font-medium">{assessment.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{assessment.subject}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(assessment.assessment_date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        {assessment.score}/{assessment.max_marks}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-16 bg-secondary rounded-full h-2">
-                            <div 
-                              className="h-2 rounded-full"
-                              style={{ 
-                                width: `${assessment.percentage}%`,
-                                backgroundColor: level?.color || "#6B7280"
-                              }}
-                            />
-                          </div>
-                          <span className="font-medium">{assessment.percentage.toFixed(1)}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          style={{ backgroundColor: level?.color }}
-                          className="text-white"
-                        >
-                          {grade}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {assessments.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No assessment records found for this student
+            {performanceOverTime.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={performanceOverTime}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    domain={[0, 100]}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: "hsl(var(--card))", 
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px"
+                    }}
+                    formatter={(value: number) => [`${value}%`, 'Score']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="score" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: "hsl(var(--primary))", strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No assessment data available
               </div>
             )}
           </CardContent>
@@ -2349,53 +2244,172 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
 
         <Card>
           <CardHeader>
-            <CardTitle>KJSEA Grade Distribution</CardTitle>
-            <CardDescription>Performance across Kenyan Achievement Levels</CardDescription>
+            <CardTitle>Subject Performance</CardTitle>
+            <CardDescription>Average scores by subject</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              {KJSEA_LEVELS.map((level, index) => {
-                const count = gradeDistribution.find(gd => gd.grade === level.label)?.count || 0;
-                return (
-                  <div key={level.label} className="text-center p-4 rounded-lg border">
-                    <div 
-                      className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 text-white font-bold"
-                      style={{ backgroundColor: level.color }}
-                    >
-                      {level.label.split(' ')[0]}
-                    </div>
-                    <div className="text-2xl font-bold">{count}</div>
-                    <div className="text-xs text-muted-foreground">{level.description}</div>
-                    <div className="text-xs mt-1">Level {level.label.split('(')[1].replace(')', '')}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance Insights</CardTitle>
-            <CardDescription>Key observations and recommendations based on KJSEA levels</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {insights.map((insight, index) => (
-                <div key={index} className="flex items-start space-x-3">
-                  {insight.icon}
-                  <div>
-                    <h4 className="font-semibold">{insight.title}</h4>
-                    <p className="text-sm text-muted-foreground">{insight.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {subjectPerformanceData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={subjectPerformanceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="subject" 
+                    stroke="hsl(var(--muted-foreground))"
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    domain={[0, 100]}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: "hsl(var(--card))", 
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px"
+                    }}
+                    formatter={(value: number) => [`${value}%`, 'Average']}
+                  />
+                  <Bar 
+                    dataKey="average" 
+                    radius={[4, 4, 0, 0]}
+                  >
+                    {subjectPerformanceData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No subject data available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-    );
-  };
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Assessments</CardTitle>
+          <CardDescription>Last {assessments.length} exam results</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Assessment</TableHead>
+                <TableHead>Subject</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Percentage</TableHead>
+                <TableHead>KJSEA Level</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {assessments.map((assessment) => {
+                const grade = calculateKJSEAGrade(assessment.percentage);
+                const level = KJSEA_LEVELS.find(l => l.label === grade);
+                
+                return (
+                  <TableRow key={assessment.id}>
+                    <TableCell className="font-medium">{assessment.title}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{assessment.subject}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(assessment.assessment_date).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {assessment.score}/{assessment.max_marks}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 bg-secondary rounded-full h-2">
+                          <div 
+                            className="h-2 rounded-full"
+                            style={{ 
+                              width: `${assessment.percentage}%`,
+                              backgroundColor: level?.color || "#6B7280"
+                            }}
+                          />
+                        </div>
+                        <span className="font-medium">{assessment.percentage.toFixed(1)}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        style={{ backgroundColor: level?.color }}
+                        className="text-white"
+                      >
+                        {grade}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          {assessments.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No assessment records found for this student
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>KJSEA Grade Distribution</CardTitle>
+          <CardDescription>Performance across Kenyan Achievement Levels</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            {KJSEA_LEVELS.map((level, index) => {
+              const count = gradeDistribution.find(gd => gd.grade === level.label)?.count || 0;
+              return (
+                <div key={level.label} className="text-center p-4 rounded-lg border">
+                  <div 
+                    className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 text-white font-bold"
+                    style={{ backgroundColor: level.color }}
+                  >
+                    {level.label.split(' ')[0]}
+                  </div>
+                  <div className="text-2xl font-bold">{count}</div>
+                  <div className="text-xs text-muted-foreground">{level.description}</div>
+                  <div className="text-xs mt-1">Level {level.label.split('(')[1].replace(')', '')}</div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Performance Insights</CardTitle>
+          <CardDescription>Key observations and recommendations based on KJSEA levels</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {insights.map((insight, index) => (
+              <div key={index} className="flex items-start space-x-3">
+                {insight.icon}
+                <div>
+                  <h4 className="font-semibold">{insight.title}</h4>
+                  <p className="text-sm text-muted-foreground">{insight.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
   const AnnouncementsSection = () => (
     <div className="space-y-6">
