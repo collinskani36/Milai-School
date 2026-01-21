@@ -18,14 +18,12 @@ export default {
     },
     extend: {
       colors: {
-        // 🔴 Make Maroon the dominant color (35%)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
 
-        // 🎨 Enhanced Maroon Color Palette
         maroon: {
           50: "#fdf2f2",
           100: "#fde8e8",
@@ -37,14 +35,13 @@ export default {
           700: "#c81e1e",
           800: "#9b1c1c",
           900: "#771d1d",
-          DEFAULT: "#800000", // Primary maroon
+          DEFAULT: "#800000", 
           light: "#a83232",
           dark: "#4d0000",
         },
 
-        // Primary should be maroon
         primary: {
-          DEFAULT: "#800000", // maroon
+          DEFAULT: "#800000", 
           foreground: "#ffffff",
           50: "#fdf2f2",
           100: "#fde8e8",
@@ -59,13 +56,12 @@ export default {
         },
 
         secondary: {
-          DEFAULT: "#f5f5f5", // light gray
+          DEFAULT: "#f5f5f5",
           foreground: "#000000",
         },
 
-        // Keep your other system colors but make them use maroon variants
         destructive: {
-          DEFAULT: "#e02424", // maroon-600
+          DEFAULT: "#e02424",
           foreground: "#ffffff",
         },
         muted: {
@@ -73,7 +69,7 @@ export default {
           foreground: "#737373",
         },
         accent: {
-          DEFAULT: "#800000", // maroon
+          DEFAULT: "#800000",
           foreground: "#ffffff",
         },
         popover: {
@@ -90,6 +86,10 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // --- THE PREMIUM EXTENSIONS ---
+      transitionTimingFunction: {
+        'expo': 'cubic-bezier(0.87, 0, 0.13, 1)',
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -99,12 +99,16 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "fade-in": {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 0.6s ease-out forwards",
       },
-      // Add maroon-based gradients
       backgroundImage: {
         'maroon-gradient': 'linear-gradient(135deg, #800000 0%, #a83232 100%)',
         'maroon-light': 'linear-gradient(135deg, #fdf2f2 0%, #fde8e8 100%)',

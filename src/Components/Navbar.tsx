@@ -24,7 +24,7 @@ export function Navbar({ showLogout = false, handleLogout }: NavbarProps) {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
-                Milai School Portal
+                Fredan Academy Portal
               </h1>
             </div>
           </div>

@@ -3,15 +3,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Com
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Navbar } from "@/Components/Navbar";
-import { User, BookOpen, Bell, Calendar, BarChart3, Mail, Phone, Download, Printer, FileText, TrendingUp, Target, Settings, Award, CreditCard } from "lucide-react";
+import { User, BookOpen, Bell, Calendar, BarChart3, Mail, Phone, Download, Printer, FileText, TrendingUp, Target, Settings, Award, CreditCard, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle } from "@/Components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle, DialogFooter } from "@/Components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid,ReferenceLine, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/Components/ui/input";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+
+// Add PDF generation imports
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Import the new Fees Dialog
 import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
@@ -107,7 +111,24 @@ const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
   return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
 };
 
+// Helper function for PDF grade styling
+const getGradeStyles = (grade: string) => {
+  if (grade.includes("EE1")) return "color: #27ae60; font-weight: bold;";
+  if (grade.includes("EE2")) return "color: #2980b9; font-weight: bold;";
+  if (grade.includes("ME1")) return "color: #3498db; font-weight: bold;";
+  if (grade.includes("ME2")) return "color: #9b59b6; font-weight: bold;";
+  if (grade.includes("AE1")) return "color: #f39c12; font-weight: bold;";
+  if (grade.includes("AE2")) return "color: #e67e22; font-weight: bold;";
+  if (grade.includes("BE1")) return "color: #e74c3c; font-weight: bold;";
+  return "color: #95a5a6; font-weight: bold;";
+};
+
 export default function StudentDashboard({ handleLogout }) {
+  // --- NEW STATE FOR SECURITY FIX ---
+  const [showWarning, setShowWarning] = useState(false);
+  const [revealedContact, setRevealedContact] = useState<{email: string, phone: string} | null>(null);
+  const [contactLoading, setContactLoading] = useState(false);
+
   const [subjectAnalysis, setSubjectAnalysis] = useState<any[]>([]);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -139,24 +160,80 @@ export default function StudentDashboard({ handleLogout }) {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  
+  // NEW: State for student rankings from the view
+  const [studentRankings, setStudentRankings] = useState<any[]>([]);
+  const [studentRankingsLoading, setStudentRankingsLoading] = useState(false);
 
   // Add state for Fees Dialog
   const [isFeesDialogOpen, setIsFeesDialogOpen] = useState(false);
   const [feesStudentData, setFeesStudentData] = useState<any>(null);
 
+  // --- NEW: fetchTeacherContact (Step 2: Fetch PII only after confirmation) ---
+  const fetchTeacherContact = async () => {
+    if (!teacherInfo?.teacher_id) return;
+    
+    setContactLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("student_teacher_info")
+        .select("email, phone")
+        .eq("teacher_id", teacherInfo.teacher_id)
+        .single();
+
+      if (error) throw error;
+      
+      setRevealedContact(data);
+      setShowWarning(false);
+    } catch (err) {
+      console.error("Error fetching contact:", err);
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
   // Function to handle fees management - NOW AS POPUP
   const handleFeesManagement = () => {
-  // Pass student data to the fees dialog
-  setFeesStudentData({
-    ...student,
-    first_name: profile?.first_name,
-    last_name: profile?.last_name,
-    Reg_no: profile?.reg_no,
-    guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX" // Use guardian_phone from profile
-  });
-  setIsFeesDialogOpen(true);
-};
+    // Pass student data to the fees dialog
+    setFeesStudentData({
+      ...student,
+      first_name: profile?.first_name,
+      last_name: profile?.last_name,
+      Reg_no: profile?.reg_no,
+      guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX" // Use guardian_phone from profile
+    });
+    setIsFeesDialogOpen(true);
+  };
 
+  // NEW: Fetch student rankings from the view
+const fetchStudentRankings = async () => {
+  if (!studentId || !classId) return;
+  
+  setStudentRankingsLoading(true);
+  try {
+    console.log("Fetching student rankings for student:", studentId, "class:", classId);
+    
+    const { data, error } = await supabase
+      .from("student_rankings")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("class_id", classId)
+      .order("assessment_date", { ascending: false });
+
+    if (error) {
+      console.error("Supabase error fetching rankings:", error);
+      throw error;
+    }
+    
+    console.log("Student rankings data:", data);
+    setStudentRankings(data || []);
+  } catch (err) {
+    console.error("Error fetching student rankings:", err);
+  } finally {
+    setStudentRankingsLoading(false);
+  }
+};
   // Update the fetchAssignments function to filter by class
   const fetchAssignments = async () => {
     setAssignmentsLoading(true);
@@ -414,134 +491,103 @@ export default function StudentDashboard({ handleLogout }) {
     }
   };
 
-  // Fetch performance history for the last 10 exams
-  useEffect(() => {
-    const fetchPerformanceHistory = async () => {
-      if (!studentId || !classId) return;
+  // Fetch performance history for the last 10 exams - NOW USING THE VIEW
+  // Fetch performance history for the last 10 exams - NOW USING THE VIEW
+useEffect(() => {
+  const fetchPerformanceHistory = async () => {
+    if (!studentId || !classId) return;
+    
+    setPerformanceLoading(true);
+    try {
+      console.log("Fetching performance history for student:", studentId, "class:", classId);
       
-      setPerformanceLoading(true);
-      try {
-        const { data: allAssessments, error } = await supabase
-          .from("assessment_results")
-          .select(`
-            id,
-            student_id,
-            score,
-            assessment_date,
-            assessments (
-              id,
-              title,
-              term,
-              year,
-              class_id
-            ),
-            subjects (
-              id,
-              name
-            )
-          `)
-          .eq("assessments.class_id", classId);
+      // Fetch performance data from the view
+      const { data: rankingsData, error } = await supabase
+        .from("student_rankings")
+        .select("*")
+        .eq("student_id", studentId)
+        .eq("class_id", classId)
+        .order("assessment_date", { ascending: false });
 
-        if (error) throw error;
+      if (error) {
+        console.error("Supabase error fetching rankings:", error);
+        throw error;
+      }
 
-        const examTitles = Array.from(new Set(
-          (allAssessments || [])
-            .filter(a => firstRel(a.assessments as any)?.title?.startsWith(className || ""))
-            .map(a => firstRel(a.assessments as any)?.title)
-            .filter(Boolean)
-        )).sort((a, b) => extractExamNumber(a) - extractExamNumber(b));
+      console.log("Rankings data for performance history:", rankingsData);
 
-        const examMaxTotals: Record<string, number> = {};
-        const examSubjects: Record<string, any[]> = {};
-        const examClassPositions: Record<string, Record<string, number>> = {};
-        
-        examTitles.forEach(title => {
-          const examAssessments = (allAssessments || []).filter(a => firstRel(a.assessments as any)?.title === title);
-          const studentTotals: Record<string, number> = {};
-          
-          examAssessments.forEach(assessment => {
-            const studentId = assessment.student_id;
-            if (!studentTotals[studentId]) {
-              studentTotals[studentId] = 0;
-            }
-            studentTotals[studentId] += assessment.score || 0;
-          });
+      // Fetch subject breakdowns for each exam
+      const performanceData: PerformanceRecord[] = [];
+      
+      if (rankingsData && rankingsData.length > 0) {
+        for (const ranking of rankingsData) {
+          // Get subject breakdown for this exam
+          const { data: subjectData, error: subjectError } = await supabase
+            .from("assessment_results")
+            .select(`
+              score,
+              max_marks,
+              subjects (
+                name
+              )
+            `)
+            .eq("student_id", studentId)
+            .eq("assessment_id", ranking.assessment_id);
 
-          const sortedStudents = Object.entries(studentTotals)
-            .sort(([, a], [, b]) => b - a)
-            .reduce((acc, [studentId, total], index) => {
-              acc[studentId] = index + 1;
-              return acc;
-            }, {} as Record<string, number>);
+          if (!subjectError && subjectData && subjectData.length > 0) {
+            const isEndYearExam = ranking.exam_title.toLowerCase().includes('end year') || 
+                                 ranking.exam_title.toLowerCase().includes('final') ||
+                                 ranking.exam_title.toLowerCase().includes('annual') ||
+                                 ranking.exam_title.toLowerCase().includes('year end');
 
-          examClassPositions[title] = sortedStudents;
-
-          const subjects = new Set(
-            examAssessments.map(a => firstRel(a.subjects as any)?.name).filter(Boolean)
-          );
-          examMaxTotals[title] = Array.from(subjects).length * 100;
-          
-          examSubjects[title] = examAssessments
-            .filter(a => a.student_id === studentId)
-            .map(record => ({
+            const subjectBreakdown = subjectData.map(record => ({
               subject: firstRel(record.subjects as any)?.name,
               score: record.score,
-              total_score: 100,
-              percentage: Math.round((record.score / 100) * 100),
-              grade: calculateKJSEAGrade(record.score / 100)
+              total_score: record.max_marks || 100,
+              percentage: Math.round((record.score / (record.max_marks || 100)) * 100),
+              grade: calculateKJSEAGrade(record.score / (record.max_marks || 100))
             }));
-        });
 
-        const studentAssessments = (allAssessments || []).filter(a => a.student_id === studentId);
-        
-        const performanceData: PerformanceRecord[] = examTitles.map(title => {
-          const studentScores = studentAssessments.filter(
-            a => firstRel(a.assessments as any)?.title === title
-          );
-          
-          const totalScore = studentScores.reduce((sum, a) => sum + (a.score || 0), 0);
-          const maxTotal = examMaxTotals[title] || 100;
-          const percentage = maxTotal > 0 ? Math.round((totalScore / maxTotal) * 100) : 0;
-          const classPosition = examClassPositions[title]?.[studentId] || 1;
-
-          const isEndYearExam = title.toLowerCase().includes('end year') || 
-                               title.toLowerCase().includes('final') ||
-                               title.toLowerCase().includes('annual') ||
-                               title.toLowerCase().includes('year end');
-
-          return {
-            id: `${title}-${studentId}`,
-            title: title,
-            term: firstRel(studentScores[0]?.assessments as any)?.term || "Unknown Term",
-            year: firstRel(studentScores[0]?.assessments as any)?.year || new Date().getFullYear(),
-            assessment_date: studentScores[0]?.assessment_date || new Date().toISOString(),
-            subjects: {
-              name: isEndYearExam ? "Overall" : "Multiple Subjects"
-            },
-            score: totalScore,
-            total_score: maxTotal,
-            percentage: percentage,
-            grade: calculateKJSEAGrade(totalScore / maxTotal),
-            isEndYearExam: isEndYearExam,
-            subjectBreakdown: isEndYearExam ? null : examSubjects[title],
-            classPosition: classPosition
-          };
-        }).filter(record => record.score > 0)
-          .sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())
-          .slice(0, 10);
-
-        setPerformanceHistory(performanceData);
-      } catch (err: any) {
-        console.error("Error fetching performance history:", err);
-        setError(err.message);
-      } finally {
-        setPerformanceLoading(false);
+            performanceData.push({
+              id: `${ranking.assessment_id}-${ranking.student_id}`,
+              title: ranking.exam_title,
+              term: ranking.term ? ranking.term.toString() : "Unknown Term",
+              year: ranking.year || new Date().getFullYear(),
+              assessment_date: ranking.assessment_date || new Date().toISOString(),
+              subjects: {
+                name: isEndYearExam ? "Overall" : "Multiple Subjects"
+              },
+              score: ranking.total_attained,
+              total_score: ranking.total_possible,
+              percentage: ranking.percentage,
+              grade: calculateKJSEAGrade(ranking.percentage / 100),
+              isEndYearExam: isEndYearExam,
+              subjectBreakdown: isEndYearExam ? null : subjectBreakdown,
+              classPosition: ranking.class_position
+            });
+          }
+        }
       }
-    };
 
+      // Sort by date and limit to 10 most recent
+      const sortedData = performanceData
+        .sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())
+        .slice(0, 10);
+
+      console.log("Performance data sorted:", sortedData);
+      setPerformanceHistory(sortedData);
+    } catch (err: any) {
+      console.error("Error fetching performance history:", err);
+      setError(err.message);
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
+  if (studentId && classId) {
     fetchPerformanceHistory();
-  }, [studentId, classId, className]);
-
+  }
+}, [studentId, classId]);
   // Get last 6 most recent exams
   const recentPerformance = useMemo(() => {
     return performanceHistory.slice(0, 6);
@@ -654,7 +700,7 @@ export default function StudentDashboard({ handleLogout }) {
   };
 
   // Generate PDF for overall yearly performance
-  const downloadYearlyPerformancePDF = () => {
+  const downloadYearlyPerformancePDF = async () => {
     const yearlyData: Record<number, PerformanceRecord[]> = {};
     recentPerformance.forEach(record => {
       if (!yearlyData[record.year]) {
@@ -663,6 +709,16 @@ export default function StudentDashboard({ handleLogout }) {
       yearlyData[record.year].push(record);
     });
 
+    // Create a container element for the PDF content
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.position = 'absolute';
+    pdfContainer.style.left = '-9999px';
+    pdfContainer.style.top = '0';
+    pdfContainer.style.width = '800px';
+    pdfContainer.style.padding = '20px';
+    pdfContainer.style.backgroundColor = 'white';
+    pdfContainer.style.fontFamily = 'Arial, sans-serif';
+    
     let yearlyContent = '';
     Object.entries(yearlyData).forEach(([year, records]) => {
       const yearlyTotal = records.reduce((sum, record) => sum + record.score, 0);
@@ -671,34 +727,34 @@ export default function StudentDashboard({ handleLogout }) {
 
       yearlyContent += `
         <div style="margin-bottom: 40px;">
-          <h2 style="color: #800000; border-bottom: 2px solid #800000; padding-bottom: 10px;">Year ${year} Performance Summary</h2>
+          <h2 style="color: #800000; border-bottom: 2px solid #800000; padding-bottom: 10px; margin-bottom: 20px;">Year ${year} Performance Summary</h2>
           
-          <table>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px;">
             <thead>
               <tr>
-                <th>Exam Title</th>
-                <th>Total Marks</th>
-                <th>Class Position</th>
-                <th>Assessment Date</th>
+                <th style="border: 1px solid #ddd; padding: 10px; text-align: left; background-color: #800000; color: white;">Exam Title</th>
+                <th style="border: 1px solid #ddd; padding: 10px; text-align: left; background-color: #800000; color: white;">Total Marks</th>
+                <th style="border: 1px solid #ddd; padding: 10px; text-align: left; background-color: #800000; color: white;">Class Position</th>
+                <th style="border: 1px solid #ddd; padding: 10px; text-align: left; background-color: #800000; color: white;">Assessment Date</th>
               </tr>
             </thead>
             <tbody>
               ${records.map(record => `
                 <tr>
-                  <td>${record.title}</td>
-                  <td>${record.score} / ${record.total_score}</td>
-                  <td class="position-${record.classPosition}">${record.classPosition}</td>
-                  <td>${new Date(record.assessment_date).toLocaleDateString()}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px;">${record.title}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px;">${record.score} / ${record.total_score}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; ${record.classPosition === 1 ? 'background-color: #d4edda; font-weight: bold;' : record.classPosition === 2 ? 'background-color: #fff3cd; font-weight: bold;' : record.classPosition === 3 ? 'background-color: #f8d7da; font-weight: bold;' : ''}">${record.classPosition}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px;">${new Date(record.assessment_date).toLocaleDateString()}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
 
-          <div class="summary">
-            <h3>Year ${year} Summary</h3>
+          <div style="background-color: #f9f0f0; padding: 15px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #800000;">
+            <h3 style="color: #800000; margin-top: 0;">Year ${year} Summary</h3>
             <p><strong>Total Score:</strong> ${yearlyTotal} / ${yearlyMaxTotal}</p>
             <p><strong>Average Percentage:</strong> ${yearlyAverage}%</p>
-            <p><strong>Overall KJSEA Level:</strong> <span class="grade-${calculateKJSEAGrade(yearlyTotal / yearlyMaxTotal)}">${calculateKJSEAGrade(yearlyTotal / yearlyMaxTotal)}</span></p>
+            <p><strong>Overall KJSEA Level:</strong> <span style="${getGradeStyles(calculateKJSEAGrade(yearlyTotal / yearlyMaxTotal))}">${calculateKJSEAGrade(yearlyTotal / yearlyMaxTotal)}</span></p>
             <p><strong>Exams Taken:</strong> ${records.length}</p>
             <p><strong>Best Position:</strong> ${Math.min(...records.map(r => r.classPosition))}</p>
           </div>
@@ -707,69 +763,59 @@ export default function StudentDashboard({ handleLogout }) {
     });
 
     const pdfContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Yearly Performance Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #800000; padding-bottom: 20px; }
-          .student-info { margin-bottom: 30px; background: #f9f0f0; padding: 15px; border-radius: 5px; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 12px; }
-          th { background-color: #800000; color: white; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .summary { background-color: #f9f0f0; padding: 15px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #800000; }
-          .grade-EE1 { color: #27ae60; font-weight: bold; }
-          .grade-EE2 { color: #2980b9; font-weight: bold; }
-          .grade-ME1 { color: #3498db; font-weight: bold; }
-          .grade-ME2 { color: #9b59b6; font-weight: bold; }
-          .grade-AE1 { color: #f39c12; font-weight: bold; }
-          .grade-AE2 { color: #e67e22; font-weight: bold; }
-          .grade-BE1 { color: #e74c3c; font-weight: bold; }
-          .grade-BE2 { color: #95a5a6; font-weight: bold; }
-          .position-1 { background-color: #d4edda; font-weight: bold; }
-          .position-2 { background-color: #fff3cd; font-weight: bold; }
-          .position-3 { background-color: #f8d7da; font-weight: bold; }
-          .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #7f8c8d; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1 style="color: #800000;">Yearly Academic Performance Report</h1>
+      <div style="padding: 20px; color: #333;">
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #800000; padding-bottom: 20px;">
+          <h1 style="color: #800000; margin: 0; font-size: 24px;">Yearly Academic Performance Report</h1>
         </div>
         
-        <div class="student-info">
-          <h3>Student Information</h3>
-          <p><strong>Name:</strong> ${profile?.first_name} ${profile?.last_name}</p>
-          <p><strong>Student ID:</strong> ${profile?.reg_no}</p>
-          <p><strong>Class:</strong> ${className}</p>
-          <p><strong>Report Period:</strong> ${Object.keys(yearlyData).join(', ')}</p>
-          <p><strong>Report Generated:</strong> ${new Date().toLocaleDateString()}</p>
+        <div style="margin-bottom: 30px; background: #f9f0f0; padding: 15px; border-radius: 5px;">
+          <h3 style="color: #800000; margin-top: 0;">Student Information</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            <div><strong>Name:</strong> ${profile?.first_name} ${profile?.last_name}</div>
+            <div><strong>Student ID:</strong> ${profile?.reg_no}</div>
+            <div><strong>Class:</strong> ${className}</div>
+            <div><strong>Report Period:</strong> ${Object.keys(yearlyData).join(', ')}</div>
+            <div><strong>Report Generated:</strong> ${new Date().toLocaleDateString()}</div>
+          </div>
         </div>
 
         ${yearlyContent}
 
-        <div class="footer">
+        <div style="text-align: center; margin-top: 40px; font-size: 12px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px;">
           <p>Generated by Student Portal • ${new Date().toLocaleDateString()}</p>
         </div>
-      </body>
-      </html>
+      </div>
     `;
 
-    const blob = new Blob([pdfContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `yearly-performance-${profile?.reg_no || "student"}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    pdfContainer.innerHTML = pdfContent;
+    document.body.appendChild(pdfContainer);
+
+    try {
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      pdf.save(`yearly-performance-${profile?.reg_no || "student"}.pdf`);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      document.body.removeChild(pdfContainer);
+    }
   };
 
-  // Download individual exam results as HTML
-  const downloadExamResultsPDF = (examRecord: PerformanceRecord) => {
+  // Download individual exam results as PDF
+  const downloadExamResultsPDF = async (examRecord: PerformanceRecord) => {
     const classPosition = examRecord.classPosition || 'N/A';
     const subjectBreakdown = examRecord.subjectBreakdown;
 
@@ -778,26 +824,26 @@ export default function StudentDashboard({ handleLogout }) {
 
     if (subjectBreakdown && subjectBreakdown.length > 0) {
       subjectContent = `
-        <div class="subject-results">
-          <h3>Subject-wise Performance</h3>
-          <table>
+        <div style="margin: 30px 0;">
+          <h3 style="color: #800000; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">Subject-wise Performance</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <thead>
               <tr>
-                <th>Subject</th>
-                <th>Score</th>
-                <th>Total</th>
-                <th>Percentage</th>
-                <th>KJSEA Level</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Subject</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Score</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Total</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Percentage</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">KJSEA Level</th>
               </tr>
             </thead>
             <tbody>
               ${subjectBreakdown.map(subject => `
                 <tr>
-                  <td>${subject.subject}</td>
-                  <td>${subject.score}</td>
-                  <td>${subject.total_score}</td>
-                  <td>${subject.percentage}%</td>
-                  <td class="grade-${subject.grade.split(' ')[0]}">${subject.grade}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px;">${subject.subject}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px;">${subject.score}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px;">${subject.total_score}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px;">${subject.percentage}%</td>
+                  <td style="border: 1px solid #ddd; padding: 12px; ${getGradeStyles(subject.grade)}">${subject.grade}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -806,23 +852,23 @@ export default function StudentDashboard({ handleLogout }) {
       `;
     } else {
       subjectContent = `
-        <div class="subject-results">
-          <h3>Overall Performance</h3>
-          <table>
+        <div style="margin: 30px 0;">
+          <h3 style="color: #800000; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">Overall Performance</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <thead>
               <tr>
-                <th>Score</th>
-                <th>Total</th>
-                <th>Percentage</th>
-                <th>KJSEA Level</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Score</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Total</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">Percentage</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background: #800000; color: white; font-weight: 600;">KJSEA Level</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>${examRecord.score}</td>
-                <td>${examRecord.total_score}</td>
-                <td>${examRecord.percentage}%</td>
-                <td class="grade-${examRecord.grade.split(' ')[0]}">${examRecord.grade}</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">${examRecord.score}</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">${examRecord.total_score}</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">${examRecord.percentage}%</td>
+                <td style="border: 1px solid #ddd; padding: 12px; ${getGradeStyles(examRecord.grade)}">${examRecord.grade}</td>
               </tr>
             </tbody>
           </table>
@@ -839,104 +885,118 @@ export default function StudentDashboard({ handleLogout }) {
     const averagePercentage = Math.round((totalScore / maxTotal) * 100);
 
     summaryContent = `
-      <div class="summary">
-        <h3>Exam Summary</h3>
-        <div class="summary-grid">
-          <div class="summary-item"><span class="label">Exam Title:</span><span class="value">${examRecord.title}</span></div>
-          <div class="summary-item"><span class="label">Total Marks:</span><span class="value">${totalScore} / ${maxTotal}</span></div>
-          <div class="summary-item"><span class="label">Class Position:</span><span class="value position-${classPosition}">${classPosition}</span></div>
-          <div class="summary-item"><span class="label">Percentage:</span><span class="value">${averagePercentage}%</span></div>
-          <div class="summary-item"><span class="label">KJSEA Level:</span><span class="value grade-${examRecord.grade.split(' ')[0]}">${examRecord.grade}</span></div>
+      <div style="background: #f9f0f0; padding: 20px; margin: 30px 0; border-radius: 8px; border-left: 4px solid #800000;">
+        <h3 style="color: #800000; margin-top: 0;">Exam Summary</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+          <div style="display: flex; justify-content: space-between; background: white; border: 1px solid #e1e1e1; padding: 8px; border-radius: 6px;">
+            <span style="font-weight: bold; color: #555;">Exam Title:</span>
+            <span style="color: #333;">${examRecord.title}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; background: white; border: 1px solid #e1e1e1; padding: 8px; border-radius: 6px;">
+            <span style="font-weight: bold; color: #555;">Total Marks:</span>
+            <span style="color: #333;">${totalScore} / ${maxTotal}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; background: white; border: 1px solid #e1e1e1; padding: 8px; border-radius: 6px;">
+            <span style="font-weight: bold; color: #555;">Class Position:</span>
+            <span style="${classPosition === 1 ? 'background: #d4edda; color: #155724;' : classPosition === 2 ? 'background: #fff3cd; color: #856404;' : classPosition === 3 ? 'background: #f8d7da; color: #721c24;' : ''} font-weight: bold; padding: 2px 8px; border-radius: 4px;">${classPosition}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; background: white; border: 1px solid #e1e1e1; padding: 8px; border-radius: 6px;">
+            <span style="font-weight: bold; color: #555;">Percentage:</span>
+            <span style="color: #333;">${averagePercentage}%</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; background: white; border: 1px solid #e1e1e1; padding: 8px; border-radius: 6px;">
+            <span style="font-weight: bold; color: #555;">KJSEA Level:</span>
+            <span style="${getGradeStyles(examRecord.grade)}">${examRecord.grade}</span>
+          </div>
         </div>
       </div>
     `;
 
     const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Exam Results - ${examRecord.title}</title>
-        <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin:0; padding:20px; color:#333; background:#fff; }
-          .header { text-align:center; margin-bottom:30px; border-bottom:2px solid #800000; padding-bottom:20px; }
-          .header h1 { margin:0; color:#800000; font-size:24px; }
-          .student-info { margin:20px 0; background:#f9f0f0; padding:15px; border-radius:8px; border-left:4px solid #800000; }
-          .info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
-          .info-item { display:flex; justify-content:space-between; padding:5px 0; }
-          .info-item .label { font-weight:bold; color:#555; }
-          table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
-          th,td { border:1px solid #ddd; padding:12px; text-align:left; }
-          th { background:#800000; color:white; font-weight:600; }
-          tr:nth-child(even) { background:#f9f9f9; }
-          .subject-results { margin:30px 0; }
-          .subject-results h3 { color:#800000; border-bottom:1px solid #eee; padding-bottom:10px; }
-          .summary { background:#f9f0f0; padding:20px; margin:30px 0; border-radius:8px; border-left:4px solid #800000; }
-          .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
-          .summary-item { display:flex; justify-content:space-between; background:white; border:1px solid #e1e1e1; padding:8px; border-radius:6px; }
-          .footer { text-align:center; margin-top:40px; font-size:12px; color:#7f8c8d; border-top:1px solid #eee; padding-top:20px; }
-          .grade-EE1 { color:#27ae60; font-weight:bold; }
-          .grade-EE2 { color:#2980b9; font-weight:bold; }
-          .grade-ME1 { color:#3498db; font-weight:bold; }
-          .grade-ME2 { color:#9b59b6; font-weight:bold; }
-          .grade-AE1 { color:#f39c12; font-weight:bold; }
-          .grade-AE2 { color:#e67e22; font-weight:bold; }
-          .grade-BE1 { color:#e74c3c; font-weight:bold; }
-          .grade-BE2 { color:#95a5a6; font-weight:bold; }
-          .position-1 { background:#d4edda; color:#155724; font-weight:bold; padding:2px 8px; border-radius:4px; }
-          .position-2 { background:#fff3cd; color:#856404; font-weight:bold; padding:2px 8px; border-radius:4px; }
-          .position-3 { background:#f8d7da; color:#721c24; font-weight:bold; padding:2px 8px; border-radius:4px; }
-        </style>
-      </head>
-      <body>
-        <div class="header"><h1>${examRecord.title} - Exam Report</h1></div>
-        <div class="student-info">
-          <div class="info-grid">
-            <div class="info-item"><span class="label">Name:</span><span>${profile?.first_name} ${profile?.last_name}</span></div>
-            <div class="info-item"><span class="label">Student ID:</span><span>${profile?.reg_no}</span></div>
-            <div class="info-item"><span class="label">Class:</span><span>${className}</span></div>
-            <div class="info-item"><span class="label">Exam Date:</span><span>${new Date(examRecord.assessment_date).toLocaleDateString()}</span></div>
+      <div style="padding: 20px; color: #333; background: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #800000; padding-bottom: 20px;">
+          <h1 style="color: #800000; margin: 0; font-size: 24px;">${examRecord.title} - Exam Report</h1>
+        </div>
+        
+        <div style="margin: 20px 0; background: #f9f0f0; padding: 15px; border-radius: 8px; border-left: 4px solid #800000;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+              <span style="font-weight: bold; color: #555;">Name:</span>
+              <span style="color: #333;">${profile?.first_name} ${profile?.last_name}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+              <span style="font-weight: bold; color: #555;">Student ID:</span>
+              <span style="color: #333;">${profile?.reg_no}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+              <span style="font-weight: bold; color: #555;">Class:</span>
+              <span style="color: #333;">${className}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+              <span style="font-weight: bold; color: #555;">Exam Date:</span>
+              <span style="color: #333;">${new Date(examRecord.assessment_date).toLocaleDateString()}</span>
+            </div>
           </div>
         </div>
 
         ${subjectContent}
         ${summaryContent}
 
-        <div class="footer">
+        <div style="text-align: center; margin-top: 40px; font-size: 12px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px;">
           Generated by Student Portal • ${new Date().toLocaleDateString()}
         </div>
-
-        <script>
-          window.onload = function() { setTimeout(() => { window.print(); }, 500); }
-        </script>
-      </body>
-      </html>
+      </div>
     `;
 
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `exam-results-${examRecord.title.replace(/\s+/g, '-').toLowerCase()}-${profile?.reg_no || 'student'}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.position = 'absolute';
+    pdfContainer.style.left = '-9999px';
+    pdfContainer.style.top = '0';
+    pdfContainer.style.width = '800px';
+    pdfContainer.style.padding = '20px';
+    pdfContainer.style.backgroundColor = 'white';
+    pdfContainer.style.fontFamily = 'Arial, sans-serif';
+    pdfContainer.innerHTML = htmlContent;
+    
+    document.body.appendChild(pdfContainer);
+
+    try {
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      pdf.save(`exam-results-${examRecord.title.replace(/\s+/g, '-').toLowerCase()}-${profile?.reg_no || 'student'}.pdf`);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      document.body.removeChild(pdfContainer);
+    }
   };
 
-  // --- Subject Analysis Dialog Handler ---
+  // --- MODIFIED: handleSubjectClick (Step 1: Removed email/phone from initial fetch) ---
   const handleSubjectClick = async (subjectName: string) => {
     setSelectedSubject(subjectName);
     setAnalysisLoading(true);
+    setRevealedContact(null); // Reset revealed info when switching subjects
 
     const examTitles = exams.map(e => e.title);
     const subjectAssessments = assessments.filter(
       a => a.subjects?.name === subjectName && a.student_id === studentId
     );
-
+    
     const subjectAnalysisData = examTitles.map(examTitle => {
-      const found = subjectAssessments.find(
-        a => a.assessments?.title === examTitle
-      );
+      const found = subjectAssessments.find(a => a.assessments?.title === examTitle);
       return {
         exam: examTitle,
         score: found ? found.score : null,
@@ -944,7 +1004,6 @@ export default function StudentDashboard({ handleLogout }) {
         subject_id: found ? found.subjects?.id : null,
       };
     });
-
     setSubjectAnalysis(subjectAnalysisData);
 
     let teacher = null;
@@ -956,11 +1015,13 @@ export default function StudentDashboard({ handleLogout }) {
         .eq("class_id", classId)
         .eq("subject_id", subjectId)
         .single();
+
       if (!tcError && tcData?.teacher_id) {
+        // ONLY FETCH NAMES HERE - NO PII
         const { data, error } = await supabase
-          .from("teachers")
-          .select("first_name, last_name, email, phone")
-          .eq("id", tcData.teacher_id)
+          .from("student_teacher_info")
+          .select("teacher_id, first_name, last_name")
+          .eq("teacher_id", tcData.teacher_id)
           .single();
         if (!error && data) teacher = data;
       }
@@ -971,89 +1032,121 @@ export default function StudentDashboard({ handleLogout }) {
 
   // Fetch student profile and all assessment results
   useEffect(() => {
-  const fetchStudentData = async () => {
-    setLoading(true);
-    try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      const user = userData.user;
-      if (!user) throw new Error("User not signed in");
-      
-      // REMOVED parent_phone from students query - it doesn't exist in that table
-      const { data: studentData, error: studentError } = await supabase
-        .from("students")
-        .select("id, Reg_no, first_name, last_name, auth_id") // Removed parent_phone
-        .eq("auth_id", user.id)
-        .single();
-      if (studentError) throw studentError;
-      if (!studentData) throw new Error("No student found");
-      setStudent(studentData);
-      setStudentId(studentData.id);
+    const fetchStudentData = async () => {
+      setLoading(true);
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        const user = userData.user;
+        if (!user) throw new Error("User not signed in");
+        
+        // Get student data
+        const { data: studentData, error: studentError } = await supabase
+          .from("students")
+          .select("id, Reg_no, first_name, last_name, auth_id")
+          .eq("auth_id", user.id)
+          .single();
+        
+        if (studentError) throw studentError;
+        if (!studentData) throw new Error("No student found");
+        setStudent(studentData);
+        setStudentId(studentData.id);
 
-      // Profile now contains guardian_phone
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("student_id", studentData.id)
-        .single();
-      if (profileError) throw profileError;
-      if (!profileData) throw new Error("No student profile found");
-      setProfile(profileData);
+        // Get student profile
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("student_id", studentData.id)
+          .single();
+        
+        if (profileError) throw profileError;
+        if (!profileData) throw new Error("No student profile found");
+        setProfile(profileData);
 
-      
+        // Get enrollment and class info
+        const { data: enrollmentData, error: enrollmentError } = await supabase
+          .from("enrollments")
+          .select(`
+            class_id,
+            classes (name)
+          `)
+          .eq("student_id", studentData.id)
+          .single();
+        
+        if (enrollmentError) throw enrollmentError;
+        const classId = enrollmentData?.class_id || null;
+        const className = firstRel(enrollmentData?.classes as any)?.name || "Unknown";
+        setClassId(classId);
+        setClassName(className);
 
-      const { data: enrollmentData, error: enrollmentError } = await supabase
-        .from("enrollments")
-        .select(`
-          class_id,
-          classes (name)
-        `)
-        .eq("student_id", studentData.id)
-        .single();
-      if (enrollmentError) throw enrollmentError;
-      const classId = enrollmentData?.class_id || null;
-      const className = firstRel(enrollmentData?.classes as any)?.name || "Unknown";
-      setClassId(classId);
-      setClassName(className);
-
-      const { data: assessmentsData, error } = await supabase
-        .from("assessment_results")
-        .select(`
-          id,
-          student_id,
-          score,
-          assessment_date,
-          assessments (
-            id,
-            title,
-            term,
-            year,
-            class_id
-          ),
-          subjects (
-            id,
-            name
-          )
-        `)
-        .eq("assessments.class_id", classId);
-
-      if (error) {
-        console.error("Error fetching assessments:", error);
-        setAssessments([]);
-      } else {
-        setAssessments(assessmentsData || []);
+        // Fetch assessments for the current student - ADDED TIME FILTER
+        const currentYear = new Date().getFullYear();
+        const lastYear = currentYear - 1;
+        
+        const { data: assessmentsData, error: assessmentsError } = await supabase
+  .from("assessment_results")
+  .select(`
+    id,
+    student_id,
+    score,
+    max_marks,
+    assessment_date,
+    assessments (
+      id,
+      title,
+      term,
+      year,
+      class_id
+    ),
+    subjects (
+      id,
+      name
+    )
+  `)
+  .eq("student_id", studentData.id)  // Filter by student_id first
+  .eq("assessments.class_id", classId)  // Then filter by class
+  .in("assessments.year", [currentYear, lastYear])
+  .order("assessment_date", { ascending: false });
+        
+        if (assessmentsError) {
+          console.error("Error fetching assessments:", assessmentsError);
+          setAssessments([]);
+        } else {
+          // Process the data to ensure proper structure
+          const processedData = (assessmentsData || []).map(item => ({
+            ...item,
+            assessments: firstRel(item.assessments),
+            subjects: firstRel(item.subjects),
+            // Calculate percentage if not present
+            percentage: item.max_marks > 0 ? (item.score / item.max_marks) * 100 : 0
+          }));
+          
+          setAssessments(processedData);
+        }
+        
+        setAssessmentsLoading(false);
+        
+        // Fetch student rankings from the view
+        if (classId) {
+          fetchStudentRankings();
+        }
+      } catch (err: any) {
+        console.error("Error in fetchStudentData:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-      setAssessmentsLoading(false);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  fetchStudentData();
-}, []);
+    fetchStudentData();
+  }, []);
+
+  // Fetch student rankings when studentId or classId changes
+  useEffect(() => {
+    if (studentId && classId) {
+      fetchStudentRankings();
+    }
+  }, [studentId, classId]);
 
   // Fetch attendance
   useEffect(() => {
@@ -1130,199 +1223,208 @@ export default function StudentDashboard({ handleLogout }) {
   }, []);
 
   // Password update handler
-const handlePasswordUpdate = async () => {
-  setPasswordLoading(true);
-  setPasswordError(null);
-  setPasswordSuccess(null);
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsLoading(true);
 
-  try {
-    // Validate passwords
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      throw new Error("All password fields are required");
-    }
-
-    if (newPassword.length < 6) {
-      throw new Error("New password must be at least 6 characters long");
-    }
-
+    // 1. Check if the two new passwords actually match
     if (newPassword !== confirmPassword) {
-      throw new Error("New passwords do not match");
+      alert("New passwords do not match!");
+      setSettingsLoading(false);
+      return;
     }
 
-    // Update password using Supabase
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword
-    });
+    try {
+      // 2. THE SECURITY GATE: Re-authenticate the user
+      // We try to log in again using the email and the OLD password they provided
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
 
-    if (error) throw error;
+      // If the old password is wrong, stop immediately!
+      if (signInError) {
+        alert("Current password is incorrect. Please try again.");
+        setSettingsLoading(false);
+        return;
+      }
 
-    setPasswordSuccess("Password updated successfully!");
-    
-    // Reset form
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+      // 3. If we got here, it means the current password was CORRECT.
+      // Now it is safe to update to the new password.
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
 
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      setPasswordSuccess(null);
-    }, 3000);
+      if (updateError) throw updateError;
 
-  } catch (err: any) {
-    console.error("Error updating password:", err);
-    setPasswordError(err.message);
-  } finally {
-    setPasswordLoading(false);
-  }
-};
+      alert("Password updated successfully!");
+      
+      // Clear the boxes
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsSettingsOpen(false);
+
+    } catch (error: any) {
+      alert(error.message || "An error occurred while updating password");
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
 
   // Update the existing assignments useEffect to use the new function
   useEffect(() => {
-    if (classId) {
-      fetchAssignments();
-    }
-  }, [classId]); // ADDED: Run when classId changes
+    fetchAssignments();
+  }, []);
 
   // Update the existing announcements useEffect to use the new function  
   useEffect(() => {
     fetchAnnouncements();
   }, []);
 
-// Reset password form when modal closes
-useEffect(() => {
-  console.log("Settings modal state:", isSettingsOpen);
-}, [isSettingsOpen]);
+  // Reset password form when modal closes
+  useEffect(() => {
+    console.log("Settings modal state:", isSettingsOpen);
+  }, [isSettingsOpen]);
 
-// Reset password form when modal closes
-useEffect(() => {
-  if (!isSettingsOpen) {
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setPasswordError(null);
-    setPasswordSuccess(null);
-  }
-}, [isSettingsOpen]);
+  // Reset password form when modal closes
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError(null);
+      setPasswordSuccess(null);
+    }
+  }, [isSettingsOpen]);
 
   // Exams list for table
   const exams = useMemo(() => {
-    if (!assessments || assessments.length === 0 || !className) return [];
+    if (!assessments || assessments.length === 0) {
+      return [];
+    }
+    
     const examTitleSet = new Set<string>();
     assessments.forEach(a => {
-      if (a.assessments?.title && a.assessments?.title.startsWith(className)) {
+      if (a.assessments?.title) {
         examTitleSet.add(a.assessments.title);
       }
     });
+    
     return Array.from(examTitleSet)
       .sort((a, b) => extractExamNumber(a) - extractExamNumber(b))
       .map(title => ({ id: title, title }));
-  }, [assessments, className]);
+  }, [assessments]);
 
-  // Pivot data for assessment table
-  const pivotData = useMemo(() => {
-    if (!assessments || assessments.length === 0 || !studentId || !className) return [];
-
-    const examTitles = exams.map(e => e.title);
-    const grouped: Record<string, any> = {};
-    
-    assessments.forEach(a => {
-      if (a.student_id !== studentId) return;
-      const subject = a.subjects?.name || "Unknown Subject";
-      const examTitle = a.assessments?.title || "Untitled Exam";
-      if (!grouped[subject]) {
-        grouped[subject] = { subject, exams: {} };
-      }
-      grouped[subject].exams[examTitle] = a.score;
+  // Pivot data for assessment table - NOW USING THE VIEW FOR TOTALS AND POSITIONS
+  // Pivot data for assessment table - NOW USING THE VIEW FOR TOTALS AND POSITIONS
+const pivotData = useMemo(() => {
+  // Guard clause: Ensure we have the necessary data
+  if (!assessments || !studentId || !studentRankings || studentRankings.length === 0) {
+    console.log("Pivot data conditions:", {
+      hasAssessments: !!assessments,
+      studentId,
+      hasStudentRankings: !!studentRankings,
+      studentRankingsLength: studentRankings?.length
     });
+    return [];
+  }
+
+  const examTitles = exams.map(e => e.title);
+  const grouped: Record<string, any> = {};
+  
+  console.log("Building pivot data for exams:", examTitles);
+  console.log("Student rankings:", studentRankings);
+  
+  // 1. Group Subject Rows for the LOGGED-IN Student
+  assessments.forEach(a => {
+    if (String(a.student_id) !== String(studentId)) return;
+    const subject = a.subjects?.name || "Unknown Subject";
+    const examTitle = a.assessments?.title || "Untitled Exam";
     
-    const rows = Object.values(grouped).map((row: any) => ({
-      subject: row.subject,
-      exams: examTitles.reduce((acc: Record<string, any>, title) => {
-        acc[title] = row.exams[title] ?? "-";
-        return acc;
-      }, {}),
-    }));
+    if (!grouped[subject]) {
+      grouped[subject] = { subject, exams: {} };
+    }
+    // Store score as a number for calculation, or "-" if null
+    grouped[subject].exams[examTitle] = a.score !== null ? Number(a.score) : "-";
+  });
+  
+  // Map grouped data into table rows
+  const rows = Object.values(grouped).map((row: any) => ({
+    subject: row.subject,
+    exams: examTitles.reduce((acc: Record<string, any>, title) => {
+      acc[title] = row.exams[title] ?? "-";
+      return acc;
+    }, {}),
+  }));
 
-    const totals: Record<string, number> = {};
-    examTitles.forEach(title => {
-      let sum = 0;
-      Object.values(grouped).forEach((row: any) => {
-        const score = row.exams[title];
-        if (typeof score === "number") sum += score;
-      });
-      totals[title] = sum;
-    });
+  // 2. Create a map from exam title to the studentRanking data for the current student
+  const rankingMap: Record<string, any> = {};
+  studentRankings.forEach(r => {
+    if (r.exam_title) {
+      rankingMap[r.exam_title] = {
+        total_attained: r.total_attained,
+        total_possible: r.total_possible,
+        class_position: r.class_position
+      };
+    }
+  });
 
-    const positions: Record<string, number | string> = {};
-    const resultsSource = assessments || [];
-    
-    examTitles.forEach(title => {
-      const totalsByStudent: Record<string, number> = {};
-      resultsSource.forEach(row => {
-        const sid = row.student_id;
-        const rowTitle = row.assessments?.title;
-        const scoreRaw = row.score;
-        const score = typeof scoreRaw === "number" ? scoreRaw : scoreRaw != null && !Number.isNaN(Number(scoreRaw)) ? Number(scoreRaw) : null;
-        if (!sid || !rowTitle || rowTitle !== title || score === null) return;
-        totalsByStudent[sid] = (totalsByStudent[sid] || 0) + score;
-      });
-      
-      const studentIds = Object.keys(totalsByStudent);
-      if (studentIds.length === 0) {
-        positions[title] = "-";
-        return;
-      }
-      
-      const ranked = Object.entries(totalsByStudent).sort((a, b) => b[1] - a[1]);
-      const ranks: Record<string, number> = {};
-      let prevScore: number | null = null;
-      let prevRank = 0;
-      
-      for (let i = 0; i < ranked.length; i++) {
-        const [sid, total] = ranked[i];
-        if (i === 0) {
-          ranks[sid] = 1;
-          prevRank = 1;
-          prevScore = total;
-        } else {
-          if (total === prevScore) {
-            ranks[sid] = prevRank;
-          } else {
-            const rank = i + 1;
-            ranks[sid] = rank;
-            prevRank = rank;
-            prevScore = total;
-          }
-        }
-      }
-      positions[title] = ranks[studentId] ?? "-";
-    });
+  console.log("Ranking map:", rankingMap);
 
-    return [
-      ...rows,
-      { subject: "Totals", exams: totals },
-      { subject: "Position", exams: positions }
-    ];
-  }, [assessments, studentId, className, exams]);
+  // 3. Calculate Totals and Positions using the rankingMap
+  const totals: Record<string, any> = {};
+  const positions: Record<string, any> = {};
 
-  // Calculate GPA using KJSEA levels
+  examTitles.forEach(title => {
+    if (rankingMap[title]) {
+      totals[title] = `${rankingMap[title].total_attained}/${rankingMap[title].total_possible}`;
+      positions[title] = rankingMap[title].class_position;
+    } else {
+      totals[title] = "-";
+      positions[title] = "-";
+    }
+  });
+
+  // 4. Return the combined data for the table
+  return [
+    ...rows,
+    { subject: "Totals", exams: totals },
+    { subject: "Position", exams: positions }
+  ];
+}, [assessments, studentId, exams, studentRankings]);
+
+  // Calculate GPA using weighted percentages across all assessments
   const calculateGPA = () => {
     if (!assessments || assessments.length === 0 || !studentId) return "-";
+    
     const myScores = assessments.filter(a => a.student_id === studentId);
     if (!myScores.length) return "-";
-    const total = myScores.reduce((sum, a) => sum + (a.score || 0), 0);
-    const avg = total / myScores.length;
     
-    // Convert to KJSEA GPA scale
-    const percentage = avg; // score out of 100
+    // Calculate total score and total max marks
+    let totalScore = 0;
+    let totalMaxMarks = 0;
     
-    if (percentage >= 90) return "8.0 (EE1)";
-    if (percentage >= 75) return "7.0 (EE2)";
-    if (percentage >= 58) return "6.0 (ME1)";
-    if (percentage >= 41) return "5.0 (ME2)";
-    if (percentage >= 31) return "4.0 (AE1)";
-    if (percentage >= 21) return "3.0 (AE2)";
-    if (percentage >= 11) return "2.0 (BE1)";
+    myScores.forEach(assessment => {
+      totalScore += assessment.score || 0;
+      // Use max_marks from the assessment, default to 100 if not available
+      totalMaxMarks += assessment.max_marks || 100;
+    });
+    
+    // Avoid division by zero
+    if (totalMaxMarks === 0) return "-";
+    
+    // Calculate overall percentage
+    const overallPercentage = (totalScore / totalMaxMarks) * 100;
+    
+    // Convert to KJSEA GPA scale based on overall percentage
+    if (overallPercentage >= 90) return "8.0 (EE1)";
+    if (overallPercentage >= 75) return "7.0 (EE2)";
+    if (overallPercentage >= 58) return "6.0 (ME1)";
+    if (overallPercentage >= 41) return "5.0 (ME2)";
+    if (overallPercentage >= 31) return "4.0 (AE1)";
+    if (overallPercentage >= 21) return "3.0 (AE2)";
+    if (overallPercentage >= 11) return "2.0 (BE1)";
     return "1.0 (BE2)";
   };
 
@@ -1544,7 +1646,12 @@ useEffect(() => {
                 <CardDescription className="text-gray-600">Click any subject for detailed performance analysis</CardDescription>
               </CardHeader>
               <CardContent>
-                {pivotData.length > 0 ? (
+                {assessmentsLoading || studentRankingsLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading assessment results...</p>
+                  </div>
+                ) : pivotData.length > 0 ? (
                   <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader className="bg-maroon-50">
@@ -1597,6 +1704,7 @@ useEffect(() => {
                   <div className="text-center py-12">
                     <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600">No assessment results found.</p>
+                    <p className="text-sm text-gray-500 mt-2">Check if assessments have been added for your class.</p>
                   </div>
                 )}
               </CardContent>
@@ -2017,8 +2125,7 @@ useEffect(() => {
       </div>
 
       {/* Enhanced Subject Analysis Dialog */}
-      {/* Enhanced Subject Analysis Dialog - THEMED & SCROLLABLE */}
-{/* Subject Analysis Dialog - THEMED & SCROLLABLE */}
+      {/* Subject Analysis Dialog - THEMED & SCROLLABLE */}
 <Dialog open={!!selectedSubject} onOpenChange={() => setSelectedSubject(null)}>
   <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white to-maroon/5 border-maroon/20">
     <DialogHeader className="border-b border-maroon/10 pb-4">
@@ -2031,373 +2138,366 @@ useEffect(() => {
       </DialogDescription>
     </DialogHeader>
     
-    <div className="space-y-6 py-2">
-      {analysisLoading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-maroon mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading detailed analysis...</p>
-        </div>
-      ) : (
-        <>
-          {/* Teacher Information Card - Compact Horizontal Layout with Native Actions */}
-{teacherInfo && (
-  <Card className="bg-white dark:bg-gray-900 border-l-4 border-maroon shadow-2xl shadow-maroon/10 transition-shadow duration-300">
-    <CardContent className="p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        
-        {/* Left Section: Header and Icon */}
-        <div className="flex items-center mb-4 sm:mb-0 sm:pr-6 border-b sm:border-b-0 sm:border-r pb-4 sm:pb-0 sm:border-gray-100 dark:sm:border-gray-800">
-          <div className="w-12 h-12 bg-maroon rounded-lg flex items-center justify-center mr-4 shadow-md flex-shrink-0">
-            <User className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h4 className="font-extrabold text-xl tracking-tight text-gray-900 dark:text-white">
-              {selectedSubject} Teacher
-            </h4>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-              /Teacher Contact
-            </p>
-          </div>
-        </div>
-        
-        {/* Right Section: Contact Information - Horizontal (Flex-wrap for responsiveness) */}
-        <div className="flex-1 min-w-0 pt-4 sm:pt-0 pl-0 sm:pl-6">
-          <div className="flex flex-wrap gap-y-4 gap-x-6 justify-start">
-            
-            {/* 1. Name */}
-            <div className="flex-shrink-0">
-              <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Name</div>
-              <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
-                {teacherInfo.first_name} {teacherInfo.last_name}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+      <Card className="md:col-span-1">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+            <User className="h-4 w-4 mr-2" />
+            Subject Teacher
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {analysisLoading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ) : teacherInfo ? (
+            <div className="space-y-4">
+              <div>
+                <p className="font-bold text-lg">{teacherInfo.first_name} {teacherInfo.last_name}</p>
+                <Badge variant="outline" className="mt-1">Lead Instructor</Badge>
+              </div>
+
+              {/* --- THE FIX: Reveal Logic --- */}
+              <div className="pt-2 border-t">
+                {revealedContact ? (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Mail className="h-4 w-4 mr-2 text-maroon" />
+                      {revealedContact.email}
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Phone className="h-4 w-4 mr-2 text-maroon" />
+                      {revealedContact.phone}
+                    </div>
+                  </div>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-xs"
+                    onClick={() => setShowWarning(true)}
+                  >
+                    <ShieldAlert className="h-3 w-3 mr-2" />
+                    View Contact (Parents Only)
+                  </Button>
+                )}
               </div>
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">Teacher info not assigned</p>
+          )}
+        </CardContent>
+      </Card>
 
-            {/* 2. Email (Actionable) */}
-            <a href={`mailto:${teacherInfo.email}`} className="flex-shrink-0 group hover:underline underline-offset-2 transition-colors">
-              <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Email</div>
-              <div className="text-base text-maroon font-medium dark:text-maroon/80 group-hover:text-maroon/90 mt-0.5 truncate">
-                {teacherInfo.email}
-              </div>
-            </a>
-
-            {/* 3. Phone (Actionable, Conditional) */}
-            {teacherInfo.phone && (
-              <a href={`tel:${teacherInfo.phone}`} className="flex-shrink-0 group hover:underline underline-offset-2 transition-colors">
-                <div className="font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">Phone</div>
-                <div className="text-base text-maroon font-medium dark:text-maroon/80 group-hover:text-maroon/90 font-mono mt-0.5">
-                  {teacherInfo.phone}
-                </div>
-              </a>
-            )}
-
+      {/* Charts and Analysis Section */}
+      <div className="md:col-span-2 space-y-6">
+        {analysisLoading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-maroon mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading detailed analysis...</p>
           </div>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-)}
+        ) : subjectAnalysis.length > 0 ? (
+          <>
+            {/* Subject Insights Card */}
+            {(() => {
+              const insights = getSubjectInsights(subjectAnalysis.filter(d => d.score !== null));
+              return insights && (
+                <Card className="bg-white border-maroon/20 shadow-lg">
+                  <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
+                    <CardTitle className="flex items-center text-xl text-gray-900">
+                      <TrendingUp className="h-5 w-5 mr-2 text-maroon" />
+                      Performance Insights
+                    </CardTitle>
+                    <CardDescription className="text-gray-600">
+                      Based on analysis of last {insights.examsAnalyzed} exams in {selectedSubject}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Trend Analysis */}
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-gray-900 border-b pb-2">Trend Analysis</h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium text-gray-700">Current Trend:</span>
+                            <Badge 
+                              className={
+                                insights.trend === 'improving' 
+                                  ? 'bg-green-100 text-green-800 border-green-200' 
+                                  : insights.trend === 'declining' 
+                                  ? 'bg-red-100 text-red-800 border-red-200'
+                                  : 'bg-blue-100 text-blue-800 border-blue-200'
+                              }
+                            >
+                              {insights.trend === 'improving' ? '📈 Improving' : 
+                              insights.trend === 'declining' ? '📉 Declining' : '➡️ Stable'}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium text-gray-700">Trend Strength:</span>
+                            <span className="font-semibold capitalize text-gray-900">{insights.trendStrength}</span>
+                          </div>
+                        </div>
+                      </div>
 
-          {subjectAnalysis.length > 0 ? (
-            <>
-              {/* Subject Insights Card */}
-              {(() => {
-                const insights = getSubjectInsights(subjectAnalysis.filter(d => d.score !== null));
-                return insights && (
-                  <Card className="bg-white border-maroon/20 shadow-lg">
-                    <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                      <CardTitle className="flex items-center text-xl text-gray-900">
-                        <TrendingUp className="h-5 w-5 mr-2 text-maroon" />
-                        Performance Insights
-                      </CardTitle>
-                      <CardDescription className="text-gray-600">
-                        Based on analysis of last {insights.examsAnalyzed} exams in {selectedSubject}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Trend Analysis */}
-                        <div className="space-y-4">
-                          <h4 className="font-semibold text-gray-900 border-b pb-2">Trend Analysis</h4>
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                              <span className="font-medium text-gray-700">Current Trend:</span>
+                      {/* Performance Metrics */}
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-gray-900 border-b pb-2">Performance Metrics</h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium text-gray-700">Latest Score:</span>
+                            <span className={`font-bold text-lg ${
+                              insights.latestScore >= 90 ? 'text-green-600' :
+                              insights.latestScore >= 75 ? 'text-emerald-600' :
+                              insights.latestScore >= 58 ? 'text-blue-600' :
+                              insights.latestScore >= 41 ? 'text-cyan-600' :
+                              insights.latestScore >= 31 ? 'text-yellow-600' :
+                              insights.latestScore >= 21 ? 'text-orange-600' :
+                              insights.latestScore >= 11 ? 'text-red-600' : 'text-gray-600'
+                            }`}>
+                              {insights.latestScore}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium text-gray-700">Average Score:</span>
+                            <span className="font-semibold text-gray-900">{insights.averageScore}%</span>
+                          </div>
+                          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium text-gray-700">Score Range:</span>
+                            <span className="text-sm text-gray-700">
+                              {insights.lowestScore}% - {insights.highestScore}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Performance Recommendations */}
+                    <div className={`mt-6 p-4 rounded-lg border-l-4 ${
+                      insights.latestScore >= 90 ? 'border-green-400 bg-green-50' :
+                      insights.latestScore >= 75 ? 'border-emerald-400 bg-emerald-50' :
+                      insights.latestScore >= 58 ? 'border-blue-400 bg-blue-50' :
+                      insights.latestScore >= 41 ? 'border-cyan-400 bg-cyan-50' :
+                      insights.latestScore >= 31 ? 'border-yellow-400 bg-yellow-50' :
+                      insights.latestScore >= 21 ? 'border-orange-400 bg-orange-50' :
+                      insights.latestScore >= 11 ? 'border-red-400 bg-red-50' :
+                      'border-gray-400 bg-gray-50'
+                    }`}>
+                      <h5 className="font-semibold text-gray-900 mb-2">Recommendations:</h5>
+                      <p className="text-sm text-gray-700">
+                        {insights.latestScore >= 90 
+                          ? "Exceptional performance! Maintain your current study habits and consider advanced topics."
+                          : insights.latestScore >= 75
+                          ? "Excellent performance. Focus on consistent practice to reach exceptional level."
+                          : insights.latestScore >= 58
+                          ? "Very good performance. Regular practice and review challenging concepts."
+                          : insights.latestScore >= 41
+                          ? "Good performance. Focus on strengthening weak areas and regular revision."
+                          : insights.latestScore >= 31
+                          ? "Average performance. Increase study time and seek help when needed."
+                          : insights.latestScore >= 21
+                          ? "Below average performance. Consider additional tutoring and focus on fundamentals."
+                          : insights.latestScore >= 11
+                          ? "Poor performance. Seek immediate help from teacher and increase study hours."
+                          : "Very poor performance. Requires intensive tutoring and complete revision of basics."
+                        }
+                      </p>
+                      {insights.trend === 'improving' && insights.trendStrength === 'significant' && (
+                        <p className="text-sm text-green-600 font-medium mt-2">
+                          🎉 Great progress! Your improvement trend is strong.
+                        </p>
+                      )}
+                      {insights.trend === 'declining' && insights.trendStrength === 'significant' && (
+                        <p className="text-sm text-red-600 font-medium mt-2">
+                          ⚠️ Significant decline detected. Consider reviewing recent topics and seeking help.
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Performance Chart Card */}
+            <Card className="bg-white border-maroon/20 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
+                <CardTitle className="flex items-center text-xl text-gray-900">
+                  <BarChart3 className="h-5 w-5 mr-2 text-maroon" />
+                  Performance Progression
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  Your score trend across all exams in {selectedSubject}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+<ResponsiveContainer width="100%" height={400}>
+  <LineChart 
+    data={subjectAnalysis.filter(d => d.score !== null)}
+    margin={{ top: 20, right: 30, left: 40, bottom: 80 }}
+  >
+    <CartesianGrid 
+      strokeDasharray="3 3" 
+      stroke="#e5e7eb" 
+      strokeOpacity={0.6}
+    />
+    <XAxis 
+      dataKey="exam" 
+      angle={-45}
+      textAnchor="end"
+      height={80}
+      tick={{ fontSize: 11, fill: '#6b7280' }}
+      stroke="#9ca3af"
+      interval={0}
+    />
+    <YAxis 
+      domain={['dataMin - 15', 'dataMax + 15']}
+      tick={{ fontSize: 12, fill: '#6b7280' }}
+      stroke="#9ca3af"
+      tickFormatter={(value) => `${value}%`}
+      width={40}
+      tickCount={8}
+    />
+    <Tooltip 
+      contentStyle={{ 
+        backgroundColor: "white", 
+        border: "2px solid #80000020",
+        borderRadius: "8px",
+        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+      }}
+      formatter={(value: number) => [`${value}%`, 'Score']}
+      labelFormatter={(label) => `Exam: ${label}`}
+    />
+    <Line 
+      type="monotone" 
+      dataKey="score" 
+      stroke="#800000"
+      strokeWidth={3}
+      dot={{ 
+        r: 6, 
+        fill: "#800000",
+        stroke: "#fff",
+        strokeWidth: 2
+      }}
+      activeDot={{ 
+        r: 8, 
+        fill: "#800000",
+        stroke: "#fff",
+        strokeWidth: 2
+      }}
+      name="Score"
+    />
+  </LineChart>
+</ResponsiveContainer>
+
+{/* Chart Legend */}
+<div className="flex justify-center items-center mt-4 p-3 bg-maroon/5 rounded-lg">
+  <div className="flex items-center gap-2 text-sm text-gray-700">
+    <div className="w-3 h-1 bg-maroon rounded-full"></div>
+    <span>Your ${selectedSubject} Scores</span>
+  </div>
+</div>
+</CardContent>
+            </Card>
+
+            {/* Recent Exam Scores Table */}
+            <Card className="bg-white border-maroon/20 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
+                <CardTitle className="flex items-center text-xl text-gray-900">
+                  <FileText className="h-5 w-5 mr-2 text-maroon" />
+                  Recent Exam Scores
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  Detailed breakdown of your performance in recent exams
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-maroon-50">
+                      <TableRow>
+                        <TableHead className="font-semibold text-gray-900">Exam</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Score</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Percentage</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Date</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Performance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {subjectAnalysis
+                        .filter(d => d.score !== null)
+                        .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime())
+                        .map((data, index) => (
+                          <TableRow key={index} className="hover:bg-maroon/5 transition-colors">
+                            <TableCell className="font-medium text-gray-900">
+                              {data.exam}
+                            </TableCell>
+                            <TableCell className="font-semibold text-gray-900">
+                              {data.score}/100
+                            </TableCell>
+                            <TableCell>
                               <Badge 
+                                variant="secondary"
                                 className={
-                                  insights.trend === 'improving' 
-                                    ? 'bg-green-100 text-green-800 border-green-200' 
-                                    : insights.trend === 'declining' 
-                                    ? 'bg-red-100 text-red-800 border-red-200'
-                                    : 'bg-blue-100 text-blue-800 border-blue-200'
+                                  data.score >= 90 ? "bg-green-100 text-green-800 border-green-200" :
+                                  data.score >= 75 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
+                                  data.score >= 58 ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                  data.score >= 41 ? "bg-cyan-100 text-cyan-800 border-cyan-200" :
+                                  data.score >= 31 ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                                  data.score >= 21 ? "bg-orange-100 text-orange-800 border-orange-200" :
+                                  data.score >= 11 ? "bg-red-100 text-red-800 border-red-200" :
+                                  "bg-gray-100 text-gray-800 border-gray-200"
                                 }
                               >
-                                {insights.trend === 'improving' ? '📈 Improving' : 
-                                 insights.trend === 'declining' ? '📉 Declining' : '➡️ Stable'}
+                                {data.score}%
                               </Badge>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                              <span className="font-medium text-gray-700">Trend Strength:</span>
-                              <span className="font-semibold capitalize text-gray-900">{insights.trendStrength}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Performance Metrics */}
-                        <div className="space-y-4">
-                          <h4 className="font-semibold text-gray-900 border-b pb-2">Performance Metrics</h4>
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                              <span className="font-medium text-gray-700">Latest Score:</span>
-                              <span className={`font-bold text-lg ${
-                                insights.latestScore >= 90 ? 'text-green-600' :
-                                insights.latestScore >= 75 ? 'text-emerald-600' :
-                                insights.latestScore >= 58 ? 'text-blue-600' :
-                                insights.latestScore >= 41 ? 'text-cyan-600' :
-                                insights.latestScore >= 31 ? 'text-yellow-600' :
-                                insights.latestScore >= 21 ? 'text-orange-600' :
-                                insights.latestScore >= 11 ? 'text-red-600' : 'text-gray-600'
-                              }`}>
-                                {insights.latestScore}%
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                              <span className="font-medium text-gray-700">Average Score:</span>
-                              <span className="font-semibold text-gray-900">{insights.averageScore}%</span>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                              <span className="font-medium text-gray-700">Score Range:</span>
-                              <span className="text-sm text-gray-700">
-                                {insights.lowestScore}% - {insights.highestScore}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Performance Recommendations */}
-                      <div className={`mt-6 p-4 rounded-lg border-l-4 ${
-                        insights.latestScore >= 90 ? 'border-green-400 bg-green-50' :
-                        insights.latestScore >= 75 ? 'border-emerald-400 bg-emerald-50' :
-                        insights.latestScore >= 58 ? 'border-blue-400 bg-blue-50' :
-                        insights.latestScore >= 41 ? 'border-cyan-400 bg-cyan-50' :
-                        insights.latestScore >= 31 ? 'border-yellow-400 bg-yellow-50' :
-                        insights.latestScore >= 21 ? 'border-orange-400 bg-orange-50' :
-                        insights.latestScore >= 11 ? 'border-red-400 bg-red-50' :
-                        'border-gray-400 bg-gray-50'
-                      }`}>
-                        <h5 className="font-semibold text-gray-900 mb-2">Recommendations:</h5>
-                        <p className="text-sm text-gray-700">
-                          {insights.latestScore >= 90 
-                            ? "Exceptional performance! Maintain your current study habits and consider advanced topics."
-                            : insights.latestScore >= 75
-                            ? "Excellent performance. Focus on consistent practice to reach exceptional level."
-                            : insights.latestScore >= 58
-                            ? "Very good performance. Regular practice and review challenging concepts."
-                            : insights.latestScore >= 41
-                            ? "Good performance. Focus on strengthening weak areas and regular revision."
-                            : insights.latestScore >= 31
-                            ? "Average performance. Increase study time and seek help when needed."
-                            : insights.latestScore >= 21
-                            ? "Below average performance. Consider additional tutoring and focus on fundamentals."
-                            : insights.latestScore >= 11
-                            ? "Poor performance. Seek immediate help from teacher and increase study hours."
-                            : "Very poor performance. Requires intensive tutoring and complete revision of basics."
-                          }
-                        </p>
-                        {insights.trend === 'improving' && insights.trendStrength === 'significant' && (
-                          <p className="text-sm text-green-600 font-medium mt-2">
-                            🎉 Great progress! Your improvement trend is strong.
-                          </p>
-                        )}
-                        {insights.trend === 'declining' && insights.trendStrength === 'significant' && (
-                          <p className="text-sm text-red-600 font-medium mt-2">
-                            ⚠️ Significant decline detected. Consider reviewing recent topics and seeking help.
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-
-              {/* Performance Chart Card */}
-              <Card className="bg-white border-maroon/20 shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                  <CardTitle className="flex items-center text-xl text-gray-900">
-                    <BarChart3 className="h-5 w-5 mr-2 text-maroon" />
-                    Performance Progression
-                  </CardTitle>
-                  <CardDescription className="text-gray-600">
-                    Your score trend across all exams in {selectedSubject}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-  <ResponsiveContainer width="100%" height={400}>
-    <LineChart 
-      data={subjectAnalysis.filter(d => d.score !== null)}
-      margin={{ top: 20, right: 30, left: 40, bottom: 80 }}
-    >
-      <CartesianGrid 
-        strokeDasharray="3 3" 
-        stroke="#e5e7eb" 
-        strokeOpacity={0.6}
-      />
-      <XAxis 
-        dataKey="exam" 
-        angle={-45}
-        textAnchor="end"
-        height={80}
-        tick={{ fontSize: 11, fill: '#6b7280' }}
-        stroke="#9ca3af"
-        interval={0}
-      />
-      <YAxis 
-  domain={['dataMin - 15', 'dataMax + 15']}
-  tick={{ fontSize: 12, fill: '#6b7280' }}
-  stroke="#9ca3af"
-  tickFormatter={(value) => `${value}%`}
-  width={40}
-  tickCount={8}
-/>
-      <Tooltip 
-        contentStyle={{ 
-          backgroundColor: "white", 
-          border: "2px solid #80000020",
-          borderRadius: "8px",
-          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
-        }}
-        formatter={(value: number) => [`${value}%`, 'Score']}
-        labelFormatter={(label) => `Exam: ${label}`}
-      />
-      <Line 
-        type="monotone" 
-        dataKey="score" 
-        stroke="#800000"
-        strokeWidth={3}
-        dot={{ 
-          r: 6, 
-          fill: "#800000",
-          stroke: "#fff",
-          strokeWidth: 2
-        }}
-        activeDot={{ 
-          r: 8, 
-          fill: "#800000",
-          stroke: "#fff",
-          strokeWidth: 2
-        }}
-        name="Score"
-      />
-    </LineChart>
-  </ResponsiveContainer>
-  
-  {/* Chart Legend */}
-  <div className="flex justify-center items-center mt-4 p-3 bg-maroon/5 rounded-lg">
-    <div className="flex items-center gap-2 text-sm text-gray-700">
-      <div className="w-3 h-1 bg-maroon rounded-full"></div>
-      <span>Your ${selectedSubject} Scores</span>
-    </div>
-  </div>
-</CardContent>
-              </Card>
-
-              {/* Recent Exam Scores Table */}
-              <Card className="bg-white border-maroon/20 shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                  <CardTitle className="flex items-center text-xl text-gray-900">
-                    <FileText className="h-5 w-5 mr-2 text-maroon" />
-                    Recent Exam Scores
-                  </CardTitle>
-                  <CardDescription className="text-gray-600">
-                    Detailed breakdown of your performance in recent exams
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader className="bg-maroon-50">
-                        <TableRow>
-                          <TableHead className="font-semibold text-gray-900">Exam</TableHead>
-                          <TableHead className="font-semibold text-gray-900">Score</TableHead>
-                          <TableHead className="font-semibold text-gray-900">Percentage</TableHead>
-                          <TableHead className="font-semibold text-gray-900">Date</TableHead>
-                          <TableHead className="font-semibold text-gray-900">Performance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {subjectAnalysis
-                          .filter(d => d.score !== null)
-                          .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime())
-                          .map((data, index) => (
-                            <TableRow key={index} className="hover:bg-maroon/5 transition-colors">
-                              <TableCell className="font-medium text-gray-900">
-                                {data.exam}
-                              </TableCell>
-                              <TableCell className="font-semibold text-gray-900">
-                                {data.score}/100
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="secondary"
-                                  className={
-                                    data.score >= 90 ? "bg-green-100 text-green-800 border-green-200" :
-                                    data.score >= 75 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
-                                    data.score >= 58 ? "bg-blue-100 text-blue-800 border-blue-200" :
-                                    data.score >= 41 ? "bg-cyan-100 text-cyan-800 border-cyan-200" :
-                                    data.score >= 31 ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                                    data.score >= 21 ? "bg-orange-100 text-orange-800 border-orange-200" :
-                                    data.score >= 11 ? "bg-red-100 text-red-800 border-red-200" :
-                                    "bg-gray-100 text-gray-800 border-gray-200"
-                                  }
-                                >
-                                  {data.score}%
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-gray-700">
-                                {data.date ? new Date(data.date).toLocaleDateString() : 'N/A'}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className="h-2 rounded-full transition-all duration-300"
-                                      style={{ 
-                                        width: `${data.score}%`,
-                                        backgroundColor: 
-                                          data.score >= 90 ? '#10b981' :
-                                          data.score >= 75 ? '#10b981' :
-                                          data.score >= 58 ? '#3b82f6' :
-                                          data.score >= 41 ? '#06b6d4' :
-                                          data.score >= 31 ? '#f59e0b' :
-                                          data.score >= 21 ? '#f97316' :
-                                          data.score >= 11 ? '#ef4444' : '#6b7280'
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="text-xs text-gray-500">{data.score}%</span>
+                            </TableCell>
+                            <TableCell className="text-gray-700">
+                              {data.date ? new Date(data.date).toLocaleDateString() : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="h-2 rounded-full transition-all duration-300"
+                                    style={{ 
+                                      width: `${data.score}%`,
+                                      backgroundColor: 
+                                        data.score >= 90 ? '#10b981' :
+                                        data.score >= 75 ? '#10b981' :
+                                        data.score >= 58 ? '#3b82f6' :
+                                        data.score >= 41 ? '#06b6d4' :
+                                        data.score >= 31 ? '#f59e0b' :
+                                        data.score >= 21 ? '#f97316' :
+                                        data.score >= 11 ? '#ef4444' : '#6b7280'
+                                    }}
+                                  />
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card className="bg-white border-maroon/20 text-center py-12">
-              <CardContent>
-                <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Exam Data Available</h3>
-                <p className="text-gray-600">
-                  No assessment data found for {selectedSubject}. 
-                  This could be because no exams have been conducted yet or grades are pending.
-                </p>
+                                <span className="text-xs text-gray-500">{data.score}%</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
-          )}
-        </>
-      )}
+          </>
+        ) : (
+          <Card className="bg-white border-maroon/20 text-center py-12">
+            <CardContent>
+              <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Exam Data Available</h3>
+              <p className="text-gray-600">
+                No assessment data found for {selectedSubject}. 
+                This could be because no exams have been conducted yet or grades are pending.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   </DialogContent>
 </Dialog>
@@ -2465,105 +2565,125 @@ useEffect(() => {
       </Card>
 
       {/* Password Update Form */}
-      <Card className="border-maroon/20">
-        <CardContent className="p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Settings className="h-5 w-5 mr-2 text-maroon" />
-            Change Password
-          </h3>
-          
-          {/* Error/Success Messages */}
-          {passwordError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
-              <div className="flex items-center">
-                <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                {passwordError}
-              </div>
-            </div>
-          )}
-          
-          {passwordSuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm mb-4">
-              <div className="flex items-center">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                {passwordSuccess}
-              </div>
-            </div>
-          )}
+      <Card className="border-maroon/20 overflow-hidden shadow-lg">
+  <CardContent className="p-0">
+    {/* High Security Header */}
+    <div className="bg-maroon p-4 text-white flex items-center justify-between">
+      <h3 className="text-lg font-semibold flex items-center">
+        <Settings className="h-5 w-5 mr-2" />
+        Change Password
+      </h3>
+      <ShieldAlert className="h-5 w-5 text-maroon-light opacity-50" />
+    </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="currentPassword" className="text-sm font-medium text-gray-700 flex items-center">
-                <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-                Current Password
-              </label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter your current password"
-                disabled={passwordLoading}
-                className="w-full border-gray-300 focus:border-maroon focus:ring-maroon"
-              />
-            </div>
+    <div className="p-4 space-y-4">
+      {/* SECURITY NOTICE BOX */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start animate-in fade-in duration-500">
+        <div className="bg-amber-100 p-1.5 rounded-full">
+          <ShieldAlert className="h-4 w-4 text-amber-600" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
+          <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
+            To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
+          </p>
+        </div>
+      </div>
 
-            <div className="space-y-2">
-              <label htmlFor="newPassword" className="text-sm font-medium text-gray-700 flex items-center">
-                <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-                New Password
-              </label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter your new password"
-                disabled={passwordLoading}
-                className="w-full border-gray-300 focus:border-maroon focus:ring-maroon"
-              />
-              <p className="text-xs text-gray-500 flex items-center">
-                <span className="w-1 h-1 bg-gray-400 rounded-full mr-2"></span>
-                Must be at least 6 characters long
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
-                <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-                Confirm New Password
-              </label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your new password"
-                disabled={passwordLoading}
-                className="w-full border-gray-300 focus:border-maroon focus:ring-maroon"
-              />
-            </div>
-
-            <Button
-              onClick={handlePasswordUpdate}
-              className="w-full bg-maroon hover:bg-maroon/90 text-white font-semibold py-2.5 transition-all duration-200"
-              disabled={passwordLoading}
-            >
-              {passwordLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Updating Password...
-                </>
-              ) : (
-                <>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Update Password
-                </>
-              )}
-            </Button>
+      {/* Error/Success Messages */}
+      {passwordError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-shake">
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+            {passwordError}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {passwordSuccess && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+            {passwordSuccess}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {/* CURRENT PASSWORD - STYLED TO LOOK IMPORTANT */}
+        <div className="space-y-2">
+          <label htmlFor="currentPassword" className="text-sm font-bold text-gray-800 flex items-center">
+            <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
+            Current Password
+          </label>
+          <Input
+            id="currentPassword"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Verify current password"
+            disabled={passwordLoading}
+            className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-11"
+          />
+        </div>
+
+        <div className="h-px bg-gray-100 w-full" />
+
+        {/* NEW PASSWORD */}
+        <div className="space-y-2">
+          <label htmlFor="newPassword" className="text-sm font-medium text-gray-700 flex items-center">
+            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+            New Password
+          </label>
+          <Input
+            id="newPassword"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Min. 6 characters"
+            disabled={passwordLoading}
+            className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11"
+          />
+        </div>
+
+        {/* CONFIRM NEW PASSWORD */}
+        <div className="space-y-2">
+          <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
+            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+            Confirm New Password
+          </label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Repeat new password"
+            disabled={passwordLoading}
+            className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11"
+          />
+        </div>
+
+        <Button
+          onClick={handlePasswordUpdate}
+          className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-6 shadow-md transition-all active:scale-95"
+          disabled={passwordLoading}
+        >
+          {passwordLoading ? (
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Verifying Security...
+            </div>
+          ) : (
+            <div className="flex items-center">
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              Secure My Account
+            </div>
+          )}
+        </Button>
+      </div>
+    </div>
+  </CardContent>
+</Card>
 
       {/* Security Notice */}
       <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
@@ -2574,11 +2694,11 @@ useEffect(() => {
           </h4>
           <ul className="text-xs text-blue-700 space-y-2">
             <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+              <span className="w-1 h-1 bg-blue-500 rounded-full mt=1.5 mr-2 flex-shrink-0"></span>
               <span>Always choose a strong, unique password with mixed characters</span>
             </li>
             <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+              <span className="w-1 h-1 bg-blue-500 rounded-full mt=1.5 mr-2 flex-shrink-0"></span>
               <span>Never share your password with anyone, including friends</span>
             </li>
             <li className="flex items-start">
@@ -2595,6 +2715,34 @@ useEffect(() => {
     </div>
   </DialogContent>
 </Dialog>
+
+      {/* --- NEW: THE WARNING DIALOG --- */}
+      <Dialog open={showWarning} onOpenChange={setShowWarning}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <ShieldAlert className="h-5 w-5" />
+              Security Policy Warning
+            </DialogTitle>
+            <DialogDescription className="py-4">
+              <p className="font-semibold text-gray-900 mb-2">Notice for Students & Guardians:</p>
+              Teacher contact details are shared exclusively for parental communication regarding student welfare. 
+              <br /><br />
+              <span className="text-red-600 font-bold">Unauthorized use or sharing of this information by students is a violation of school policy and will result in a disciplinary penalty.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button variant="secondary" onClick={() => setShowWarning(false)}>Cancel</Button>
+            <Button 
+              className="bg-maroon hover:bg-maroon/90" 
+              onClick={fetchTeacherContact}
+              disabled={contactLoading}
+            >
+              {contactLoading ? "Verifying..." : "I am a Parent, I Accept"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
