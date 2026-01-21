@@ -74,9 +74,29 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// UPDATED: Improved function to extract exam numbers with priority for Cat 1, 2, 3
 function extractExamNumber(title: string) {
-  const match = title.match(/(\d+)/);
-  return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
+  // Convert to lowercase for case-insensitive matching
+  const lowerTitle = title.toLowerCase();
+  
+  // First check for "cat" patterns (cat 1, cat 2, etc.)
+  const catMatch = lowerTitle.match(/cat\s*(\d+)/);
+  if (catMatch) return parseInt(catMatch[1], 10);
+  
+  // Then check for "cat." patterns (cat.1, cat.2, etc.)
+  const catDotMatch = lowerTitle.match(/cat\.\s*(\d+)/);
+  if (catDotMatch) return parseInt(catDotMatch[1], 10);
+  
+  // Check for any standalone number at the end
+  const standaloneMatch = title.match(/(\d+)$/);
+  if (standaloneMatch) return parseInt(standaloneMatch[1], 10);
+  
+  // For non-cat exams, assign higher numbers to push them to the end
+  if (lowerTitle.includes('mid term') || lowerTitle.includes('mid-term')) return 10;
+  if (lowerTitle.includes('end term') || lowerTitle.includes('end-term') || 
+      lowerTitle.includes('final') || lowerTitle.includes('annual')) return 20;
+  
+  return Number.MAX_SAFE_INTEGER;
 }
 
 // Calculate KJSEA Achievement Level based on percentage
@@ -1298,7 +1318,7 @@ useEffect(() => {
     }
   }, [isSettingsOpen]);
 
-  // Exams list for table
+  // UPDATED: Exams list for table with proper Cat 1, 2, 3 ordering
   const exams = useMemo(() => {
     if (!assessments || assessments.length === 0) {
       return [];
@@ -1312,7 +1332,16 @@ useEffect(() => {
     });
     
     return Array.from(examTitleSet)
-      .sort((a, b) => extractExamNumber(a) - extractExamNumber(b))
+      .sort((a, b) => {
+        const numA = extractExamNumber(a);
+        const numB = extractExamNumber(b);
+        
+        // First sort by extracted number
+        if (numA !== numB) return numA - numB;
+        
+        // If numbers are equal, sort alphabetically
+        return a.localeCompare(b);
+      })
       .map(title => ({ id: title, title }));
   }, [assessments]);
 
