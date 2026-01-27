@@ -1476,111 +1476,106 @@ const pivotData = useMemo(() => {
     <div className="min-h-screen bg-white">
      
       <Navbar {...({ showLogout: true, handleLogout } as any)} />
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
-       {/* Modern Welcome Header - UPDATED WITH HORIZONTAL BUTTONS (Notifications Removed) */}
-<div className="bg-maroon-50 rounded-2xl p-8 border border-maroon-200 shadow-sm relative">
-  <div className="flex justify-between items-start">
-    <div className="flex-1">
-      {/* 1. Welcome and Primary Details (Unchanged) */}
-      <h1 className="text-3xl font-bold text-gray-900">
-        Welcome, {profile.first_name} {profile.last_name}
-      </h1>
-      <p className="text-gray-600 mt-2">Ready to achieve your academic goals today</p>
-      
-      {/* Student Details (ID, Class, GPA) (Unchanged) */}
-      <div className="flex flex-wrap gap-6 mt-4 text-sm text-gray-600 pb-4 border-b border-maroon-100">
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-maroon" />
-          <span>ID: **{profile?.reg_no}**</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-maroon" />
-          <span>Class: **{className}**</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Award className="h-4 w-4 text-maroon" />
-          <span>KJSEA Level: **{calculateGPA()}**</span>
-        </div>
-      </div>
-      
-      {/* 2. HORIZONTAL ACTION BUTTONS (Only Fees and Settings remain) */}
-      <div className="flex flex-wrap gap-4 mt-4">
-        
-        {/* Fee Statement Button */}
-        <Button
-          variant="outline"
-          size="default"
-          onClick={handleFeesManagement}
-          className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors"
-        >
-          <CreditCard className="h-4 w-4" />
-          Fee Statement
-        </Button>
+      {/* MOBILE-OPTIMIZED CONTAINER */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-6 md:space-y-8">
+        {/* MOBILE-OPTIMIZED WELCOME HEADER */}
+        <div className="bg-maroon-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-maroon-200 shadow-sm relative">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0">
+            <div className="flex-1 w-full">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+                Welcome, {profile.first_name} {profile.last_name}
+              </h1>
+              <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+                Ready to achieve your academic goals today
+              </p>
+              
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-6 mt-4 text-xs sm:text-sm text-gray-600 pb-4 border-b border-maroon-100">
+                <div className="flex items-center gap-2">
+                  <User className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                  <span>ID: <span className="font-semibold">{profile?.reg_no}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                  <span>Class: <span className="font-semibold">{className}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Award className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                  <span>KJSEA Level: <span className="font-semibold">{calculateGPA()}</span></span>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-3 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFeesManagement}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
+                >
+                  <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="truncate">Fee Statement</span>
+                </Button>
 
-        {/* Settings Button */}
-        <Button
-          variant="outline"
-          size="default"
-          onClick={() => {
-            console.log("Settings button clicked");
-            setIsSettingsOpen(true);
-          }}
-          className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </Button>
-      </div>
-    </div>
-    
-    {/* 3. Attendance Card (Unchanged) */}
-    <div className="flex flex-col items-end gap-4 ml-6 flex-shrink-0">
-      <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-28 border border-maroon/10 shadow-lg">
-        <div className="text-3xl font-extrabold text-maroon">{attendanceData?.attendanceRate.toFixed(1)}%</div>
-        <div className="text-sm text-gray-600 mt-1">Attendance Rate</div>
-      </div>
-    </div>
-  </div>
-</div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
+                >
+                  <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="truncate">Settings</span>
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center sm:items-end gap-4 mt-4 sm:mt-0 sm:ml-6 flex-shrink-0 w-full sm:w-auto">
+              <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-[100px] sm:min-w-28 border border-maroon/10 shadow-lg w-full sm:w-auto">
+                <div className="text-2xl sm:text-3xl font-extrabold text-maroon">{attendanceData?.attendanceRate.toFixed(1)}%</div>
+                <div className="text-xs sm:text-sm text-gray-600 mt-1">Attendance Rate</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        {/* Tabs for Dashboard and Performance History */}
-        <Tabs defaultValue="dashboard" className="space-y-8">
+        {/* MOBILE-OPTIMIZED TABS */}
+        <Tabs defaultValue="dashboard" className="space-y-6 md:space-y-8">
           <TabsList className="grid w-full grid-cols-2 p-1 bg-maroon-50 rounded-lg">
-<TabsTrigger value="dashboard" className="rounded-md data-[state=active]:bg-maroon data-[state=active]:text-white">
+            <TabsTrigger value="dashboard" className="rounded-md data-[state=active]:bg-maroon data-[state=active]:text-white text-xs sm:text-sm py-2">
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="performance" className="rounded-md data-[state=active]:bg-maroon data-[state=active]:text-white">
+            <TabsTrigger value="performance" className="rounded-md data-[state=active]:bg-maroon data-[state=active]:text-white text-xs sm:text-sm py-2">
               Performance History
             </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-8">
-            {/* Modern Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <TabsContent value="dashboard" className="space-y-6 md:space-y-8">
+            {/* MOBILE-OPTIMIZED STATS ROW */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Card className="bg-maroon-50 border-l-4 border-l-maroon">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-4">
-                  <div className="w-12 h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-4">
-                    <TrendingUp className="h-6 w-6 text-maroon" />
+                <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-maroon" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg text-gray-900">Academic Progress</CardTitle>
-                    <CardDescription className="text-gray-600">Overall performance</CardDescription>
+                    <CardTitle className="text-base sm:text-lg text-gray-900">Academic Progress</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm text-gray-600">Overall performance</CardDescription>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="px-4 pb-4">
+                  <div className="space-y-2 sm:space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Current Level</span>
-                      <Badge variant="secondary" className="bg-maroon/10 text-maroon">{calculateGPA()}</Badge>
+                      <span className="text-xs sm:text-sm text-gray-700">Current Level</span>
+                      <Badge variant="secondary" className="bg-maroon/10 text-maroon text-xs">
+                        {calculateGPA()}
+                      </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Exams Completed</span>
-                      <span className="text-sm font-medium text-gray-900">{recentPerformance.length}</span>
+                      <span className="text-xs sm:text-sm text-gray-700">Exams Completed</span>
+                      <span className="text-xs sm:text-sm font-medium text-gray-900">{recentPerformance.length}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Average Score</span>
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-xs sm:text-sm text-gray-700">Average Score</span>
+                      <span className="text-xs sm:text-sm font-medium text-gray-900">
                         {recentPerformance.length > 0 
                           ? Math.round(recentPerformance.reduce((sum, r) => sum + r.percentage, 0) / recentPerformance.length) 
                           : 0}%
@@ -1591,32 +1586,32 @@ const pivotData = useMemo(() => {
               </Card>
 
               <Card className="border-l-4 border-l-green-500 bg-white">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
-                    <Target className="h-6 w-6 text-green-600" />
+                <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <Target className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg text-gray-900">This Week</CardTitle>
-                    <CardDescription className="text-gray-600">Current priorities</CardDescription>
+                    <CardTitle className="text-base sm:text-lg text-gray-900">This Week</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm text-gray-600">Current priorities</CardDescription>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                <CardContent className="px-4 pb-4">
+                  <div className="space-y-2 sm:space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Assignments Due</span>
-                      <Badge variant="outline" className="border-gray-200 text-gray-700">
+                      <span className="text-xs sm:text-sm text-gray-700">Assignments Due</span>
+                      <Badge variant="outline" className="border-gray-200 text-gray-700 text-xs">
                         {assignments.filter(a => !a.submitted && a.due_date && new Date(a.due_date) > new Date()).length}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Tests Scheduled</span>
-                      <Badge variant="outline" className="border-gray-200 text-gray-700">
+                      <span className="text-xs sm:text-sm text-gray-700">Tests Scheduled</span>
+                      <Badge variant="outline" className="border-gray-200 text-gray-700 text-xs">
                         {(assessments.filter(a => a.assessment_date && new Date(a.assessment_date) > new Date() && a.student_id === studentId)).length}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Active Subjects</span>
-                      <Badge className="bg-maroon text-white">
+                      <span className="text-xs sm:text-sm text-gray-700">Active Subjects</span>
+                      <Badge className="bg-maroon text-white text-xs">
                         {new Set(assessments.filter(a => a.student_id === studentId).map(a => a.subjects?.name)).size}
                       </Badge>
                     </div>
@@ -1624,33 +1619,33 @@ const pivotData = useMemo(() => {
                 </CardContent>
               </Card>
 
-              <Card className="border-l-4 border-l-blue-500 bg-white">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                    <Calendar className="h-6 w-6 text-blue-600" />
+              <Card className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1">
+                <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg text-gray-900">Attendance</CardTitle>
-                    <CardDescription className="text-gray-600">Class participation</CardDescription>
+                    <CardTitle className="text-base sm:text-lg text-gray-900">Attendance</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm text-gray-600">Class participation</CardDescription>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4">
                   {attendanceLoading ? (
                     <div className="text-center py-4">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-maroon mx-auto"></div>
                     </div>
                   ) : attendanceError ? (
-                    <div className="text-center py-4 text-red-500">{attendanceError}</div>
+                    <div className="text-center py-4 text-red-500 text-xs sm:text-sm">{attendanceError}</div>
                   ) : !attendanceData ? (
                     <div className="text-center py-4">
-                      <p className="text-gray-600">No attendance records yet</p>
+                      <p className="text-gray-600 text-xs sm:text-sm">No attendance records yet</p>
                     </div>
                   ) : (
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-green-600 mb-2">
+                      <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
                         {attendanceData.attendanceRate.toFixed(1)}%
                       </div>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
                         {attendanceData.presentDays}/{attendanceData.totalDays} days present
                       </p>
                       <div className="w-full bg-gray-200 rounded-full h-2">
@@ -1665,302 +1660,311 @@ const pivotData = useMemo(() => {
               </Card>
             </div>
 
-            {/* Academic Performance */}
+            {/* MOBILE-OPTIMIZED ACADEMIC PERFORMANCE */}
             <Card className="bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center text-xl text-gray-900">
-                  <BookOpen className="h-6 w-6 mr-3 text-maroon" />
+              <CardHeader className="px-4 sm:px-6">
+                <CardTitle className="flex items-center text-lg sm:text-xl text-gray-900">
+                  <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
                   Recent Assessment Results
                 </CardTitle>
-                <CardDescription className="text-gray-600">Click any subject for detailed performance analysis</CardDescription>
+                <CardDescription className="text-xs sm:text-sm text-gray-600">
+                  Click any subject for detailed performance analysis
+                </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-6">
                 {assessmentsLoading || studentRankingsLoading ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-8 sm:py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading assessment results...</p>
+                    <p className="mt-2 text-gray-600 text-sm sm:text-base">Loading assessment results...</p>
                   </div>
                 ) : pivotData.length > 0 ? (
-                  <div className="overflow-x-auto rounded-lg border">
-                    <Table>
-                      <TableHeader className="bg-maroon-50">
-                        <TableRow>
-                          <TableHead className="font-semibold text-gray-900">Subject</TableHead>
-                          {exams.map((exam) => (
-                            <TableHead key={exam.id} className="font-semibold text-gray-900">{exam.title}</TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pivotData.map((row, rowIndex) => (
-                          <TableRow
-                            key={rowIndex}
-                            className={
-                              row.subject === "Totals"
-                                ? "font-bold bg-gray-50"
-                                : row.subject === "Position"
-                                ? "font-bold bg-gray-100"
-                                : "hover:bg-gray-50 cursor-pointer transition-colors"
-                            }
-                            onClick={() => {
-                              if (row.subject !== "Totals" && row.subject !== "Position") {
-                                handleSubjectClick(row.subject);
-                              }
-                            }}
-                          >
-                            <TableCell className={
-                              row.subject === "Totals" || row.subject === "Position" 
-                                ? "font-bold text-gray-900" 
-                                : "font-medium text-gray-700"
-                            }>
-                              {row.subject}
-                            </TableCell>
+                  <div className="overflow-x-auto -mx-2 sm:mx-0 rounded-lg border">
+                    <div className="min-w-[600px] sm:min-w-0">
+                      <Table>
+                        <TableHeader className="bg-maroon-50">
+                          <TableRow>
+                            <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Subject</TableHead>
                             {exams.map((exam) => (
-                              <TableCell key={exam.id} className={
-                                row.subject === "Totals" || row.subject === "Position" 
-                                  ? "font-bold text-gray-900" 
-                                  : "text-gray-700"
-                              }>
-                                {row.exams[exam.title] ?? "-"}
-                              </TableCell>
+                              <TableHead key={exam.id} className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">
+                                {exam.title}
+                              </TableHead>
                             ))}
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {pivotData.map((row, rowIndex) => (
+                            <TableRow
+                              key={rowIndex}
+                              className={
+                                row.subject === "Totals"
+                                  ? "font-bold bg-gray-50"
+                                  : row.subject === "Position"
+                                  ? "font-bold bg-gray-100"
+                                  : "hover:bg-gray-50 cursor-pointer transition-colors"
+                              }
+                              onClick={() => {
+                                if (row.subject !== "Totals" && row.subject !== "Position") {
+                                  handleSubjectClick(row.subject);
+                                }
+                              }}
+                            >
+                              <TableCell className={
+                                row.subject === "Totals" || row.subject === "Position" 
+                                  ? "font-bold text-gray-900 text-xs sm:text-sm px-3 py-2" 
+                                  : "font-medium text-gray-700 text-xs sm:text-sm px-3 py-2"
+                              }>
+                                {row.subject}
+                              </TableCell>
+                              {exams.map((exam) => (
+                                <TableCell key={exam.id} className={
+                                  row.subject === "Totals" || row.subject === "Position" 
+                                    ? "font-bold text-gray-900 text-xs sm:text-sm px-3 py-2" 
+                                    : "text-gray-700 text-xs sm:text-sm px-3 py-2"
+                                }>
+                                  {row.exams[exam.title] ?? "-"}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No assessment results found.</p>
-                    <p className="text-sm text-gray-500 mt-2">Check if assessments have been added for your class.</p>
+                  <div className="text-center py-8 sm:py-12">
+                    <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                    <p className="text-gray-600 text-sm sm:text-base">No assessment results found.</p>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-2">Check if assessments have been added for your class.</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-          {/* Announcements and Assignments */}
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-  <Card className="bg-white">
-    <CardHeader>
-      <CardTitle className="flex items-center text-xl text-gray-900">
-        <Bell className="h-6 w-6 mr-3 text-maroon" />
-        Recent Announcements
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      {announcementsLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
-        </div>
-      ) : announcements.length === 0 ? (
-        <div className="text-center py-8">
-          <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">No announcements yet</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {announcements.slice(0, 4).map((a) => {
-            const isNew = new Date(a.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            
-            return (
-              <div 
-                key={a.id} 
-                className="p-4 bg-maroon/5 rounded-lg border-l-4 border-l-maroon"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-semibold text-sm text-gray-900">{a.title}</h4>
-                  <div className="flex items-center gap-2">
-                    {isNew && (
-                      <Badge className="bg-green-100 text-green-800 border-green-200 text-xs hover:bg-green-100">
-                        New
-                      </Badge>
-                    )}
-                    <Badge 
-                      variant="outline" 
-                      className="text-xs border-gray-200 text-gray-700"
-                    >
-                      {new Date(a.created_at).toLocaleDateString()}
-                    </Badge>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600">{a.content}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </CardContent>
-  </Card>
+            {/* MOBILE-OPTIMIZED ANNOUNCEMENTS & ASSIGNMENTS */}
+            <div className="grid grid-cols-1 gap-6 sm:gap-8">
+              <Card className="bg-white">
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-gray-900">
+                    <Bell className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
+                    Recent Announcements
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 sm:px-6">
+                  {announcementsLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
+                    </div>
+                  ) : announcements.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Bell className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                      <p className="text-gray-600 text-sm sm:text-base">No announcements yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 sm:space-y-4">
+                      {announcements.slice(0, 4).map((a) => {
+                        const isNew = new Date(a.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                        
+                        return (
+                          <div 
+                            key={a.id} 
+                            className="p-3 sm:p-4 bg-maroon/5 rounded-lg border-l-4 border-l-maroon"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-0">
+                              <h4 className="font-semibold text-xs sm:text-sm text-gray-900 line-clamp-1">{a.title}</h4>
+                              <div className="flex items-center gap-2">
+                                {isNew && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 text-xs hover:bg-green-100">
+                                    New
+                                  </Badge>
+                                )}
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs border-gray-200 text-gray-700"
+                                >
+                                  {new Date(a.created_at).toLocaleDateString()}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{a.content}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-  <Card className="bg-white">
-    <CardHeader>
-      <CardTitle className="flex items-center text-xl text-gray-900">
-        <FileText className="h-6 w-6 mr-3 text-maroon" />
-        Upcoming Assignments
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      {assignmentsLoading ? (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon"></div>
-        </div>
-      ) : assignments.length === 0 ? (
-        <div className="text-center py-8">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-sm">
-            No assignments have been uploaded for your class yet.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {assignments.slice(0, 4).map((a) => {
-            const isNew = new Date(a.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const isDueSoon = a.due_date && new Date(a.due_date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-            
-            return (
-              <div 
-                key={a.id} 
-                className="p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-sm text-gray-900">{a.title}</h4>
-                    {isNew && (
-                      <Badge className="bg-green-100 text-green-800 border-green-200 text-xs hover:bg-green-100">
-                        New
-                      </Badge>
-                    )}
-                  </div>
-                  <Badge 
-                    variant="outline" 
-                    className={
-                      isDueSoon 
-                        ? "bg-red-50 text-red-700 border-red-200" 
-                        : "bg-blue-50 text-blue-700 border-blue-200"
-                    }
-                  >
-                    Due: {a.due_date ? new Date(a.due_date).toLocaleDateString() : "No due date"}
-                  </Badge>
-                </div>
-                {a.file_url ? (
-                  <a
-                    href={a.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-2 text-xs text-maroon font-medium hover:text-maroon/80 transition"
-                  >
-                    <Download className="h-3 w-3" />
-                    Download Assignment
-                  </a>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-2 italic">
-                    No file attached
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </CardContent>
-  </Card>
-</div>
+              <Card className="bg-white">
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-gray-900">
+                    <FileText className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
+                    Upcoming Assignments
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 sm:px-6">
+                  {assignmentsLoading ? (
+                    <div className="flex justify-center items-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon"></div>
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                      <p className="text-gray-600 text-sm">
+                        No assignments have been uploaded for your class yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 sm:space-y-4">
+                      {assignments.slice(0, 4).map((a) => {
+                        const isNew = new Date(a.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                        const isDueSoon = a.due_date && new Date(a.due_date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+                        
+                        return (
+                          <div 
+                            key={a.id} 
+                            className="p-3 sm:p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-xs sm:text-sm text-gray-900 line-clamp-1">{a.title}</h4>
+                                {isNew && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 text-xs hover:bg-green-100">
+                                    New
+                                  </Badge>
+                                )}
+                              </div>
+                              <Badge 
+                                variant="outline" 
+                                className={
+                                  isDueSoon 
+                                    ? "bg-red-50 text-red-700 border-red-200 text-xs" 
+                                    : "bg-blue-50 text-blue-700 border-blue-200 text-xs"
+                                }
+                              >
+                                Due: {a.due_date ? new Date(a.due_date).toLocaleDateString() : "No due date"}
+                              </Badge>
+                            </div>
+                            {a.file_url ? (
+                              <a
+                                href={a.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 mt-2 text-xs text-maroon font-medium hover:text-maroon/80 transition"
+                              >
+                                <Download className="h-3 w-3" />
+                                Download Assignment
+                              </a>
+                            ) : (
+                              <p className="text-xs text-gray-500 mt-2 italic">
+                                No file attached
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
-          {/* Performance History Tab */}
-          <TabsContent value="performance" className="space-y-8">
+          {/* MOBILE-OPTIMIZED PERFORMANCE HISTORY TAB */}
+          <TabsContent value="performance" className="space-y-6 md:space-y-8">
             <Card className="bg-white">
-              <CardHeader>
-                <div className="flex justify-between items-center">
+              <CardHeader className="px-4 sm:px-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
                   <div>
-                    <CardTitle className="flex items-center text-xl text-gray-900">
-                      <TrendingUp className="h-6 w-6 mr-3 text-maroon" />
+                    <CardTitle className="flex items-center text-lg sm:text-xl text-gray-900">
+                      <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
                       Performance History
                     </CardTitle>
-                    <CardDescription className="text-gray-600">
+                    <CardDescription className="text-xs sm:text-sm text-gray-600">
                       Your last {recentPerformance.length} most recent exam results
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <Button 
                       onClick={downloadYearlyPerformancePDF} 
                       variant="outline" 
                       size="sm"
-                      className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 text-xs"
                     >
-                      <Download className="h-4 w-4" />
-                      Yearly PDF
+                      <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Yearly PDF</span>
+                      <span className="sm:hidden">PDF</span>
                     </Button>
                     <Button 
                       onClick={downloadPerformanceHistory} 
                       variant="outline" 
                       size="sm"
-                      className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 text-xs"
                     >
-                      <Download className="h-4 w-4" />
-                      Download CSV
+                      <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Download CSV</span>
+                      <span className="sm:hidden">CSV</span>
                     </Button>
                     <Button 
                       onClick={printPerformanceHistory} 
                       variant="outline" 
                       size="sm"
-                      className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 text-xs"
                     >
-                      <Printer className="h-4 w-4" />
-                      Print All
+                      <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Print All</span>
+                      <span className="sm:hidden">Print</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 sm:px-6">
                 {performanceLoading ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-8 sm:py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading performance history...</p>
+                    <p className="mt-2 text-gray-600 text-sm sm:text-base">Loading performance history...</p>
                   </div>
                 ) : recentPerformance.length === 0 ? (
-                  <div className="text-center py-12">
-                    <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No performance records found</p>
+                  <div className="text-center py-8 sm:py-12">
+                    <TrendingUp className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                    <p className="text-gray-600 text-sm sm:text-base">No performance records found</p>
                   </div>
                 ) : (
-                  <div className="space-y-8">
-                    {/* Performance Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-6 md:space-y-8">
+                    {/* MOBILE-OPTIMIZED PERFORMANCE SUMMARY CARDS */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
                       <Card className="border-l-4 border-l-maroon bg-white">
-                        <CardContent className="p-6 text-center">
-                          <div className="text-2xl font-bold text-maroon">
+                        <CardContent className="p-4 text-center">
+                          <div className="text-xl sm:text-2xl font-bold text-maroon">
                             {recentPerformance.length}
                           </div>
-                          <p className="text-sm text-gray-600">Exams Tracked</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">Exams Tracked</p>
                         </CardContent>
                       </Card>
                       <Card className="border-l-4 border-l-blue-500 bg-white">
-                        <CardContent className="p-6 text-center">
-                          <div className="text-2xl font-bold text-blue-600">
+                        <CardContent className="p-4 text-center">
+                          <div className="text-xl sm:text-2xl font-bold text-blue-600">
                             {Math.round(
                               recentPerformance.reduce((sum, record) => sum + record.percentage, 0) / 
                               recentPerformance.length
                             )}%
                           </div>
-                          <p className="text-sm text-gray-600">Average Score</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">Avg Score</p>
                         </CardContent>
                       </Card>
                       <Card className="border-l-4 border-l-purple-500 bg-white">
-                        <CardContent className="p-6 text-center">
-                          <div className="text-2xl font-bold text-purple-600">
+                        <CardContent className="p-4 text-center">
+                          <div className="text-xl sm:text-2xl font-bold text-purple-600">
                             {recentPerformance.filter(record => record.grade.includes("EE1") || record.grade.includes("EE2")).length}
                           </div>
-                          <p className="text-sm text-gray-600">Exceptional/Excellent</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">Excellent</p>
                         </CardContent>
                       </Card>
                       <Card className="border-l-4 border-l-orange-500 bg-white">
-                        <CardContent className="p-6 text-center">
-                          <div className="text-2xl font-bold text-orange-600">
+                        <CardContent className="p-4 text-center">
+                          <div className="text-xl sm:text-2xl font-bold text-orange-600">
                             {Math.min(...recentPerformance.map(r => r.classPosition))}
                           </div>
-                          <p className="text-sm text-gray-600">Best Position</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">Best Position</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -1968,10 +1972,10 @@ const pivotData = useMemo(() => {
                     {/* Performance Insights */}
                     {performanceInsights && (
                       <Card className="bg-maroon/5">
-                        <CardHeader>
-                          <CardTitle className="text-lg text-gray-900">Performance Insights</CardTitle>
+                        <CardHeader className="px-4 sm:px-6">
+                          <CardTitle className="text-base sm:text-lg text-gray-900">Performance Insights</CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="px-4 sm:px-6">
                           <div className="space-y-2 text-sm text-gray-700">
                             <p>
                               <span className="font-medium">Trend: </span>
@@ -1993,157 +1997,159 @@ const pivotData = useMemo(() => {
                       </Card>
                     )}
 
-                    {/* Performance Table */}
-                    <div className="overflow-x-auto rounded-lg border">
-                      <Table>
-                        <TableHeader className="bg-maroon-50">
-                          <TableRow>
-                            <TableHead className="font-semibold text-gray-900">Exam</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Subject</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Term/Year</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Date</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Score</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Percentage</TableHead>
-                            <TableHead className="font-semibold text-gray-900">KJSEA Level</TableHead>
-                            <TableHead className="font-semibold text-gray-900">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {recentPerformance.map((record) => (
-                            <TableRow key={record.id} className="hover:bg-gray-50">
-                              <TableCell className="font-medium text-gray-700">{record.title}</TableCell>
-                              <TableCell className="text-gray-700">{record.subjects.name}</TableCell>
-                              <TableCell className="text-gray-700">{record.term} {record.year}</TableCell>
-                              <TableCell className="text-gray-700">
-                                {new Date(record.assessment_date).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell className="text-gray-700">
-                                {record.score} / {record.total_score}
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="secondary"
-                                  className={
-                                    record.percentage >= 90 ? "bg-green-100 text-green-800 hover:bg-green-100" :
-                                    record.percentage >= 75 ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100" :
-                                    record.percentage >= 58 ? "bg-blue-100 text-blue-800 hover:bg-blue-100" :
-                                    record.percentage >= 41 ? "bg-cyan-100 text-cyan-800 hover:bg-cyan-100" :
-                                    record.percentage >= 31 ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100" :
-                                    record.percentage >= 21 ? "bg-orange-100 text-orange-800 hover:bg-orange-100" :
-                                    record.percentage >= 11 ? "bg-red-100 text-red-800 hover:bg-red-100" :
-                                    "bg-gray-100 text-gray-800 hover:bg-gray-100"
-                                  }
-                                >
-                                  {record.percentage}%
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline"
-                                  className={getGradeColor(record.grade)}
-                                >
-                                  {record.grade}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => downloadExamResultsPDF(record)}
-                                    className="h-8 px-3 border-gray-200 text-gray-700 hover:bg-gray-50"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => printExamResults(record.title)}
-                                    className="h-8 px-3 border-gray-200 text-gray-700 hover:bg-gray-50"
-                                  >
-                                    <Printer className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </TableCell>
+                    {/* MOBILE-OPTIMIZED PERFORMANCE TABLE */}
+                    <div className="overflow-x-auto -mx-2 sm:mx-0 rounded-lg border">
+                      <div className="min-w-[800px] sm:min-w-0">
+                        <Table>
+                          <TableHeader className="bg-maroon-50">
+                            <TableRow>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Exam</TableHead>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Subject</TableHead>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Term/Year</TableHead>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Score</TableHead>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">%</TableHead>
+                              <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Actions</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {recentPerformance.map((record) => (
+                              <TableRow key={record.id} className="hover:bg-gray-50">
+                                <TableCell className="font-medium text-gray-700 text-xs sm:text-sm px-3 py-2">
+                                  <div className="line-clamp-1">{record.title}</div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {new Date(record.assessment_date).toLocaleDateString()}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-gray-700 text-xs sm:text-sm px-3 py-2">
+                                  <div className="line-clamp-1">{record.subjects.name}</div>
+                                  <div className="text-xs text-gray-500 mt-1">{record.term} {record.year}</div>
+                                </TableCell>
+                                <TableCell className="text-gray-700 text-xs sm:text-sm px-3 py-2">
+                                  {record.term} {record.year}
+                                </TableCell>
+                                <TableCell className="text-gray-700 text-xs sm:text-sm px-3 py-2">
+                                  {record.score} / {record.total_score}
+                                </TableCell>
+                                <TableCell className="px-3 py-2">
+                                  <Badge 
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {record.percentage}%
+                                  </Badge>
+                                  <div className="mt-1">
+                                    <Badge 
+                                      variant="outline"
+                                      className={getGradeColor(record.grade) + " text-xs"}
+                                    >
+                                      {record.grade.split(" ")[0]}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-3 py-2">
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => downloadExamResultsPDF(record)}
+                                      className="h-7 w-7 p-0 border-gray-200 text-gray-700 hover:bg-gray-50"
+                                      title="Download PDF"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => printExamResults(record.title)}
+                                      className="h-7 w-7 p-0 border-gray-200 text-gray-700 hover:bg-gray-50"
+                                      title="Print"
+                                    >
+                                      <Printer className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
 
                     {/* Performance Chart - Now Line Chart */}
                     <Card className="bg-white">
-                      <CardHeader>
-                        <CardTitle className="text-lg text-gray-900">Performance Trend</CardTitle>
-                        <CardDescription className="text-gray-600">Your score progression across recent exams</CardDescription>
+                      <CardHeader className="px-4 sm:px-6">
+                        <CardTitle className="text-base sm:text-lg text-gray-900">Performance Trend</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm text-gray-600">Your score progression across recent exams</CardDescription>
                       </CardHeader>
-                      <CardContent>
-  <ResponsiveContainer width="100%" height={400}>
-    <LineChart 
-      data={[...recentPerformance].reverse()}
-      margin={{ top: 20, right: 30, left: 40, bottom: 80 }}
-    >
-      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-      <XAxis 
-        dataKey="title" 
-        angle={-45}
-        textAnchor="end"
-        height={80}
-        tick={{ fontSize: 11 }}
-        stroke="#64748b"
-        interval={0}
-      />
-      <YAxis 
-        domain={['dataMin - 10', 'dataMax + 10']}
-        stroke="#64748b" 
-        tickFormatter={(value) => `${value}%`}
-        width={40}
-        tickCount={8}
-      />
-      <Tooltip 
-        contentStyle={{ 
-          backgroundColor: "white", 
-          border: "2px solid #80000020",
-          borderRadius: "8px",
-          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
-        }}
-        formatter={(value: number) => [`${value}%`, 'Score']}
-        labelFormatter={(label) => `Exam: ${label}`}
-      />
-      <Line 
-        type="monotone" 
-        dataKey="percentage" 
-        stroke="#800000"
-        strokeWidth={3}
-        dot={{ 
-          r: 6, 
-          fill: "#800000",
-          stroke: "#fff",
-          strokeWidth: 2
-        }}
-        activeDot={{ 
-          r: 8, 
-          fill: "#800000",
-          stroke: "#fff",
-          strokeWidth: 2
-        }}
-        name="Percentage"
-      />
-      {/* Reference line to show average if you want */}
-      <ReferenceLine 
-        y={recentPerformance.reduce((sum, item) => sum + item.percentage, 0) / recentPerformance.length} 
-        stroke="#666" 
-        strokeDasharray="5 5" 
-        label={{ 
-          value: 'Average', 
-          position: 'right',
-          fill: '#666',
-          fontSize: 12
-        }}
-      />
-    </LineChart>
-  </ResponsiveContainer>
-</CardContent>
+                      <CardContent className="px-2 sm:px-6">
+                        <div className="h-[300px] sm:h-[400px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart 
+                              data={[...recentPerformance].reverse()}
+                              margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <XAxis 
+                                dataKey="title" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={60}
+                                tick={{ fontSize: 10 }}
+                                stroke="#64748b"
+                                interval={0}
+                              />
+                              <YAxis 
+                                domain={['dataMin - 10', 'dataMax + 10']}
+                                stroke="#64748b" 
+                                tickFormatter={(value) => `${value}%`}
+                                width={30}
+                                tickCount={6}
+                              />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  backgroundColor: "white", 
+                                  border: "2px solid #80000020",
+                                  borderRadius: "8px",
+                                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                                  fontSize: "12px"
+                                }}
+                                formatter={(value: number) => [`${value}%`, 'Score']}
+                                labelFormatter={(label) => `Exam: ${label}`}
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="percentage" 
+                                stroke="#800000"
+                                strokeWidth={2}
+                                dot={{ 
+                                  r: 4, 
+                                  fill: "#800000",
+                                  stroke: "#fff",
+                                  strokeWidth: 1
+                                }}
+                                activeDot={{ 
+                                  r: 6, 
+                                  fill: "#800000",
+                                  stroke: "#fff",
+                                  strokeWidth: 2
+                                }}
+                                name="Percentage"
+                              />
+                              <ReferenceLine 
+                                y={recentPerformance.reduce((sum, item) => sum + item.percentage, 0) / recentPerformance.length} 
+                                stroke="#666" 
+                                strokeDasharray="5 5" 
+                                label={{ 
+                                  value: 'Average', 
+                                  position: 'right',
+                                  fill: '#666',
+                                  fontSize: 10
+                                }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
                     </Card>
                   </div>
                 )}
@@ -2153,25 +2159,25 @@ const pivotData = useMemo(() => {
         </Tabs>
       </div>
 
-      {/* Enhanced Subject Analysis Dialog */}
-      {/* Subject Analysis Dialog - THEMED & SCROLLABLE */}
+      {/* MOBILE-OPTIMIZED SUBJECT ANALYSIS DIALOG */}
+      {/* Corrected Subject Analysis Dialog */}
 <Dialog open={!!selectedSubject} onOpenChange={() => setSelectedSubject(null)}>
-  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white to-maroon/5 border-maroon/20">
+  <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white to-maroon/5 border-maroon/20 mx-2">
     <DialogHeader className="border-b border-maroon/10 pb-4">
-      <DialogTitle className="flex items-center text-2xl font-bold text-maroon">
-        <BarChart3 className="h-7 w-7 mr-3 text-maroon" />
+      <DialogTitle className="flex items-center text-lg sm:text-xl md:text-2xl font-bold text-maroon">
+        <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 mr-2 sm:mr-3 text-maroon" />
         {selectedSubject} Performance Analysis
       </DialogTitle>
-      <DialogDescription className="text-gray-600 text-base">
+      <DialogDescription className="text-xs sm:text-sm md:text-base text-gray-600">
         Detailed performance insights and trend analysis for {selectedSubject}
       </DialogDescription>
     </DialogHeader>
     
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-      <Card className="md:col-span-1">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+      <Card className="lg:col-span-1">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-            <User className="h-4 w-4 mr-2" />
+          <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center">
+            <User className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
             Subject Teacher
           </CardTitle>
         </CardHeader>
@@ -2184,20 +2190,20 @@ const pivotData = useMemo(() => {
           ) : teacherInfo ? (
             <div className="space-y-4">
               <div>
-                <p className="font-bold text-lg">{teacherInfo.first_name} {teacherInfo.last_name}</p>
-                <Badge variant="outline" className="mt-1">Lead Instructor</Badge>
+                <p className="font-bold text-base sm:text-lg">{teacherInfo.first_name} {teacherInfo.last_name}</p>
+                <Badge variant="outline" className="mt-1 text-xs">Lead Instructor</Badge>
               </div>
 
-              {/* --- THE FIX: Reveal Logic --- */}
+              {/* Contact Info with Security Warning */}
               <div className="pt-2 border-t">
                 {revealedContact ? (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Mail className="h-4 w-4 mr-2 text-maroon" />
+                    <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                      <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-2 text-maroon" />
                       {revealedContact.email}
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Phone className="h-4 w-4 mr-2 text-maroon" />
+                    <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                      <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-2 text-maroon" />
                       {revealedContact.phone}
                     </div>
                   </div>
@@ -2215,49 +2221,49 @@ const pivotData = useMemo(() => {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground italic">Teacher info not assigned</p>
+            <p className="text-xs sm:text-sm text-muted-foreground italic">Teacher info not assigned</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Charts and Analysis Section */}
-      <div className="md:col-span-2 space-y-6">
+      {/* Charts and Analysis Section - RESTORED ORIGINAL FUNCTIONALITY */}
+      <div className="lg:col-span-2 space-y-6">
         {analysisLoading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-maroon mx-auto mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading detailed analysis...</p>
+          <div className="text-center py-8 sm:py-12">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-maroon mx-auto mb-3 sm:mb-4"></div>
+            <p className="text-gray-600 text-sm sm:text-base">Loading detailed analysis...</p>
           </div>
         ) : subjectAnalysis.length > 0 ? (
           <>
-            {/* Subject Insights Card */}
+            {/* Subject Insights Card - RESTORED */}
             {(() => {
               const insights = getSubjectInsights(subjectAnalysis.filter(d => d.score !== null));
               return insights && (
                 <Card className="bg-white border-maroon/20 shadow-lg">
-                  <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                    <CardTitle className="flex items-center text-xl text-gray-900">
-                      <TrendingUp className="h-5 w-5 mr-2 text-maroon" />
+                  <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10 px-4 sm:px-6">
+                    <CardTitle className="flex items-center text-base sm:text-lg text-gray-900">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-maroon" />
                       Performance Insights
                     </CardTitle>
-                    <CardDescription className="text-gray-600">
+                    <CardDescription className="text-xs sm:text-sm text-gray-600">
                       Based on analysis of last {insights.examsAnalyzed} exams in {selectedSubject}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                       {/* Trend Analysis */}
-                      <div className="space-y-4">
-                        <h4 className="font-semibold text-gray-900 border-b pb-2">Trend Analysis</h4>
-                        <div className="space-y-3">
+                      <div className="space-y-3 sm:space-y-4">
+                        <h4 className="font-semibold text-gray-900 border-b pb-2 text-sm sm:text-base">Trend Analysis</h4>
+                        <div className="space-y-2 sm:space-y-3">
                           <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium text-gray-700">Current Trend:</span>
+                            <span className="font-medium text-gray-700 text-xs sm:text-sm">Current Trend:</span>
                             <Badge 
                               className={
                                 insights.trend === 'improving' 
-                                  ? 'bg-green-100 text-green-800 border-green-200' 
+                                  ? 'bg-green-100 text-green-800 border-green-200 text-xs' 
                                   : insights.trend === 'declining' 
-                                  ? 'bg-red-100 text-red-800 border-red-200'
-                                  : 'bg-blue-100 text-blue-800 border-blue-200'
+                                  ? 'bg-red-100 text-red-800 border-red-200 text-xs'
+                                  : 'bg-blue-100 text-blue-800 border-blue-200 text-xs'
                               }
                             >
                               {insights.trend === 'improving' ? '📈 Improving' : 
@@ -2265,19 +2271,19 @@ const pivotData = useMemo(() => {
                             </Badge>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium text-gray-700">Trend Strength:</span>
-                            <span className="font-semibold capitalize text-gray-900">{insights.trendStrength}</span>
+                            <span className="font-medium text-gray-700 text-xs sm:text-sm">Trend Strength:</span>
+                            <span className="font-semibold capitalize text-gray-900 text-xs sm:text-sm">{insights.trendStrength}</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Performance Metrics */}
-                      <div className="space-y-4">
-                        <h4 className="font-semibold text-gray-900 border-b pb-2">Performance Metrics</h4>
-                        <div className="space-y-3">
+                      <div className="space-y-3 sm:space-y-4">
+                        <h4 className="font-semibold text-gray-900 border-b pb-2 text-sm sm:text-base">Performance Metrics</h4>
+                        <div className="space-y-2 sm:space-y-3">
                           <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium text-gray-700">Latest Score:</span>
-                            <span className={`font-bold text-lg ${
+                            <span className="font-medium text-gray-700 text-xs sm:text-sm">Latest Score:</span>
+                            <span className={`font-bold text-base sm:text-lg ${
                               insights.latestScore >= 90 ? 'text-green-600' :
                               insights.latestScore >= 75 ? 'text-emerald-600' :
                               insights.latestScore >= 58 ? 'text-blue-600' :
@@ -2290,12 +2296,12 @@ const pivotData = useMemo(() => {
                             </span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium text-gray-700">Average Score:</span>
-                            <span className="font-semibold text-gray-900">{insights.averageScore}%</span>
+                            <span className="font-medium text-gray-700 text-xs sm:text-sm">Average Score:</span>
+                            <span className="font-semibold text-gray-900 text-xs sm:text-sm">{insights.averageScore}%</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium text-gray-700">Score Range:</span>
-                            <span className="text-sm text-gray-700">
+                            <span className="font-medium text-gray-700 text-xs sm:text-sm">Score Range:</span>
+                            <span className="text-xs text-gray-700">
                               {insights.lowestScore}% - {insights.highestScore}%
                             </span>
                           </div>
@@ -2314,8 +2320,8 @@ const pivotData = useMemo(() => {
                       insights.latestScore >= 11 ? 'border-red-400 bg-red-50' :
                       'border-gray-400 bg-gray-50'
                     }`}>
-                      <h5 className="font-semibold text-gray-900 mb-2">Recommendations:</h5>
-                      <p className="text-sm text-gray-700">
+                      <h5 className="font-semibold text-gray-900 mb-2 text-sm">Recommendations:</h5>
+                      <p className="text-xs sm:text-sm text-gray-700">
                         {insights.latestScore >= 90 
                           ? "Exceptional performance! Maintain your current study habits and consider advanced topics."
                           : insights.latestScore >= 75
@@ -2334,12 +2340,12 @@ const pivotData = useMemo(() => {
                         }
                       </p>
                       {insights.trend === 'improving' && insights.trendStrength === 'significant' && (
-                        <p className="text-sm text-green-600 font-medium mt-2">
+                        <p className="text-xs sm:text-sm text-green-600 font-medium mt-2">
                           🎉 Great progress! Your improvement trend is strong.
                         </p>
                       )}
                       {insights.trend === 'declining' && insights.trendStrength === 'significant' && (
-                        <p className="text-sm text-red-600 font-medium mt-2">
+                        <p className="text-xs sm:text-sm text-red-600 font-medium mt-2">
                           ⚠️ Significant decline detected. Consider reviewing recent topics and seeking help.
                         </p>
                       )}
@@ -2349,95 +2355,101 @@ const pivotData = useMemo(() => {
               );
             })()}
 
-            {/* Performance Chart Card */}
+            {/* Performance Chart Card - FIXED */}
             <Card className="bg-white border-maroon/20 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                <CardTitle className="flex items-center text-xl text-gray-900">
-                  <BarChart3 className="h-5 w-5 mr-2 text-maroon" />
+              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10 px-4 sm:px-6">
+                <CardTitle className="flex items-center text-base sm:text-lg text-gray-900">
+                  <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-maroon" />
                   Performance Progression
                 </CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-xs sm:text-sm text-gray-600">
                   Your score trend across all exams in {selectedSubject}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-6">
-<ResponsiveContainer width="100%" height={400}>
-  <LineChart 
-    data={subjectAnalysis.filter(d => d.score !== null)}
-    margin={{ top: 20, right: 30, left: 40, bottom: 80 }}
-  >
-    <CartesianGrid 
-      strokeDasharray="3 3" 
-      stroke="#e5e7eb" 
-      strokeOpacity={0.6}
-    />
-    <XAxis 
-      dataKey="exam" 
-      angle={-45}
-      textAnchor="end"
-      height={80}
-      tick={{ fontSize: 11, fill: '#6b7280' }}
-      stroke="#9ca3af"
-      interval={0}
-    />
-    <YAxis 
-      domain={['dataMin - 15', 'dataMax + 15']}
-      tick={{ fontSize: 12, fill: '#6b7280' }}
-      stroke="#9ca3af"
-      tickFormatter={(value) => `${value}%`}
-      width={40}
-      tickCount={8}
-    />
-    <Tooltip 
-      contentStyle={{ 
-        backgroundColor: "white", 
-        border: "2px solid #80000020",
-        borderRadius: "8px",
-        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
-      }}
-      formatter={(value: number) => [`${value}%`, 'Score']}
-      labelFormatter={(label) => `Exam: ${label}`}
-    />
-    <Line 
-      type="monotone" 
-      dataKey="score" 
-      stroke="#800000"
-      strokeWidth={3}
-      dot={{ 
-        r: 6, 
-        fill: "#800000",
-        stroke: "#fff",
-        strokeWidth: 2
-      }}
-      activeDot={{ 
-        r: 8, 
-        fill: "#800000",
-        stroke: "#fff",
-        strokeWidth: 2
-      }}
-      name="Score"
-    />
-  </LineChart>
-</ResponsiveContainer>
+              <CardContent className="p-4 sm:p-6">
+                <div className="h-[300px] sm:h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart 
+                      data={subjectAnalysis
+                        .filter(d => d.score !== null && d.score !== undefined)
+                        .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+                      }
+                      margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
+                    >
+                      <CartesianGrid 
+                        strokeDasharray="3 3" 
+                        stroke="#e5e7eb" 
+                        strokeOpacity={0.6}
+                      />
+                      <XAxis 
+                        dataKey="exam" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        tick={{ fontSize: 10 }}
+                        stroke="#9ca3af"
+                        interval={0}
+                      />
+                      <YAxis 
+                        domain={['dataMin - 15', 'dataMax + 15']}
+                        tick={{ fontSize: 10 }}
+                        stroke="#9ca3af"
+                        tickFormatter={(value) => `${value}%`}
+                        width={30}
+                        tickCount={8}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: "white", 
+                          border: "2px solid #80000020",
+                          borderRadius: "8px",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                          fontSize: "12px"
+                        }}
+                        formatter={(value: number) => [`${value}%`, 'Score']}
+                        labelFormatter={(label) => `Exam: ${label}`}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="score" 
+                        stroke="#800000"
+                        strokeWidth={2}
+                        dot={{ 
+                          r: 4, 
+                          fill: "#800000",
+                          stroke: "#fff",
+                          strokeWidth: 1
+                        }}
+                        activeDot={{ 
+                          r: 6, 
+                          fill: "#800000",
+                          stroke: "#fff",
+                          strokeWidth: 2
+                        }}
+                        name="Score"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
 
-{/* Chart Legend */}
-<div className="flex justify-center items-center mt-4 p-3 bg-maroon/5 rounded-lg">
-  <div className="flex items-center gap-2 text-sm text-gray-700">
-    <div className="w-3 h-1 bg-maroon rounded-full"></div>
-    <span>Your ${selectedSubject} Scores</span>
-  </div>
-</div>
-</CardContent>
+                {/* Chart Legend */}
+                <div className="flex justify-center items-center mt-4 p-3 bg-maroon/5 rounded-lg">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                    <div className="w-3 h-1 bg-maroon rounded-full"></div>
+                    <span>Your {selectedSubject} Scores</span>
+                  </div>
+                </div>
+              </CardContent>
             </Card>
 
-            {/* Recent Exam Scores Table */}
+            {/* Recent Exam Scores Table - RESTORED */}
             <Card className="bg-white border-maroon/20 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10">
-                <CardTitle className="flex items-center text-xl text-gray-900">
-                  <FileText className="h-5 w-5 mr-2 text-maroon" />
+              <CardHeader className="bg-gradient-to-r from-maroon/5 to-transparent border-b border-maroon/10 px-4 sm:px-6">
+                <CardTitle className="flex items-center text-base sm:text-lg text-gray-900">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-maroon" />
                   Recent Exam Scores
                 </CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-xs sm:text-sm text-gray-600">
                   Detailed breakdown of your performance in recent exams
                 </CardDescription>
               </CardHeader>
@@ -2446,46 +2458,46 @@ const pivotData = useMemo(() => {
                   <Table>
                     <TableHeader className="bg-maroon-50">
                       <TableRow>
-                        <TableHead className="font-semibold text-gray-900">Exam</TableHead>
-                        <TableHead className="font-semibold text-gray-900">Score</TableHead>
-                        <TableHead className="font-semibold text-gray-900">Percentage</TableHead>
-                        <TableHead className="font-semibold text-gray-900">Date</TableHead>
-                        <TableHead className="font-semibold text-gray-900">Performance</TableHead>
+                        <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Exam</TableHead>
+                        <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Score</TableHead>
+                        <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Percentage</TableHead>
+                        <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Date</TableHead>
+                        <TableHead className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">Performance</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {subjectAnalysis
-                        .filter(d => d.score !== null)
+                        .filter(d => d.score !== null && d.score !== undefined)
                         .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime())
                         .map((data, index) => (
                           <TableRow key={index} className="hover:bg-maroon/5 transition-colors">
-                            <TableCell className="font-medium text-gray-900">
+                            <TableCell className="font-medium text-gray-900 text-xs sm:text-sm px-3 py-2">
                               {data.exam}
                             </TableCell>
-                            <TableCell className="font-semibold text-gray-900">
+                            <TableCell className="font-semibold text-gray-900 text-xs sm:text-sm px-3 py-2">
                               {data.score}/100
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                               <Badge 
                                 variant="secondary"
                                 className={
-                                  data.score >= 90 ? "bg-green-100 text-green-800 border-green-200" :
-                                  data.score >= 75 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
-                                  data.score >= 58 ? "bg-blue-100 text-blue-800 border-blue-200" :
-                                  data.score >= 41 ? "bg-cyan-100 text-cyan-800 border-cyan-200" :
-                                  data.score >= 31 ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                                  data.score >= 21 ? "bg-orange-100 text-orange-800 border-orange-200" :
-                                  data.score >= 11 ? "bg-red-100 text-red-800 border-red-200" :
-                                  "bg-gray-100 text-gray-800 border-gray-200"
+                                  data.score >= 90 ? "bg-green-100 text-green-800 border-green-200 text-xs" :
+                                  data.score >= 75 ? "bg-emerald-100 text-emerald-800 border-emerald-200 text-xs" :
+                                  data.score >= 58 ? "bg-blue-100 text-blue-800 border-blue-200 text-xs" :
+                                  data.score >= 41 ? "bg-cyan-100 text-cyan-800 border-cyan-200 text-xs" :
+                                  data.score >= 31 ? "bg-yellow-100 text-yellow-800 border-yellow-200 text-xs" :
+                                  data.score >= 21 ? "bg-orange-100 text-orange-800 border-orange-200 text-xs" :
+                                  data.score >= 11 ? "bg-red-100 text-red-800 border-red-200 text-xs" :
+                                  "bg-gray-100 text-gray-800 border-gray-200 text-xs"
                                 }
                               >
                                 {data.score}%
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-gray-700">
+                            <TableCell className="text-gray-700 text-xs sm:text-sm px-3 py-2">
                               {data.date ? new Date(data.date).toLocaleDateString() : 'N/A'}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                               <div className="flex items-center gap-2">
                                 <div className="w-16 bg-gray-200 rounded-full h-2">
                                   <div 
@@ -2515,11 +2527,11 @@ const pivotData = useMemo(() => {
             </Card>
           </>
         ) : (
-          <Card className="bg-white border-maroon/20 text-center py-12">
+          <Card className="bg-white border-maroon/20 text-center py-8 sm:py-12">
             <CardContent>
-              <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Exam Data Available</h3>
-              <p className="text-gray-600">
+              <BarChart3 className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No Exam Data Available</h3>
+              <p className="text-gray-600 text-sm">
                 No assessment data found for {selectedSubject}. 
                 This could be because no exams have been conducted yet or grades are pending.
               </p>
@@ -2531,229 +2543,219 @@ const pivotData = useMemo(() => {
   </DialogContent>
 </Dialog>
 
-     {/* Fees Dialog - NEW POPUP MODAL */}
-<Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
-  <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0 border-maroon/20 bg-white">
-    <VisuallyHidden>
-      <DialogTitle>Student Fee Statement</DialogTitle>
-      <DialogDescription>
-        View student fee balance, payment history, and fee breakdown
-      </DialogDescription>
-    </VisuallyHidden>
+      {/* Fees Dialog - MOBILE OPTIMIZED */}
+      <Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-hidden p-0 border-maroon/20 bg-white mx-2">
+          <VisuallyHidden>
+            <DialogTitle>Student Fee Statement</DialogTitle>
+            <DialogDescription>
+              View student fee balance, payment history, and fee breakdown
+            </DialogDescription>
+          </VisuallyHidden>
 
-    <StudentFeesDialog 
-      onClose={() => setIsFeesDialogOpen(false)}
-      studentData={feesStudentData}
-      classId={classId}
-      className={className}
-    />
-  </DialogContent>
-</Dialog>
-
-
-      {/* Settings Modal for Password Update - SCROLLABLE */}
-<Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-  <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto bg-white">
-    <DialogHeader className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200">
-      <DialogTitle className="flex items-center text-xl font-bold text-maroon">
-        <Settings className="h-6 w-6 mr-3 text-maroon" />
-        Account Settings
-      </DialogTitle>
-      <DialogDescription className="text-gray-600">
-        Update your account password and security settings
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-6 py-4">
-      {/* Student Info Display */}
-      <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20">
-        <CardContent className="p-4">
-          <h4 className="font-semibold text-lg mb-3 text-gray-900 flex items-center">
-            <User className="h-5 w-5 mr-2 text-maroon" />
-            Student Information
-          </h4>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-              <span className="font-medium text-gray-700">Name:</span>
-              <span className="text-gray-900">{profile?.first_name} {profile?.last_name}</span>
-              </div>
-            <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-              <span className="font-medium text-gray-700">Student ID:</span>
-              <span className="text-gray-900 font-mono">{profile?.reg_no}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-              <span className="font-medium text-gray-700">Class:</span>
-              <span className="text-gray-900">{className}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-              <span className="font-medium text-gray-700">Email:</span>
-              <span className="text-gray-900 text-xs truncate max-w-[150px]">{profile?.email}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Password Update Form */}
-      <Card className="border-maroon/20 overflow-hidden shadow-lg">
-  <CardContent className="p-0">
-    {/* High Security Header */}
-    <div className="bg-maroon p-4 text-white flex items-center justify-between">
-      <h3 className="text-lg font-semibold flex items-center">
-        <Settings className="h-5 w-5 mr-2" />
-        Change Password
-      </h3>
-      <ShieldAlert className="h-5 w-5 text-maroon-light opacity-50" />
-    </div>
-
-    <div className="p-4 space-y-4">
-      {/* SECURITY NOTICE BOX */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start animate-in fade-in duration-500">
-        <div className="bg-amber-100 p-1.5 rounded-full">
-          <ShieldAlert className="h-4 w-4 text-amber-600" />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
-          <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
-            To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
-          </p>
-        </div>
-      </div>
-
-      {/* Error/Success Messages */}
-      {passwordError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-shake">
-          <div className="flex items-center">
-            <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-            {passwordError}
-          </div>
-        </div>
-      )}
-
-      {passwordSuccess && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-          <div className="flex items-center">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-            {passwordSuccess}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {/* CURRENT PASSWORD - STYLED TO LOOK IMPORTANT */}
-        <div className="space-y-2">
-          <label htmlFor="currentPassword" className="text-sm font-bold text-gray-800 flex items-center">
-            <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-            Current Password
-          </label>
-          <Input
-            id="currentPassword"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Verify current password"
-            disabled={passwordLoading}
-            className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-11"
+          <StudentFeesDialog 
+            onClose={() => setIsFeesDialogOpen(false)}
+            studentData={feesStudentData}
+            classId={classId}
+            className={className}
           />
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        <div className="h-px bg-gray-100 w-full" />
+      {/* MOBILE-OPTIMIZED SETTINGS MODAL */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[80vh] overflow-y-auto bg-white mx-2">
+          <DialogHeader className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200">
+            <DialogTitle className="flex items-center text-lg sm:text-xl font-bold text-maroon">
+              <Settings className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
+              Account Settings
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm text-gray-600">
+              Update your account password and security settings
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 sm:space-y-6 py-4">
+            <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20">
+              <CardContent className="p-3 sm:p-4">
+                <h4 className="font-semibold text-base sm:text-lg text-gray-900 mb-2 sm:mb-3 flex items-center">
+                  <User className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-maroon" />
+                  Student Information
+                </h4>
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                    <span className="font-medium text-gray-700">Name:</span>
+                    <span className="text-gray-900">{profile?.first_name} {profile?.last_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                    <span className="font-medium text-gray-700">Student ID:</span>
+                    <span className="text-gray-900 font-mono">{profile?.reg_no}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                    <span className="font-medium text-gray-700">Class:</span>
+                    <span className="text-gray-900">{className}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                    <span className="font-medium text-gray-700">Email:</span>
+                    <span className="text-gray-900 text-xs truncate max-w-[150px]">{profile?.email}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* NEW PASSWORD */}
-        <div className="space-y-2">
-          <label htmlFor="newPassword" className="text-sm font-medium text-gray-700 flex items-center">
-            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-            New Password
-          </label>
-          <Input
-            id="newPassword"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Min. 6 characters"
-            disabled={passwordLoading}
-            className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11"
-          />
-        </div>
+            <Card className="border-maroon/20 overflow-hidden shadow-lg">
+              <CardContent className="p-0">
+                <div className="bg-maroon p-3 sm:p-4 text-white flex items-center justify-between">
+                  <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                    <Settings className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    Change Password
+                  </h3>
+                  <ShieldAlert className="h-4 w-4 sm:h-5 sm:w-5 text-maroon-light opacity-50" />
+                </div>
 
-        {/* CONFIRM NEW PASSWORD */}
-        <div className="space-y-2">
-          <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
-            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-            Confirm New Password
-          </label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat new password"
-            disabled={passwordLoading}
-            className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11"
-          />
-        </div>
+                <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start animate-in fade-in duration-500">
+                    <div className="bg-amber-100 p-1.5 rounded-full">
+                      <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
+                      <p className="text-[10px] sm:text-[11px] text-amber-700 leading-relaxed mt-1">
+                        To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
+                      </p>
+                    </div>
+                  </div>
 
-        <Button
-          onClick={handlePasswordUpdate}
-          className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-6 shadow-md transition-all active:scale-95"
-          disabled={passwordLoading}
-        >
-          {passwordLoading ? (
-            <div className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Verifying Security...
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <ShieldCheck className="h-4 w-4 mr-2" />
-              Secure My Account
-            </div>
-          )}
-        </Button>
-      </div>
-    </div>
-  </CardContent>
-</Card>
+                  {passwordError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs animate-shake">
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                        {passwordError}
+                      </div>
+                    </div>
+                  )}
 
-      {/* Security Notice */}
-      <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
-        <CardContent className="p-4">
-          <h4 className="font-semibold text-sm text-blue-900 mb-3 flex items-center">
-            <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-            Security Best Practices
-          </h4>
-          <ul className="text-xs text-blue-700 space-y-2">
-            <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt=1.5 mr-2 flex-shrink-0"></span>
-              <span>Always choose a strong, unique password with mixed characters</span>
-            </li>
-            <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt=1.5 mr-2 flex-shrink-0"></span>
-              <span>Never share your password with anyone, including friends</span>
-            </li>
-            <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-              <span>Log out after each session, especially on shared devices</span>
-            </li>
-            <li className="flex items-start">
-              <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-              <span>Update your password regularly for better security</span>
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-    </div>
-  </DialogContent>
-</Dialog>
+                  {passwordSuccess && (
+                    <div className="bg-green-50 border border-green-200 text-green-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs">
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        {passwordSuccess}
+                      </div>
+                    </div>
+                  )}
 
-      {/* --- NEW: THE WARNING DIALOG --- */}
+                  <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-1 sm:space-y-2">
+                      <label htmlFor="currentPassword" className="text-xs sm:text-sm font-bold text-gray-800 flex items-center">
+                        <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
+                        Current Password
+                      </label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="Verify current password"
+                        disabled={passwordLoading}
+                        className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-10 sm:h-11 text-sm"
+                      />
+                    </div>
+
+                    <div className="h-px bg-gray-100 w-full" />
+
+                    <div className="space-y-1 sm:space-y-2">
+                      <label htmlFor="newPassword" className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
+                        <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                        New Password
+                      </label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Min. 6 characters"
+                        disabled={passwordLoading}
+                        className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-10 sm:h-11 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1 sm:space-y-2">
+                      <label htmlFor="confirmPassword" className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
+                        <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                        Confirm New Password
+                      </label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password"
+                        disabled={passwordLoading}
+                        className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-10 sm:h-11 text-sm"
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handlePasswordUpdate}
+                      className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-4 sm:py-6 shadow-md transition-all active:scale-95 text-sm"
+                      disabled={passwordLoading}
+                    >
+                      {passwordLoading ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-2"></div>
+                          Verifying Security...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                          Secure My Account
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-3 sm:p-4">
+                <h4 className="font-semibold text-xs sm:text-sm text-blue-900 mb-2 sm:mb-3 flex items-center">
+                  <span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2"></span>
+                  Security Best Practices
+                </h4>
+                <ul className="text-xs text-blue-700 space-y-1 sm:space-y-2">
+                  <li className="flex items-start">
+                    <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+                    <span>Always choose a strong, unique password with mixed characters</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+                    <span>Never share your password with anyone, including friends</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+                    <span>Log out after each session, especially on shared devices</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+                    <span>Update your password regularly for better security</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MOBILE-OPTIMIZED WARNING DIALOG */}
       <Dialog open={showWarning} onOpenChange={setShowWarning}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-w-[95vw] mx-2">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <ShieldAlert className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-amber-600 text-base sm:text-lg">
+              <ShieldAlert className="h-4 w-4 sm:h-5 sm:w-5" />
               Security Policy Warning
             </DialogTitle>
-            <DialogDescription className="py-4">
+            <DialogDescription className="py-3 sm:py-4 text-xs sm:text-sm">
               <p className="font-semibold text-gray-900 mb-2">Notice for Students & Guardians:</p>
               Teacher contact details are shared exclusively for parental communication regarding student welfare. 
               <br /><br />
@@ -2761,9 +2763,9 @@ const pivotData = useMemo(() => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button variant="secondary" onClick={() => setShowWarning(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setShowWarning(false)} className="text-xs sm:text-sm">Cancel</Button>
             <Button 
-              className="bg-maroon hover:bg-maroon/90" 
+              className="bg-maroon hover:bg-maroon/90 text-xs sm:text-sm" 
               onClick={fetchTeacherContact}
               disabled={contactLoading}
             >

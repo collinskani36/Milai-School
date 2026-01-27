@@ -54,19 +54,12 @@ All colors MUST be HSL.
     --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
@@ -117,4 +110,329 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Mobile-first responsive base styles */
+  html {
+    -webkit-text-size-adjust: 100%; /* Prevent font scaling in landscape */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+  }
+
+  /* Base font scaling for mobile */
+  @media (max-width: 480px) {
+    html {
+      font-size: 14px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    html {
+      font-size: 13px;
+    }
+  }
+}
+
+@layer components {
+  /* Mobile-responsive container */
+  .mobile-container {
+    @apply w-full max-w-full px-4 sm:px-6 md:px-8;
+  }
+
+  /* Touch-friendly buttons for WebView */
+  .btn-touch {
+    @apply min-h-[44px] min-w-[44px] px-4 py-3 
+           text-base md:text-sm
+           active:scale-95 transition-transform;
+  }
+
+  /* Mobile-responsive card */
+  .card-mobile {
+    @apply rounded-lg sm:rounded-xl 
+           p-4 sm:p-6
+           border border-border
+           shadow-sm sm:shadow-md
+           transition-all duration-200;
+  }
+
+  /* Mobile-responsive table container */
+  .table-responsive {
+    @apply block w-full overflow-x-auto -mx-4 sm:mx-0 
+           overflow-y-hidden
+           sm:overflow-x-visible;
+  }
+
+  /* Mobile-optimized grid */
+  .grid-mobile {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 
+           gap-3 sm:gap-4 md:gap-6;
+  }
+
+  /* Truncate for mobile with ellipsis */
+  .truncate-mobile {
+    @apply truncate max-w-full;
+  }
+
+  /* Mobile navigation item */
+  .nav-item-mobile {
+    @apply flex items-center gap-2 sm:gap-3 
+           px-3 sm:px-4 py-3 sm:py-2
+           rounded-lg
+           text-sm sm:text-base;
+  }
+}
+
+@layer utilities {
+  /* Hide on mobile, show on larger screens */
+  .mobile-hidden {
+    @apply hidden sm:block;
+  }
+
+  /* Show only on mobile */
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+
+  /* Stack vertically on mobile, horizontal on larger */
+  .mobile-stack {
+    @apply flex flex-col sm:flex-row gap-2 sm:gap-4;
+  }
+
+  /* Responsive text sizes */
+  .text-mobile-sm {
+    @apply text-xs sm:text-sm;
+  }
+
+  .text-mobile-base {
+    @apply text-sm sm:text-base;
+  }
+
+  .text-mobile-lg {
+    @apply text-base sm:text-lg md:text-xl;
+  }
+
+  .text-mobile-xl {
+    @apply text-lg sm:text-xl md:text-2xl;
+  }
+
+  /* Responsive spacing */
+  .spacing-mobile {
+    @apply space-y-4 sm:space-y-6;
+  }
+
+  /* Scrollbar styling for mobile */
+  .scrollbar-mobile {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .scrollbar-mobile::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .scrollbar-mobile::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-mobile::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+
+  /* Prevent text zoom on iOS */
+  .no-zoom {
+    font-size: 16px;
+  }
+
+  /* Safe area insets for modern phones */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Animation for mobile interactions */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.3s ease-out;
+  }
+
+  /* Modal backdrop for mobile */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/50 
+           flex items-center justify-center 
+           p-4 sm:p-6;
+  }
+
+  /* Touch device detection */
+  @media (hover: none) and (pointer: coarse) {
+    .touch-device {
+      cursor: pointer;
+    }
+    
+    /* Larger hit targets for touch */
+    .touch-target {
+      @apply min-h-[44px] min-w-[44px];
+    }
+  }
+}
+
+/* Mobile-specific media queries */
+@media (max-width: 480px) {
+  /* Force full width tables */
+  table {
+    @apply min-w-full;
+  }
+
+  /* Reduce padding in tight spaces */
+  .compact-padding {
+    @apply p-2;
+  }
+
+  /* Stack badges on mobile */
+  .badge-stack {
+    @apply flex flex-wrap gap-1;
+  }
+
+  /* Single column layout on very small screens */
+  .single-column {
+    @apply flex flex-col;
+  }
+
+  /* Hide non-essential decorative elements */
+  .decorative-mobile {
+    @apply hidden;
+  }
+}
+
+/* Small mobile devices (360px and below) */
+@media (max-width: 360px) {
+  /* Even smaller text for very small screens */
+  .text-xs-360 {
+    font-size: 0.6875rem; /* 11px */
+  }
+
+  /* Compact form controls */
+  input, select, textarea {
+    @apply py-2 px-3 text-sm;
+  }
+
+  /* Reduce icon sizes further */
+  .icon-xs {
+    @apply w-3 h-3;
+  }
+
+  /* Single line truncation with tooltip alternative */
+  .single-line {
+    @apply truncate max-w-[200px];
+  }
+}
+
+/* Tablet breakpoint */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Tablet-specific adjustments */
+  .tablet-grid {
+    @apply grid-cols-2;
+  }
+
+  .tablet-text {
+    @apply text-base;
+  }
+}
+
+/* WebView specific optimizations */
+@media (pointer: coarse) and (max-width: 480px) {
+  /* Ensure all interactive elements have proper touch size */
+  button,
+  [role="button"],
+  a[href],
+  input[type="submit"],
+  input[type="button"],
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Prevent double-tap zoom on buttons */
+  button {
+    touch-action: manipulation;
+  }
+
+  /* Improve scrolling in WebView */
+  .webview-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Print styles for fee statements */
+@media print {
+  .print\:hidden {
+    display: none;
+  }
+
+  .print\:block {
+    display: block;
+  }
+
+  .print\:text-black {
+    color: black;
+  }
+
+  .print\:bg-white {
+    background: white;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .high-contrast {
+    border-width: 2px;
+  }
+
+  .high-contrast-text {
+    font-weight: 700;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* RTL language support */
+[dir="rtl"] .rtl\:flip {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .rtl\:text-right {
+  text-align: right;
 }

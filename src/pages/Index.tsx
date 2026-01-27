@@ -44,9 +44,11 @@ const Index = () => {
 
           {/* Sign In Cards - High Depth Design */}
           <div className="grid grid-cols-1 gap-8 max-w-4xl mx-auto mb-16 md:grid-cols-2 md:mb-24">
+            
+            {/* FIXED: Navigates to /login to stop flicker */}
             <Card 
               className="group bg-slate-900/50 border-white/5 hover:border-blue-500/50 hover:bg-slate-900/80 transition-all duration-500 cursor-pointer overflow-hidden relative" 
-              onClick={() => navigate("/student-dashboard")}
+              onClick={() => navigate("/login")} 
             >
               <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader className="text-center pb-6">
@@ -65,9 +67,10 @@ const Index = () => {
               </CardContent>
             </Card>
 
+            {/* FIXED: Navigates to /teacher-login to stop flicker */}
             <Card 
               className="group bg-slate-900/50 border-white/5 hover:border-blue-500/50 hover:bg-slate-900/80 transition-all duration-500 cursor-pointer overflow-hidden relative" 
-              onClick={() => navigate("/teacher-dashboard")}
+              onClick={() => navigate("/teacher-login")}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader className="text-center pb-6">

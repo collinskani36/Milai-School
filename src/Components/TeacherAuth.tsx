@@ -40,17 +40,20 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         return;
       }
 
-      if (
-        teacherRecord.is_admin === true ||
-        teacherRecord.is_admin === "true" ||
-        teacherRecord.is_admin === 1
-      ) {
-        navigate("/admin-dashboard");
+      // Execute the onLogin callback if provided
+      if (typeof onLogin === "function") onLogin(teacherRecord);
+
+      /**
+       * FLICKER FIX: 
+       * We use { replace: true } so the login page is replaced in history.
+       * This forces an immediate route swap before the App.tsx state cycles.
+       */
+      if (teacherRecord.is_admin === true || teacherRecord.is_admin === "true" || teacherRecord.is_admin === 1) {
+        navigate("/admin-dashboard", { replace: true });
       } else {
-        navigate("/teacher-dashboard");
+        navigate("/teacher-dashboard", { replace: true });
       }
 
-      if (typeof onLogin === "function") onLogin(teacherRecord);
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Try again.");
     } finally {
@@ -59,13 +62,9 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   };
 
   return (
-    // Replaced bg-gray-100 with the Deep Midnight Blue Gradient
     <div className="flex items-center justify-center min-h-screen bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] p-4">
-      
-      {/* Premium Glassmorphic Card */}
       <div className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl p-8 w-full max-w-md relative overflow-hidden">
         
-        {/* Decorative subtle blue glow */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-600/10 blur-3xl rounded-full" />
         
         <div className="flex justify-center mb-8">

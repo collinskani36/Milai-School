@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
 import { 
   GraduationCap, Calendar, Clock, AlertTriangle,
   CheckCircle, Receipt, Building2, FileText,
-  X, DollarSign, CreditCard
+  X, DollarSign, CreditCard, ChevronDown, ChevronUp, Info
 } from "lucide-react";
 
 import FeeBalanceOverview from "@/Components/Fees/FeeBalanceOverview";
@@ -28,6 +28,7 @@ export default function StudentFeesDialog({
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
   const [selectedYear, setSelectedYear] = useState('2024-2025');
   const [student, setStudent] = useState(studentData);
+  const [showSummaryCards, setShowSummaryCards] = useState(true); // Desktop: expanded, Mobile: collapsed
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -45,7 +46,6 @@ export default function StudentFeesDialog({
     setStudent(studentData);
   }, [studentData]);
 
-  // Fetch all student fees (database handles all calculations)
   const { data: allStudentFees = [], isLoading: loadingFees } = useQuery({
     queryKey: ['allStudentFees', student?.id],
     queryFn: async () => {
@@ -58,17 +58,12 @@ export default function StudentFeesDialog({
         .order('academic_year', { ascending: false })
         .order('term', { ascending: false });
 
-      if (error) {
-        console.error("Error fetching student fees:", error);
-        throw error;
-      }
-
+      if (error) throw error;
       return data || [];
     },
     enabled: !!student?.id,
   });
 
-  // Fetch payments
   const { data: payments = [], isLoading: loadingPayments } = useQuery({
     queryKey: ['payments', student?.id],
     queryFn: async () => {
@@ -80,29 +75,22 @@ export default function StudentFeesDialog({
         .eq('student_id', student.id)
         .order('payment_date', { ascending: false });
 
-      if (error) {
-        console.error("Error fetching payments:", error);
-        throw error;
-      }
-
+      if (error) throw error;
       return data || [];
     },
     enabled: !!student?.id,
   });
 
-  // Current selected fee - use database values directly
   const studentFee = allStudentFees.find(
     sf => sf.term === selectedTerm && sf.academic_year === selectedYear
   );
 
-  // Generate term options from database fees
   const termOptions = allStudentFees.map(sf => ({
     term: sf.term,
     year: sf.academic_year,
     label: `${sf.term} • ${sf.academic_year}`
   }));
 
-  // Default to most recent term if nothing selected
   useEffect(() => {
     if (termOptions.length > 0 && !studentFee) {
       const mostRecent = termOptions[0];
@@ -111,13 +99,11 @@ export default function StudentFeesDialog({
     }
   }, [termOptions, studentFee]);
 
-  // Fetch fee structure items for breakdown
   const { data: studentFeeItems = [], isLoading: loadingFeeItems } = useQuery({
     queryKey: ['studentFeeItems', student?.id, selectedTerm, selectedYear],
     queryFn: async () => {
       if (!student?.id) return [];
 
-      // Get the current term's fee record
       const { data: feeRecord, error: feeError } = await supabase
         .from('student_fees')
         .select('fee_structure_id')
@@ -128,19 +114,14 @@ export default function StudentFeesDialog({
 
       if (feeError || !feeRecord?.fee_structure_id) return [];
 
-      // Get the fee structure details
       const { data: feeStructure, error: structureError } = await supabase
         .from('fee_structure')
         .select('*')
         .eq('id', feeRecord.fee_structure_id)
         .single();
 
-      if (structureError) {
-        console.error("Error fetching fee structure:", structureError);
-        return [];
-      }
+      if (structureError) return [];
 
-      // Return as a fee item for breakdown
       return [{
         id: feeStructure.id,
         name: feeStructure.name,
@@ -191,267 +172,282 @@ export default function StudentFeesDialog({
   }
 
   return (
-    <div className="Fees-dialog-container animate-pop-in">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm">
-            <GraduationCap className="w-6 h-6 text-white" />
+    <div className="Fees-dialog-container animate-pop-in bg-white flex flex-col h-[90vh] md:h-[85vh] lg:h-[80vh] w-full max-w-7xl mx-auto rounded-none md:rounded-xl shadow-none md:shadow-2xl overflow-hidden">
+      {/* Header - Fixed height for both mobile and desktop */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm flex-shrink-0">
+              <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Fee Statement</h2>
+              <p className="text-gray-500 text-xs sm:text-sm truncate">
+                {student ? `${student.first_name} ${student.last_name}` : 'Loading...'} • {student?.Reg_no || 'N/A'} • {className || 'N/A'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Fee Statement</h2>
-            <p className="text-gray-500 text-sm">
-              {student ? `${student.first_name} ${student.last_name}` : 'Loading...'} • {student?.Reg_no || 'N/A'} • {className || 'N/A'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {studentFee && (
-            <>
-              {creditCarried > 0 && (
-                <Badge 
-                  variant="outline" 
-                  className="bg-amber-50 text-amber-700 border-amber-200 px-4 py-2 text-sm font-medium"
-                >
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  KES {creditCarried.toLocaleString()} credit available
-                </Badge>
-              )}
+          
+          <div className="flex items-center gap-2">
+            {studentFee && (
               <Badge 
                 variant="outline" 
-                className={`${getStatusConfig(studentFee.status).color} px-4 py-2 text-sm font-medium`}
+                className={`${getStatusConfig(studentFee.status).color} hidden sm:flex px-3 py-1.5 text-xs font-medium`}
               >
-                {React.createElement(getStatusConfig(studentFee.status).icon, { className: "w-4 h-4 mr-2" })}
+                {React.createElement(getStatusConfig(studentFee.status).icon, { className: "w-3 h-3 mr-1 inline-block" })}
                 {getStatusConfig(studentFee.status).message}
               </Badge>
-            </>
-          )}
-          <button
-            onClick={handleClose}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-white hover:bg-gray-50 border border-gray-200 shadow-sm hover:shadow transition-all duration-200 hover:scale-105 active:scale-95"
-            aria-label="Close fee statement"
-          >
-            <X className="w-5 h-5 text-gray-600" />
-          </button>
+            )}
+            <button
+              onClick={handleClose}
+              className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white hover:bg-gray-50 border border-gray-200 shadow-sm hover:shadow transition-all duration-200 hover:scale-105 active:scale-95"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-        {/* Current Term Banner */}
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white mb-6">
-          <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5" />
-              <div>
-                <span className="font-medium">Viewing: {selectedTerm} • {selectedYear}</span>
-                {mappedPayments.length > 0 && (
-                  <p className="text-sm text-white/80">
-                    {mappedPayments.length} payment{mappedPayments.length !== 1 ? 's' : ''} recorded
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge className="bg-white/20 text-white border-white/30">
-                {studentFee?.status || 'No Fee Record'}
-              </Badge>
-              {creditCarried > 0 && (
-                <Badge className="bg-amber-500 text-white border-amber-400">
-                  <CreditCard className="w-3 h-3 mr-1" />
-                  Credit Available
-                </Badge>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-white/80 backdrop-blur-sm shadow-lg border-0 p-1.5 rounded-xl w-full">
-            <TabsTrigger value="overview" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="fees" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
-              <FileText className="w-4 h-4 mr-2" />
-              Fee Breakdown
-            </TabsTrigger>
-            <TabsTrigger value="payments" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
-              <Receipt className="w-4 h-4 mr-2" />
-              Payments
-            </TabsTrigger>
-            <TabsTrigger value="bank" className="flex-1 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
-              <Building2 className="w-4 h-4 mr-2" />
-              Bank Details
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <FeeBalanceOverview 
-                  studentFee={studentFee} 
-                  isLoading={loadingFees}
-                />
-              </div>
-              <div>
-                <TermHistoryCard 
-                  studentFees={allStudentFees}
-                  onSelectTerm={handleSelectTerm}
-                  selectedTerm={selectedTerm}
-                  selectedYear={selectedYear}
-                  isLoading={loadingFees}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="fees" className="space-y-6">
-            {loadingFeeItems ? (
-              <div className="flex justify-center items-center h-48">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-600"></div>
-              </div>
-            ) : studentFeeItems.length === 0 ? (
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-12 text-center">
-                  <div className="p-4 rounded-full bg-gray-100 w-fit mx-auto mb-4">
-                    <FileText className="w-8 h-8 text-gray-400" />
+      {/* Main Content Area - Flexible for desktop */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto p-3 sm:p-4 md:p-6">
+          {/* Current Term Banner */}
+          <Card className="border-0 shadow-md sm:shadow-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white mb-3 sm:mb-4">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <span className="font-medium text-sm sm:text-base truncate">Viewing: {selectedTerm} • {selectedYear}</span>
+                    {mappedPayments.length > 0 && (
+                      <p className="text-xs sm:text-sm text-white/80 truncate">
+                        {mappedPayments.length} payment{mappedPayments.length !== 1 ? 's' : ''} recorded
+                      </p>
+                    )}
                   </div>
-                  <h3 className="font-semibold text-gray-900">No fee items found</h3>
-                  <p className="text-gray-500 mt-1">Fee structure not yet defined for this term</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <FeeBreakdownCard 
-                  fees={studentFeeItems.filter(f => f.category === 'Mandatory')} 
-                  title="Mandatory Fees" 
-                  type="Mandatory" 
-                  totalLabel="Total Mandatory" 
-                />
-                <FeeBreakdownCard 
-                  fees={studentFeeItems.filter(f => f.category === 'Optional')} 
-                  title="Optional Fees" 
-                  type="Optional" 
-                  totalLabel="Total Optional" 
-                />
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="payments">
-            <PaymentHistory 
-              payments={mappedPayments} 
-              isLoading={loadingPayments} 
-              showStudentInfo={false}
-              selectedTerm={selectedTerm}
-              selectedYear={selectedYear}
-            />
-          </TabsContent>
-
-          <TabsContent value="bank">
-            <BankDetailsCard />
-          </TabsContent>
-        </Tabs>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Billed</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    KES {(studentFee?.total_billed || 0).toLocaleString()}
-                  </p>
                 </div>
-                <div className="p-2 bg-gray-50 rounded-lg">
-                  <Receipt className="w-6 h-6 text-gray-600" />
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-white/20 text-white border-white/30 text-xs py-1">
+                    {studentFee?.status || 'No Fee Record'}
+                  </Badge>
+                  {studentFee && (
+                    <Badge 
+                      variant="outline" 
+                      className={`${getStatusConfig(studentFee.status).color} sm:hidden px-2 py-1 text-xs`}
+                    >
+                      {React.createElement(getStatusConfig(studentFee.status).icon, { className: "w-3 h-3 mr-1" })}
+                      Short
+                    </Badge>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Paid ({selectedTerm})</p>
-                  <p className="text-2xl font-bold text-emerald-600">
-                    KES {totalPaid.toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <CheckCircle className="w-6 h-6 text-emerald-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Tabs */}
+          <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6 mb-4 sm:mb-6">
+            <div className="relative">
+              <TabsList className="bg-white/80 backdrop-blur-sm shadow-sm sm:shadow-md border-0 p-1 rounded-lg sm:rounded-xl w-full overflow-x-auto flex-nowrap sm:flex-wrap">
+                <TabsTrigger value="overview" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="fees" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
+                  <span className="hidden sm:inline">Fee</span> Breakdown
+                </TabsTrigger>
+                <TabsTrigger value="payments" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <Receipt className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
+                  Payments
+                </TabsTrigger>
+                <TabsTrigger value="bank" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <Building2 className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
+                  Bank
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Outstanding Balance</p>
-                  <p className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                    KES {outstandingBalance.toLocaleString()}
-                  </p>
+            <TabsContent value="overview" className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="lg:col-span-2">
+                  <FeeBalanceOverview studentFee={studentFee} isLoading={loadingFees} />
                 </div>
-                <div className="p-2 bg-amber-50 rounded-lg">
-                  <Clock className="w-6 h-6 text-amber-600" />
+                <div>
+                  <TermHistoryCard 
+                    studentFees={allStudentFees}
+                    onSelectTerm={handleSelectTerm}
+                    selectedTerm={selectedTerm}
+                    selectedYear={selectedYear}
+                    isLoading={loadingFees}
+                  />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </TabsContent>
 
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Credit Available</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    KES {creditCarried.toLocaleString()}
-                  </p>
+            <TabsContent value="fees" className="space-y-4 sm:space-y-6">
+              {loadingFeeItems ? (
+                <div className="flex justify-center items-center h-32 sm:h-48">
+                  <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-t-2 border-b-2 border-emerald-600"></div>
                 </div>
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <CreditCard className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-              {creditCarried > 0 && (
-                <p className="text-xs text-blue-600 mt-2">
-                  Will be applied to future term fees automatically
-                </p>
+              ) : studentFeeItems.length === 0 ? (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
+                    <div className="p-3 sm:p-4 rounded-full bg-gray-100 w-fit mx-auto mb-3 sm:mb-4">
+                      <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base lg:text-lg">No fee items found</h3>
+                    <p className="text-gray-500 mt-1 text-xs sm:text-sm lg:text-base">Fee structure not yet defined for this term</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <FeeBreakdownCard fees={studentFeeItems.filter(f => f.category === 'Mandatory')} title="Mandatory Fees" type="Mandatory" totalLabel="Total Mandatory" />
+                  <FeeBreakdownCard fees={studentFeeItems.filter(f => f.category === 'Optional')} title="Optional Fees" type="Optional" totalLabel="Total Optional" />
+                </>
               )}
+            </TabsContent>
+
+            <TabsContent value="payments">
+              <PaymentHistory payments={mappedPayments} isLoading={loadingPayments} showStudentInfo={false} selectedTerm={selectedTerm} selectedYear={selectedYear} />
+            </TabsContent>
+
+            <TabsContent value="bank">
+              <BankDetailsCard />
+            </TabsContent>
+          </Tabs>
+
+          {/* Summary Cards Section */}
+          <div className="mb-4 sm:mb-6">
+            {/* Mobile Toggle for Summary Cards */}
+            <div className="sm:hidden mb-2">
+              <button
+                onClick={() => setShowSummaryCards(!showSummaryCards)}
+                className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Financial Summary</span>
+                  <Badge className="ml-2 bg-emerald-100 text-emerald-700">4 items</Badge>
+                </div>
+                {showSummaryCards ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+            </div>
+
+            {/* Summary Cards Grid - Always visible on desktop */}
+            <div className={`${showSummaryCards ? 'block' : 'hidden'} sm:block`}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {/* Total Billed */}
+                <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Total Billed</p>
+                        <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 truncate">
+                          KES {(studentFee?.total_billed || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-gray-50 rounded-lg flex-shrink-0 ml-2">
+                        <Receipt className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Total Paid */}
+                <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Total Paid</p>
+                        <p className="text-lg sm:text-xl lg:text-2xl font-bold text-emerald-600 truncate">
+                          KES {totalPaid.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">{selectedTerm}</p>
+                      </div>
+                      <div className="p-2 bg-emerald-50 rounded-lg flex-shrink-0 ml-2">
+                        <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Outstanding Balance */}
+                <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Balance</p>
+                        <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${outstandingBalance > 0 ? 'text-amber-600' : 'text-emerald-600'} truncate`}>
+                          KES {outstandingBalance.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-amber-50 rounded-lg flex-shrink-0 ml-2">
+                        <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Credit Available */}
+                <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Credit</p>
+                        <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600 truncate">
+                          KES {creditCarried.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0 ml-2">
+                        <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                      </div>
+                    </div>
+                    {creditCarried > 0 && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        Applied to future terms automatically
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+
+          {/* Credit System Information */}
+          <Card className="border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 hover:shadow-sm transition-shadow">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex-shrink-0">
+                  <Info className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                    <h4 className="text-sm sm:text-base font-semibold text-blue-800">Credit System Information</h4>
+                    <Badge variant="outline" className="bg-white/80 text-blue-700 border-blue-300 text-xs px-3 py-1 w-fit">
+                      Automatic Application
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Any overpayment in the current term is automatically stored as credit and applied to the next term's fees. The system handles all calculations automatically.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-blue-600">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                      <span>Outstanding balance is the amount still due</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>Credit is automatically applied to future terms</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Credit System Notice */}
-        <Card className="border border-blue-200 bg-blue-50 mt-6">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <CreditCard className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-blue-800">Credit System Information</h4>
-                <p className="text-sm text-blue-600 mt-1">
-                  Any overpayment in the current term is automatically stored as credit and applied to the next term's fees. The system handles all calculations automatically.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-xs text-blue-500">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>Outstanding balance is the amount still due</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span>Credit is automatically applied to future terms</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

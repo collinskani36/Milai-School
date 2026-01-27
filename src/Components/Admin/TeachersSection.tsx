@@ -149,52 +149,74 @@ export default function TeachersSection() {
   });
 
   // Create teacher with edge function
-  const createMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const payload = { 
-        email: data.email,
-        password: data.password, 
-        teacher_code: data.teacher_code,
-        first_name: data.first_name, 
-        last_name: data.last_name, 
-        phone: data.phone,
-        is_admin: data.is_admin
-      };
-      
-      const res = await supabase.functions.invoke('create-teacher', {
-  body: payload,
+  // In the createMutation
+const createMutation = useMutation({
+  mutationFn: async (data: FormData) => {
+    const payload = {
+      email: data.email,
+      password: data.password,
+      teacher_code: data.teacher_code,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      phone: data.phone,
+      is_admin: data.is_admin,
+    };
+
+    const res = await supabase.functions.invoke('create-teacher', { body: payload });
+
+    // 1. Check if HTTP-level error occurred
+    if (res.error) {
+      throw new Error(`Failed to create teacher: ${res.error.message}`);
+    }
+
+    // 2. Parse response properly
+    let result;
+    if (typeof res.data === 'string') {
+      result = JSON.parse(res.data);
+    } else if (res.data instanceof ArrayBuffer) {
+      const text = new TextDecoder().decode(res.data);
+      result = JSON.parse(text);
+    } else {
+      result = res.data;
+    }
+
+    // 3. Check function-level error
+    if (!result?.ok) {
+      throw new Error(result?.error || 'Create operation failed');
+    }
+
+    return result;
+  },
+
+  onSuccess: (result) => {
+    queryClient.invalidateQueries({ queryKey: ['teachers'] });
+    setShowAddModal(false);
+    setEditingTeacher(null);
+    resetForm();
+
+    let message = "Teacher was successfully created!";
+    if (!formData.password) message += " A temporary password was auto-generated.";
+
+    setCreationSuccess(message);
+    setTimeout(() => setCreationSuccess(null), 3500);
+
+    toast({
+      title: 'Teacher created',
+      description: 'The teacher was added successfully.',
+      variant: 'default'
+    });
+  },
+
+  onError: (err: Error) => {
+    setFormError(err.message);
+    toast({
+      title: 'Create failed',
+      description: err.message,
+      variant: 'destructive'
+    });
+  },
 });
 
-      if (res.error) {
-        throw new Error(`Failed to create teacher: ${res.error.message}`);
-      }
-
-      const result = res.data;
-      
-      if (!result?.ok) {
-        throw new Error(result?.error || 'Create operation failed');
-      }
-
-      return result;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teachers'] });
-      setShowAddModal(false);
-      setEditingTeacher(null);
-      resetForm();
-      setCreationSuccess("Teacher was successfully created!");
-      setTimeout(() => setCreationSuccess(null), 3500);
-      toast({ title: 'Teacher created', description: 'The teacher was added successfully.' });
-    },
-    onError: (err: Error) => {
-      setFormError(err.message);
-      toast({ 
-        title: 'Create failed', 
-        description: err.message,
-        variant: 'destructive'
-      });
-    },
-  });
 
   // Update teacher basic info
   const updateMutation = useMutation({
@@ -323,8 +345,8 @@ export default function TeachersSection() {
     mutationFn: async ({ teacherId, authId }: { teacherId: string; authId?: string }) => {
       const payload = { teacherId, userId: authId };
       const res = await supabase.functions.invoke('delete-teacher', { 
-        body: JSON.stringify(payload) 
-      });
+  body: JSON.stringify(payload) 
+});
       
       if (res.error) {
         throw new Error(`Failed to delete teacher: ${res.error.message}`);

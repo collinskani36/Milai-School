@@ -158,30 +158,7 @@ export default function FeeBalanceOverview({ studentFee, isLoading = false }) {
         </CardContent>
       </Card>
 
-      {/* Database Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <div className="p-2 rounded-lg bg-blue-100 mr-3">
-            <CreditCard className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-blue-800">Credit System Notice</h4>
-            <p className="text-sm text-blue-600 mt-1">
-              All calculations are handled by the database system. Overpayments are automatically stored as credit and applied to future terms.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-xs text-blue-500">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Outstanding balance includes any available credit</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                <span>Credit is applied automatically to new term fees</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 }
