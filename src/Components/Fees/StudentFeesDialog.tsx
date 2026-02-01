@@ -18,12 +18,23 @@ import BankDetailsCard from "@/Components/Fees/BankDetailsCard";
 import FeeBreakdownCard from "@/Components/Fees/FeeBreakdownCard";
 import TermHistoryCard from "@/Components/Fees/TermHistoryCard";
 
-export default function StudentFeesDialog({ 
-  onClose, 
-  studentData, 
-  classId, 
-  className 
-}) {
+interface StudentFeesDialogProps {
+  onClose: () => void;
+  studentData: any;
+  classId: string;
+  className: string;
+  isMobileTab: boolean;
+}
+
+
+export default function StudentFeesDialog({
+  onClose,
+  studentData,
+  classId,
+  className,
+  isMobileTab,
+}: StudentFeesDialogProps) {
+
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
   const [selectedYear, setSelectedYear] = useState('2024-2025');

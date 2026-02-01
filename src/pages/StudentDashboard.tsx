@@ -1,5 +1,5 @@
 // StudentDashboard.tsx (updated with 5 mobile bottom tabs)
-import { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
@@ -11,9 +11,9 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "@/Components/ui/input";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
-// Lazy load the extracted components
-const Assessments = lazy(() => import("./assessments"));
-const AssignmentAnnouncement = lazy(() => import("./assignment_announcement"));
+// Import components directly (NOT lazy loaded)
+import Assessments from "./assessments";
+import AssignmentAnnouncement from "./assignment_announcement";
 
 // Import the new Fees Dialog
 import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
@@ -25,10 +25,20 @@ interface AttendanceData {
   records: any[];
 }
 
+interface StudentProfile {
+  id: string;
+  reg_no: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  guardian_phone?: string;
+}
+
 export default function StudentDashboard({ handleLogout }) {
   // State for main dashboard only
   const [studentId, setStudentId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [student, setStudent] = useState<any>(null);
@@ -42,7 +52,13 @@ export default function StudentDashboard({ handleLogout }) {
   // Tab state for mobile navigation (5 tabs)
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
 
-  // Modal states for lazy-loaded components (used in web view)
+  // Tab content states
+  const [showAssessments, setShowAssessments] = useState(false);
+  const [showAssignments, setShowAssignments] = useState(false);
+  const [showFees, setShowFees] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Modal states for web view (for backward compatibility)
   const [isAssessmentsOpen, setIsAssessmentsOpen] = useState(false);
   const [isAssignmentsAnnouncementsOpen, setIsAssignmentsAnnouncementsOpen] = useState(false);
 
@@ -56,9 +72,26 @@ export default function StudentDashboard({ handleLogout }) {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
 
-  // Fees dialog state
+  // Fees dialog state for web view
   const [isFeesDialogOpen, setIsFeesDialogOpen] = useState(false);
   const [feesStudentData, setFeesStudentData] = useState<any>(null);
+
+  // Handle tab switching (similar to teacher dashboard)
+  const handleTabSwitch = (tab: "overview" | "assessments" | "assignments" | "fees" | "settings") => {
+    setActiveTab(tab);
+    
+    // Close all tab content first
+    setShowAssessments(false);
+    setShowAssignments(false);
+    setShowFees(false);
+    setShowSettings(false);
+    
+    // Open the selected tab content
+    if (tab === "assessments") setShowAssessments(true);
+    else if (tab === "assignments") setShowAssignments(true);
+    else if (tab === "fees") setShowFees(true);
+    else if (tab === "settings") setShowSettings(true);
+  };
 
   // Helper to normalize relation fields
   const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
@@ -66,7 +99,7 @@ export default function StudentDashboard({ handleLogout }) {
     return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
   };
 
-  // Fetch student profile (only essential data)
+  // Fetch student profile (only essential data) - SIMILAR TO TEACHER DASHBOARD
   useEffect(() => {
     const fetchStudentData = async () => {
       setLoading(true);
@@ -202,6 +235,8 @@ export default function StudentDashboard({ handleLogout }) {
 
   // Handle fees management
   const handleFeesManagement = () => {
+    if (!profile || !student) return;
+    
     setFeesStudentData({
       ...student,
       first_name: profile?.first_name,
@@ -330,11 +365,7 @@ export default function StudentDashboard({ handleLogout }) {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (window.innerWidth < 768) {
-                    setActiveTab("fees");
-                  } else {
-                    handleFeesManagement();
-                  }
+                  handleFeesManagement();
                 }}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
               >
@@ -346,11 +377,7 @@ export default function StudentDashboard({ handleLogout }) {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (window.innerWidth < 768) {
-                    setActiveTab("settings");
-                  } else {
-                    setIsSettingsOpen(true);
-                  }
+                  setIsSettingsOpen(true);
                 }}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
               >
@@ -420,13 +447,7 @@ export default function StudentDashboard({ handleLogout }) {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-left h-auto py-2 hover:bg-maroon/5"
-                onClick={() => {
-                  if (window.innerWidth < 768) {
-                    setActiveTab("assessments");
-                  } else {
-                    setIsAssessmentsOpen(true);
-                  }
-                }}
+                onClick={() => handleTabSwitch("assessments")}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -441,13 +462,7 @@ export default function StudentDashboard({ handleLogout }) {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-left h-auto py-2 hover:bg-maroon/5"
-                onClick={() => {
-                  if (window.innerWidth < 768) {
-                    setActiveTab("assignments");
-                  } else {
-                    setIsAssignmentsAnnouncementsOpen(true);
-                  }
-                }}
+                onClick={() => handleTabSwitch("assignments")}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -516,13 +531,7 @@ export default function StudentDashboard({ handleLogout }) {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Button
-              onClick={() => {
-                if (window.innerWidth < 768) {
-                  setActiveTab("assessments");
-                } else {
-                  setIsAssessmentsOpen(true);
-                }
-              }}
+              onClick={() => setIsAssessmentsOpen(true)}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <BarChart3 className="h-8 w-8 mb-2" />
@@ -531,13 +540,7 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={() => {
-                if (window.innerWidth < 768) {
-                  setActiveTab("assignments");
-                } else {
-                  setIsAssignmentsAnnouncementsOpen(true);
-                }
-              }}
+              onClick={() => setIsAssignmentsAnnouncementsOpen(true)}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <Bell className="h-8 w-8 mb-2" />
@@ -546,13 +549,7 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={() => {
-                if (window.innerWidth < 768) {
-                  setActiveTab("fees");
-                } else {
-                  handleFeesManagement();
-                }
-              }}
+              onClick={handleFeesManagement}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <CreditCard className="h-8 w-8 mb-2" />
@@ -561,13 +558,7 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={() => {
-                if (window.innerWidth < 768) {
-                  setActiveTab("settings");
-                } else {
-                  setIsSettingsOpen(true);
-                }
-              }}
+              onClick={() => setIsSettingsOpen(true)}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <Settings className="h-8 w-8 mb-2" />
@@ -580,90 +571,51 @@ export default function StudentDashboard({ handleLogout }) {
     </div>
   );
 
-  // Fees Content Component for Mobile Tab
-  const FeesContent = () => {
-    useEffect(() => {
-      // Load fees data when this tab is opened
-      setFeesStudentData({
-        ...student,
-        first_name: profile?.first_name,
-        last_name: profile?.last_name,
-        Reg_no: profile?.reg_no,
-        guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX"
-      });
-    }, []);
-
-    return (
-      <div className="space-y-6">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-            Fee Statement
-          </h1>
-          <p className="text-sm text-gray-600">
-            View your fee balance, payment history, and fee breakdown
-          </p>
-        </div>
-
-        {feesStudentData && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <StudentFeesDialog 
-              onClose={() => setActiveTab("overview")}
-              studentData={feesStudentData}
-              classId={classId}
-              className={className}
-              isMobileTab={true}
-            />
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Settings Content Component for Mobile Tab
   const SettingsContent = () => {
-    const [currentPassword, setCurrentPassword] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [mobileCurrentPassword, setMobileCurrentPassword] = useState("");
+    const [mobileNewPassword, setMobileNewPassword] = useState("");
+    const [mobileConfirmPassword, setMobileConfirmPassword] = useState("");
+    const [mobilePasswordLoading, setMobilePasswordLoading] = useState(false);
 
     const handleMobilePasswordUpdate = async (e: React.FormEvent) => {
       e.preventDefault();
-      setPasswordLoading(true);
+      setMobilePasswordLoading(true);
 
-      if (newPassword !== confirmPassword) {
+      if (mobileNewPassword !== mobileConfirmPassword) {
         alert("New passwords do not match!");
-        setPasswordLoading(false);
+        setMobilePasswordLoading(false);
         return;
       }
 
       try {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: profile.email,
-          password: currentPassword,
+          password: mobileCurrentPassword,
         });
 
         if (signInError) {
           alert("Current password is incorrect. Please try again.");
-          setPasswordLoading(false);
+          setMobilePasswordLoading(false);
           return;
         }
 
         const { error: updateError } = await supabase.auth.updateUser({
-          password: newPassword
+          password: mobileNewPassword
         });
 
         if (updateError) throw updateError;
 
         alert("Password updated successfully!");
         
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
+        setMobileCurrentPassword("");
+        setMobileNewPassword("");
+        setMobileConfirmPassword("");
 
       } catch (error: any) {
         alert(error.message || "An error occurred while updating password");
       } finally {
-        setPasswordLoading(false);
+        setMobilePasswordLoading(false);
       }
     };
 
@@ -738,10 +690,10 @@ export default function StudentDashboard({ handleLogout }) {
                     <Input
                       id="mobileCurrentPassword"
                       type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      value={mobileCurrentPassword}
+                      onChange={(e) => setMobileCurrentPassword(e.target.value)}
                       placeholder="Verify current password"
-                      disabled={passwordLoading}
+                      disabled={mobilePasswordLoading}
                       className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-11 text-sm"
                     />
                   </div>
@@ -756,10 +708,10 @@ export default function StudentDashboard({ handleLogout }) {
                     <Input
                       id="mobileNewPassword"
                       type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      value={mobileNewPassword}
+                      onChange={(e) => setMobileNewPassword(e.target.value)}
                       placeholder="Min. 6 characters"
-                      disabled={passwordLoading}
+                      disabled={mobilePasswordLoading}
                       className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
                     />
                   </div>
@@ -772,10 +724,10 @@ export default function StudentDashboard({ handleLogout }) {
                     <Input
                       id="mobileConfirmPassword"
                       type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      value={mobileConfirmPassword}
+                      onChange={(e) => setMobileConfirmPassword(e.target.value)}
                       placeholder="Repeat new password"
-                      disabled={passwordLoading}
+                      disabled={mobilePasswordLoading}
                       className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
                     />
                   </div>
@@ -783,9 +735,9 @@ export default function StudentDashboard({ handleLogout }) {
                   <Button
                     type="submit"
                     className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-4 shadow-md transition-all active:scale-95 text-sm"
-                    disabled={passwordLoading}
+                    disabled={mobilePasswordLoading}
                   >
-                    {passwordLoading ? (
+                    {mobilePasswordLoading ? (
                       <div className="flex items-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                         Verifying Security...
@@ -822,7 +774,7 @@ export default function StudentDashboard({ handleLogout }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab("overview")}
+              onClick={() => handleTabSwitch("overview")}
               className="flex items-center gap-2 mb-4 sm:hidden"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -839,19 +791,17 @@ export default function StudentDashboard({ handleLogout }) {
               </p>
             </div>
 
-            {/* Assessments Content */}
-            <Suspense fallback={<div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon"></div>
-            </div>}>
+            {/* Assessments Content - LOADED IMMEDIATELY like teacher dashboard */}
+            {showAssessments && (
               <Assessments
                 studentId={studentId}
                 classId={classId}
                 className={className}
                 profile={profile}
                 isOpen={true}
-                onClose={() => setActiveTab("overview")}
+                onClose={() => handleTabSwitch("overview")}
               />
-            </Suspense>
+            )}
           </div>
         ) : activeTab === "assignments" ? (
           /* Assignments Tab - Full screen focus on mobile */
@@ -860,7 +810,7 @@ export default function StudentDashboard({ handleLogout }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab("overview")}
+              onClick={() => handleTabSwitch("overview")}
               className="flex items-center gap-2 mb-4 sm:hidden"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -877,16 +827,14 @@ export default function StudentDashboard({ handleLogout }) {
               </p>
             </div>
 
-            {/* Assignments Content */}
-            <Suspense fallback={<div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon"></div>
-            </div>}>
+            {/* Assignments Content - LOADED IMMEDIATELY like teacher dashboard */}
+            {showAssignments && (
               <AssignmentAnnouncement
                 classId={classId}
                 isOpen={true}
-                onClose={() => setActiveTab("overview")}
+                onClose={() => handleTabSwitch("overview")}
               />
-            </Suspense>
+            )}
           </div>
         ) : activeTab === "fees" ? (
           /* Fees Tab - Full screen focus on mobile */
@@ -895,15 +843,40 @@ export default function StudentDashboard({ handleLogout }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab("overview")}
+              onClick={() => handleTabSwitch("overview")}
               className="flex items-center gap-2 mb-4 sm:hidden"
             >
               <ChevronLeft className="h-4 w-4" />
               Back to Overview
             </Button>
 
-            {/* Fees Content */}
-            <FeesContent />
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Fee Statement
+              </h1>
+              <p className="text-sm text-gray-600">
+                View your fee balance, payment history, and fee breakdown
+              </p>
+            </div>
+
+            {/* Fees Content - LOADED IMMEDIATELY like teacher dashboard */}
+            {showFees && profile && student && (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <StudentFeesDialog 
+                  onClose={() => handleTabSwitch("overview")}
+                  studentData={{
+                    ...student,
+                    first_name: profile?.first_name,
+                    last_name: profile?.last_name,
+                    Reg_no: profile?.reg_no,
+                    guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX"
+                  }}
+                  classId={classId}
+                  className={className}
+                  isMobileTab={true}
+                />
+              </div>
+            )}
           </div>
         ) : activeTab === "settings" ? (
           /* Settings Tab - Full screen focus on mobile */
@@ -912,44 +885,40 @@ export default function StudentDashboard({ handleLogout }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab("overview")}
+              onClick={() => handleTabSwitch("overview")}
               className="flex items-center gap-2 mb-4 sm:hidden"
             >
               <ChevronLeft className="h-4 w-4" />
               Back to Overview
             </Button>
 
-            {/* Settings Content */}
-            <SettingsContent />
+            {/* Settings Content - LOADED IMMEDIATELY like teacher dashboard */}
+            {showSettings && <SettingsContent />}
           </div>
         ) : null}
       </div>
 
-      {/* LAZY-LOADED MODALS FOR WEB VIEW */}
-      <Suspense fallback={<div className="fixed inset-0 bg-white/80 flex items-center justify-center z-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-maroon"></div>
-      </div>}>
-        {/* Assessments Modal - For web view only */}
-        {isAssessmentsOpen && (
-          <Assessments
-            studentId={studentId}
-            classId={classId}
-            className={className}
-            profile={profile}
-            isOpen={isAssessmentsOpen}
-            onClose={() => setIsAssessmentsOpen(false)}
-          />
-        )}
+      {/* MODALS FOR WEB VIEW (not lazy loaded) */}
+      {/* Assessments Modal - For web view only */}
+      {isAssessmentsOpen && (
+        <Assessments
+          studentId={studentId}
+          classId={classId}
+          className={className}
+          profile={profile}
+          isOpen={isAssessmentsOpen}
+          onClose={() => setIsAssessmentsOpen(false)}
+        />
+      )}
 
-        {/* Assignments & Announcements Modal - For web view only */}
-        {isAssignmentsAnnouncementsOpen && (
-          <AssignmentAnnouncement
-            classId={classId}
-            isOpen={isAssignmentsAnnouncementsOpen}
-            onClose={() => setIsAssignmentsAnnouncementsOpen(false)}
-          />
-        )}
-      </Suspense>
+      {/* Assignments & Announcements Modal - For web view only */}
+      {isAssignmentsAnnouncementsOpen && (
+        <AssignmentAnnouncement
+          classId={classId}
+          isOpen={isAssignmentsAnnouncementsOpen}
+          onClose={() => setIsAssignmentsAnnouncementsOpen(false)}
+        />
+      )}
 
       {/* FEES DIALOG - For web view only */}
       <Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
@@ -965,8 +934,7 @@ export default function StudentDashboard({ handleLogout }) {
             onClose={() => setIsFeesDialogOpen(false)}
             studentData={feesStudentData}
             classId={classId}
-            className={className}
-          />
+            className={className} isMobileTab={false}          />
         </DialogContent>
       </Dialog>
 
@@ -1114,7 +1082,7 @@ export default function StudentDashboard({ handleLogout }) {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 sm:hidden z-50 shadow-lg">
         <div className="flex justify-around items-center h-16">
           <button
-            onClick={() => setActiveTab("overview")}
+            onClick={() => handleTabSwitch("overview")}
             className={`flex flex-col items-center justify-center flex-1 h-full ${
               activeTab === "overview" 
                 ? "text-maroon border-t-2 border-maroon" 
@@ -1126,7 +1094,7 @@ export default function StudentDashboard({ handleLogout }) {
           </button>
           
           <button
-            onClick={() => setActiveTab("assessments")}
+            onClick={() => handleTabSwitch("assessments")}
             className={`flex flex-col items-center justify-center flex-1 h-full ${
               activeTab === "assessments" 
                 ? "text-maroon border-t-2 border-maroon" 
@@ -1138,7 +1106,7 @@ export default function StudentDashboard({ handleLogout }) {
           </button>
           
           <button
-            onClick={() => setActiveTab("assignments")}
+            onClick={() => handleTabSwitch("assignments")}
             className={`flex flex-col items-center justify-center flex-1 h-full ${
               activeTab === "assignments" 
                 ? "text-maroon border-t-2 border-maroon" 
@@ -1150,7 +1118,7 @@ export default function StudentDashboard({ handleLogout }) {
           </button>
 
           <button
-            onClick={() => setActiveTab("fees")}
+            onClick={() => handleTabSwitch("fees")}
             className={`flex flex-col items-center justify-center flex-1 h-full ${
               activeTab === "fees" 
                 ? "text-maroon border-t-2 border-maroon" 
@@ -1162,7 +1130,7 @@ export default function StudentDashboard({ handleLogout }) {
           </button>
 
           <button
-            onClick={() => setActiveTab("settings")}
+            onClick={() => handleTabSwitch("settings")}
             className={`flex flex-col items-center justify-center flex-1 h-full ${
               activeTab === "settings" 
                 ? "text-maroon border-t-2 border-maroon" 
