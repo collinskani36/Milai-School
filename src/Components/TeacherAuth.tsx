@@ -17,14 +17,13 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Scroll input into view
   const scrollIntoView = (ref: React.RefObject<HTMLInputElement>) => {
     setTimeout(() => {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
   };
 
-  // Adjust container height when keyboard opens (Expo Go WebView)
+  // Scroll container height based on viewport (Expo Go / Mobile)
   useEffect(() => {
     const updateHeight = () => {
       const vh = window.visualViewport?.height || window.innerHeight;
@@ -32,15 +31,9 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         containerRef.current.style.height = `${vh}px`;
       }
     };
-
     window.visualViewport?.addEventListener("resize", updateHeight);
-
-    // Initial height
     updateHeight();
-
-    return () => {
-      window.visualViewport?.removeEventListener("resize", updateHeight);
-    };
+    return () => window.visualViewport?.removeEventListener("resize", updateHeight);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -91,7 +84,18 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   return (
     <div
       ref={containerRef}
-      className="flex flex-col items-center justify-center w-full p-4 overflow-auto bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617]"
+      className="
+        flex w-full p-4 overflow-auto bg-[#020617] 
+        bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617]
+        min-h-screen
+        flex-col justify-center
+        md:justify-center
+        md:items-center
+      "
+      style={{
+        justifyContent: window.innerWidth < 768 ? "flex-start" : "center",
+        paddingTop: window.innerWidth < 768 ? "60px" : "0px"
+      }}
     >
       <div className="relative w-full max-w-sm p-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-visible">
 
