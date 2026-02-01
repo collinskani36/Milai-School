@@ -1,4 +1,4 @@
-// StudentDashboard.tsx (updated with mobile bottom tabs)
+// StudentDashboard.tsx (updated with 5 mobile bottom tabs)
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";
@@ -39,8 +39,8 @@ export default function StudentDashboard({ handleLogout }) {
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const navigate = useNavigate();
 
-  // Tab state for mobile navigation
-  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments">("overview");
+  // Tab state for mobile navigation (5 tabs)
+  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
 
   // Modal states for lazy-loaded components (used in web view)
   const [isAssessmentsOpen, setIsAssessmentsOpen] = useState(false);
@@ -329,7 +329,13 @@ export default function StudentDashboard({ handleLogout }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleFeesManagement}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setActiveTab("fees");
+                  } else {
+                    handleFeesManagement();
+                  }
+                }}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
               >
                 <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -339,7 +345,13 @@ export default function StudentDashboard({ handleLogout }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsSettingsOpen(true)}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setActiveTab("settings");
+                  } else {
+                    setIsSettingsOpen(true);
+                  }
+                }}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
               >
                 <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -359,8 +371,40 @@ export default function StudentDashboard({ handleLogout }) {
         </div>
       </div>
 
-      {/* DASHBOARD SUMMARY CARDS */}
+      {/* DASHBOARD SUMMARY CARDS - REARRANGED: Today's Summary comes before Quick Access */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Today's Summary Card - Now first */}
+        <Card className="border-l-4 border-l-green-500 bg-white">
+          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+              <Target className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
+            </div>
+            <div>
+              <CardTitle className="text-base sm:text-lg text-gray-900">Today's Summary</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-gray-600">Your current status</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                <span className="text-xs sm:text-sm text-gray-700">Attendance Today</span>
+                <Badge variant="outline" className="border-green-200 text-green-700 text-xs">
+                  {attendanceData?.presentDays || 0} days
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                <span className="text-xs sm:text-sm text-gray-700">Class</span>
+                <span className="text-xs sm:text-sm font-medium text-gray-900">{className}</span>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                <span className="text-xs sm:text-sm text-gray-700">Student ID</span>
+                <span className="text-xs sm:text-sm font-medium text-gray-900">{profile?.reg_no}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Access Card - Now second */}
         <Card className="bg-maroon-50 border-l-4 border-l-maroon">
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
@@ -419,36 +463,7 @@ export default function StudentDashboard({ handleLogout }) {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500 bg-white">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <Target className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-            </div>
-            <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Today's Summary</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">Your current status</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="space-y-2 sm:space-y-3">
-              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Attendance Today</span>
-                <Badge variant="outline" className="border-green-200 text-green-700 text-xs">
-                  {attendanceData?.presentDays || 0} days
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Class</span>
-                <span className="text-xs sm:text-sm font-medium text-gray-900">{className}</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Student ID</span>
-                <span className="text-xs sm:text-sm font-medium text-gray-900">{profile?.reg_no}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+        {/* Attendance Card - Now third */}
         <Card className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
@@ -501,7 +516,13 @@ export default function StudentDashboard({ handleLogout }) {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Button
-              onClick={() => setIsAssessmentsOpen(true)}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setActiveTab("assessments");
+                } else {
+                  setIsAssessmentsOpen(true);
+                }
+              }}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <BarChart3 className="h-8 w-8 mb-2" />
@@ -510,7 +531,13 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={() => setIsAssignmentsAnnouncementsOpen(true)}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setActiveTab("assignments");
+                } else {
+                  setIsAssignmentsAnnouncementsOpen(true);
+                }
+              }}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <Bell className="h-8 w-8 mb-2" />
@@ -519,7 +546,13 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={handleFeesManagement}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setActiveTab("fees");
+                } else {
+                  handleFeesManagement();
+                }
+              }}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <CreditCard className="h-8 w-8 mb-2" />
@@ -528,7 +561,13 @@ export default function StudentDashboard({ handleLogout }) {
             </Button>
             
             <Button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setActiveTab("settings");
+                } else {
+                  setIsSettingsOpen(true);
+                }
+              }}
               className="flex flex-col items-center justify-center h-24 bg-white hover:bg-maroon hover:text-white transition-all border border-maroon/20"
             >
               <Settings className="h-8 w-8 mb-2" />
@@ -541,8 +580,234 @@ export default function StudentDashboard({ handleLogout }) {
     </div>
   );
 
+  // Fees Content Component for Mobile Tab
+  const FeesContent = () => {
+    useEffect(() => {
+      // Load fees data when this tab is opened
+      setFeesStudentData({
+        ...student,
+        first_name: profile?.first_name,
+        last_name: profile?.last_name,
+        Reg_no: profile?.reg_no,
+        guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX"
+      });
+    }, []);
+
+    return (
+      <div className="space-y-6">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Fee Statement
+          </h1>
+          <p className="text-sm text-gray-600">
+            View your fee balance, payment history, and fee breakdown
+          </p>
+        </div>
+
+        {feesStudentData && (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <StudentFeesDialog 
+              onClose={() => setActiveTab("overview")}
+              studentData={feesStudentData}
+              classId={classId}
+              className={className}
+              isMobileTab={true}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Settings Content Component for Mobile Tab
+  const SettingsContent = () => {
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [passwordLoading, setPasswordLoading] = useState(false);
+
+    const handleMobilePasswordUpdate = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setPasswordLoading(true);
+
+      if (newPassword !== confirmPassword) {
+        alert("New passwords do not match!");
+        setPasswordLoading(false);
+        return;
+      }
+
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: profile.email,
+          password: currentPassword,
+        });
+
+        if (signInError) {
+          alert("Current password is incorrect. Please try again.");
+          setPasswordLoading(false);
+          return;
+        }
+
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+
+        if (updateError) throw updateError;
+
+        alert("Password updated successfully!");
+        
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+
+      } catch (error: any) {
+        alert(error.message || "An error occurred while updating password");
+      } finally {
+        setPasswordLoading(false);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Account Settings
+          </h1>
+          <p className="text-sm text-gray-600">
+            Update your account password and security settings
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20">
+            <CardContent className="p-4">
+              <h4 className="font-semibold text-lg text-gray-900 mb-3 flex items-center">
+                <User className="h-5 w-5 mr-2 text-maroon" />
+                Student Information
+              </h4>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                  <span className="font-medium text-gray-700">Name:</span>
+                  <span className="text-gray-900">{profile?.first_name} {profile?.last_name}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                  <span className="font-medium text-gray-700">Student ID:</span>
+                  <span className="text-gray-900 font-mono">{profile?.reg_no}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                  <span className="font-medium text-gray-700">Class:</span>
+                  <span className="text-gray-900">{className}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                  <span className="font-medium text-gray-700">Email:</span>
+                  <span className="text-gray-900 text-sm truncate max-w-[150px]">{profile?.email}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-maroon/20 overflow-hidden shadow-lg">
+            <CardContent className="p-0">
+              <div className="bg-maroon p-4 text-white flex items-center justify-between">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Settings className="h-5 w-5 mr-2" />
+                  Change Password
+                </h3>
+                <ShieldAlert className="h-5 w-5 text-maroon-light opacity-50" />
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start">
+                  <div className="bg-amber-100 p-1.5 rounded-full">
+                    <ShieldAlert className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
+                    <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
+                      To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleMobilePasswordUpdate} className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="mobileCurrentPassword" className="text-sm font-bold text-gray-800 flex items-center">
+                      <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
+                      Current Password
+                    </label>
+                    <Input
+                      id="mobileCurrentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Verify current password"
+                      disabled={passwordLoading}
+                      className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-11 text-sm"
+                    />
+                  </div>
+
+                  <div className="h-px bg-gray-100 w-full" />
+
+                  <div className="space-y-2">
+                    <label htmlFor="mobileNewPassword" className="text-sm font-medium text-gray-700 flex items-center">
+                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                      New Password
+                    </label>
+                    <Input
+                      id="mobileNewPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min. 6 characters"
+                      disabled={passwordLoading}
+                      className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="mobileConfirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
+                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                      Confirm New Password
+                    </label>
+                    <Input
+                      id="mobileConfirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repeat new password"
+                      disabled={passwordLoading}
+                      className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-4 shadow-md transition-all active:scale-95 text-sm"
+                    disabled={passwordLoading}
+                  >
+                    {passwordLoading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Verifying Security...
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <ShieldCheck className="h-4 w-4 mr-2" />
+                        Secure My Account
+                      </div>
+                    )}
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-white touch-manipulation pb-16 sm:pb-0">
+    <div className="min-h-screen bg-white touch-manipulation pb-20 sm:pb-0">
       <Navbar {...({ showLogout: true, handleLogout } as any)} />
       
       {/* Tab Content Area */}
@@ -623,6 +888,40 @@ export default function StudentDashboard({ handleLogout }) {
               />
             </Suspense>
           </div>
+        ) : activeTab === "fees" ? (
+          /* Fees Tab - Full screen focus on mobile */
+          <div className="space-y-4 sm:space-y-6">
+            {/* Back to Overview Button - Only shown on mobile */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab("overview")}
+              className="flex items-center gap-2 mb-4 sm:hidden"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to Overview
+            </Button>
+
+            {/* Fees Content */}
+            <FeesContent />
+          </div>
+        ) : activeTab === "settings" ? (
+          /* Settings Tab - Full screen focus on mobile */
+          <div className="space-y-4 sm:space-y-6">
+            {/* Back to Overview Button - Only shown on mobile */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab("overview")}
+              className="flex items-center gap-2 mb-4 sm:hidden"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to Overview
+            </Button>
+
+            {/* Settings Content */}
+            <SettingsContent />
+          </div>
         ) : null}
       </div>
 
@@ -652,7 +951,7 @@ export default function StudentDashboard({ handleLogout }) {
         )}
       </Suspense>
 
-      {/* FEES DIALOG */}
+      {/* FEES DIALOG - For web view only */}
       <Dialog open={isFeesDialogOpen} onOpenChange={setIsFeesDialogOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-hidden p-0 border-maroon/20 bg-white mx-2">
           <VisuallyHidden>
@@ -671,7 +970,7 @@ export default function StudentDashboard({ handleLogout }) {
         </DialogContent>
       </Dialog>
 
-      {/* SETTINGS MODAL */}
+      {/* SETTINGS MODAL - For web view only */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[80vh] overflow-y-auto bg-white mx-2">
           <DialogHeader className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200">
@@ -811,7 +1110,7 @@ export default function StudentDashboard({ handleLogout }) {
         </DialogContent>
       </Dialog>
 
-      {/* Bottom Navigation Bar for Mobile */}
+      {/* Bottom Navigation Bar for Mobile - Now with 5 tabs */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 sm:hidden z-50 shadow-lg">
         <div className="flex justify-around items-center h-16">
           <button
@@ -848,6 +1147,30 @@ export default function StudentDashboard({ handleLogout }) {
           >
             <Bell className="h-5 w-5 mb-1" />
             <span className="text-xs">Assignments</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("fees")}
+            className={`flex flex-col items-center justify-center flex-1 h-full ${
+              activeTab === "fees" 
+                ? "text-maroon border-t-2 border-maroon" 
+                : "text-gray-500"
+            }`}
+          >
+            <CreditCard className="h-5 w-5 mb-1" />
+            <span className="text-xs">Fees</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex flex-col items-center justify-center flex-1 h-full ${
+              activeTab === "settings" 
+                ? "text-maroon border-t-2 border-maroon" 
+                : "text-gray-500"
+            }`}
+          >
+            <Settings className="h-5 w-5 mb-1" />
+            <span className="text-xs">Settings</span>
           </button>
         </div>
       </div>
