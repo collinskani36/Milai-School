@@ -12,7 +12,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
+import TeacherDashboard from "./Components/teacher-dashboard/TeacherDashboard";
+
 import Index from "./pages/Index";
 import StudentAuth from "./Components/StudentAuth";
 import TeacherAuth from "./Components/TeacherAuth";

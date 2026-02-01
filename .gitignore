@@ -23,3 +23,14 @@ dist-ssr
 *.sln
 *.sw?
 .env
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/.local/
+supabase/.env
+supabase/.env.*
+supabase/.postgres/
+supabase/migrations/
+schema.sql
+# Accidental local project folder
+sidra_school_portal/
