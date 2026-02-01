@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
@@ -13,24 +13,15 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Scroll input into view on focus for WebView mobile
-  useEffect(() => {
-    const handleFocus = (e: any) => {
-      const target = e.target;
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
-    };
+  const containerRef = useRef<HTMLDivElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
-    const inputs = document.querySelectorAll("input");
-    inputs.forEach((input) => input.addEventListener("focus", handleFocus));
-
-    return () => {
-      inputs.forEach((input) =>
-        input.removeEventListener("focus", handleFocus)
-      );
-    };
-  }, []);
+  const scrollIntoView = (ref: React.RefObject<HTMLInputElement>) => {
+    setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +50,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         return;
       }
 
-      if (typeof onLogin === "function") onLogin(teacherRecord);
+      if (onLogin) onLogin(teacherRecord);
 
       if (
         teacherRecord.is_admin === true ||
@@ -78,10 +69,13 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] p-4">
-      <div className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl p-6 w-full max-w-sm relative overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex items-center justify-center min-h-screen p-4 bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] overflow-auto"
+    >
+      <div className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl p-6 w-full max-w-sm relative overflow-visible">
 
-        {/* Background glow with blue shade */}
+        {/* Background glow */}
         <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#3b82f6]/20 blur-3xl rounded-full" />
 
         {/* Logo */}
@@ -109,18 +103,22 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-4">
           <input
+            ref={emailRef}
             type="email"
             placeholder="Email Address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onFocus={() => scrollIntoView(emailRef)}
             className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all"
             required
           />
           <input
+            ref={passwordRef}
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onFocus={() => scrollIntoView(passwordRef)}
             className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all"
             required
           />
