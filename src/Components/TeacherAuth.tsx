@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
@@ -17,11 +17,31 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
+  // Scroll input into view
   const scrollIntoView = (ref: React.RefObject<HTMLInputElement>) => {
     setTimeout(() => {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 100);
+    }, 50);
   };
+
+  // Adjust container height when keyboard opens (Expo Go WebView)
+  useEffect(() => {
+    const updateHeight = () => {
+      const vh = window.visualViewport?.height || window.innerHeight;
+      if (containerRef.current) {
+        containerRef.current.style.height = `${vh}px`;
+      }
+    };
+
+    window.visualViewport?.addEventListener("resize", updateHeight);
+
+    // Initial height
+    updateHeight();
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateHeight);
+    };
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,9 +91,9 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   return (
     <div
       ref={containerRef}
-      className="flex items-center justify-center min-h-screen p-4 bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] overflow-auto"
+      className="flex flex-col items-center justify-center w-full p-4 overflow-auto bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617]"
     >
-      <div className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl p-6 w-full max-w-sm relative overflow-visible">
+      <div className="relative w-full max-w-sm p-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-visible">
 
         {/* Background glow */}
         <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#3b82f6]/20 blur-3xl rounded-full" />
@@ -101,7 +121,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         )}
 
         {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="flex flex-col space-y-4">
           <input
             ref={emailRef}
             type="email"
