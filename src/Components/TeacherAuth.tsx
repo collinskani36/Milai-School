@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
@@ -11,9 +11,9 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const navigate = useNavigate();
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
@@ -22,19 +22,6 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
   };
-
-  // Scroll container height based on viewport (Expo Go / Mobile)
-  useEffect(() => {
-    const updateHeight = () => {
-      const vh = window.visualViewport?.height || window.innerHeight;
-      if (containerRef.current) {
-        containerRef.current.style.height = `${vh}px`;
-      }
-    };
-    window.visualViewport?.addEventListener("resize", updateHeight);
-    updateHeight();
-    return () => window.visualViewport?.removeEventListener("resize", updateHeight);
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +50,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         return;
       }
 
-      if (onLogin) onLogin(teacherRecord);
+      onLogin?.(teacherRecord);
 
       if (
         teacherRecord.is_admin === true ||
@@ -83,43 +70,40 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
 
   return (
     <div
-      ref={containerRef}
       className="
-        flex w-full p-4 overflow-auto bg-[#020617] 
-        bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617]
-        min-h-screen
-        flex-col justify-center
-        md:justify-center
-        md:items-center
+        flex min-h-screen w-full
+        items-center justify-center
+        p-4
+        bg-gradient-to-br from-[#f6f2f2] via-[#fdfbfb] to-[#f3eded]
       "
-      style={{
-        justifyContent: window.innerWidth < 768 ? "flex-start" : "center",
-        paddingTop: window.innerWidth < 768 ? "60px" : "0px"
-      }}
     >
-      <div className="relative w-full max-w-sm p-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-visible">
+      <div className="relative w-full max-w-sm p-6 bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl">
 
-        {/* Background glow */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#3b82f6]/20 blur-3xl rounded-full" />
+        {/* Subtle maroon glow */}
+        {/* Subtle maroon glow */}
+<div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
 
-        {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <div className="p-2 bg-[#3b82f6]/20 rounded-2xl border border-[#3b82f6]/40">
-            <img src="/logo.png" alt="School Logo" className="w-16 h-16 object-contain" />
-          </div>
-        </div>
+{/* Logo */}
+<div className="flex justify-center mb-6">
+  <img
+    src="/logo.png"
+    alt="School Logo"
+    className="w-16 h-16 object-contain"
+  />
+</div>
+
 
         {/* Title */}
-        <h2 className="text-2xl font-extrabold text-center text-white mb-2 tracking-tight">
+        <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">
           Teacher Login
         </h2>
-        <p className="text-slate-400 text-center text-sm mb-6 font-light">
+        <p className="text-[#6b4b50] text-center text-sm mb-6 font-medium">
           Access your classroom management dashboard
         </p>
 
         {/* Error */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded-xl mb-4 text-sm text-center">
+          <div className="bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 text-[#7a1f2b] p-2 rounded-xl mb-4 text-sm text-center">
             {error}
           </div>
         )}
@@ -133,9 +117,21 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onFocus={() => scrollIntoView(emailRef)}
-            className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all"
+            className="
+              w-full px-3 py-2
+              bg-[#f6f2f2]
+              border border-[#7a1f2b]/20
+              rounded-xl
+              text-[#3a1b1f]
+              placeholder:text-[#9b7a7f]
+              focus:outline-none
+              focus:ring-2 focus:ring-[#7a1f2b]/30
+              focus:border-[#7a1f2b]
+              transition-all
+            "
             required
           />
+
           <input
             ref={passwordRef}
             type="password"
@@ -143,27 +139,62 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onFocus={() => scrollIntoView(passwordRef)}
-            className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all"
+            className="
+              w-full px-3 py-2
+              bg-[#f6f2f2]
+              border border-[#7a1f2b]/20
+              rounded-xl
+              text-[#3a1b1f]
+              placeholder:text-[#9b7a7f]
+              focus:outline-none
+              focus:ring-2 focus:ring-[#7a1f2b]/30
+              focus:border-[#7a1f2b]
+              transition-all
+            "
             required
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#3b82f6] hover:bg-[#60a5fa] active:bg-[#1e40af] text-white py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-[#3b82f6]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="
+              w-full
+              bg-[#7a1f2b]
+              hover:bg-[#6a1a24]
+              active:bg-[#5a161f]
+              text-white
+              py-2.5
+              rounded-xl
+              font-bold
+              transition-all
+              shadow-md
+              disabled:opacity-50
+              disabled:cursor-not-allowed
+            "
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2 text-sm">
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Authenticating...
               </span>
-            ) : "Login"}
+            ) : (
+              "Login"
+            )}
           </button>
         </form>
 
         {/* Forgot password */}
         <p
-          className="text-sm text-center text-[#3b82f6] cursor-pointer hover:text-[#60a5fa] hover:underline mt-4 transition-colors font-medium"
+          className="
+            text-sm text-center
+            text-[#7a1f2b]
+            cursor-pointer
+            hover:text-[#6a1a24]
+            hover:underline
+            mt-4
+            transition-colors
+            font-medium
+          "
           onClick={() => navigate("/teacher-forgot-password")}
         >
           Forgot password?

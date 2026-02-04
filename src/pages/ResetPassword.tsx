@@ -1,4 +1,3 @@
-// src/pages/ResetPassword.tsx
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -12,40 +11,33 @@ export default function ResetPassword() {
 
   const navigate = useNavigate();
 
-  // -------------------------------
-  // Step 1: Parse access token from URL and set session
-  // -------------------------------
   useEffect(() => {
-    const hash = window.location.hash; // e.g., #access_token=...&type=recovery
-    if (!hash) return;
+    const validateSession = async () => {
+      // 1. Check if the recovery type is in the URL hash
+      const hash = window.location.hash;
+      const params = new URLSearchParams(hash.replace("#", ""));
+      const isRecoveryHash = params.get("type") === "recovery";
 
-    const params = new URLSearchParams(hash.replace("#", ""));
-    const access_token = params.get("access_token");
-    const refresh_token = params.get("refresh_token");
+      if (isRecoveryHash) {
+        return; // Valid hash found, stay on page
+      }
 
-    if (access_token && refresh_token) {
-      supabase.auth
-        .setSession({ access_token, refresh_token })
-        .then(({ error }) => {
-          if (error) setError("Invalid or expired reset link");
-        });
-    } else {
-      setError("Invalid or expired reset link");
-    }
+      // 2. If hash is gone (consumed by Supabase), check for an active session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // If there's no hash AND no session, the link is truly invalid
+      if (!session) {
+        setError("Invalid or expired reset link. Please request a new one.");
+      }
+    };
+
+    validateSession();
   }, []);
 
-  // -------------------------------
-  // Step 2: Handle password reset form submission
-  // -------------------------------
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-
-    if (!password || !confirmPassword) {
-      setError("Please fill in all fields");
-      return;
-    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -60,21 +52,21 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
+      // updatePassword updates the currently logged-in user (from the recovery link)
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      setSuccess("Password reset successfully!");
+      setSuccess("Password reset successful. Redirecting to login...");
 
-      // Optional: remove token hash from URL for cleanliness
-      window.history.replaceState({}, document.title, "/login");
+      // Log out to clear the recovery session and force a fresh login
+      await supabase.auth.signOut();
 
-      // Redirect to login after short delay
       setTimeout(() => {
         navigate("/login");
       }, 2000);
     } catch (err: any) {
-      console.error("[ERROR] Reset password failed:", err);
-      setError("Failed to reset password. Please try again.");
+      console.error(err);
+      setError(err.message || "Failed to reset password");
     } finally {
       setLoading(false);
     }
@@ -88,44 +80,47 @@ export default function ResetPassword() {
         </h2>
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded mb-4">{error}</div>
+          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm text-center">
+            {error}
+          </div>
         )}
 
         {success && (
-          <div className="bg-green-100 text-green-700 p-2 rounded mb-4">{success}</div>
+          <div className="bg-green-100 text-green-700 p-3 rounded mb-4 text-sm text-center">
+            {success}
+          </div>
         )}
 
-        <form onSubmit={handleReset} className="space-y-4">
-          <input
-            type="password"
-            placeholder="New PIN / Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            required
-          />
+        {/* We only show the form if there is NO error and NO success message */}
+        {!error && !success && (
+          <form onSubmit={handleReset} className="space-y-4">
+            <input
+              type="password"
+              placeholder="New PIN / Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
+              required
+            />
 
-          <input
-            type="password"
-            placeholder="Confirm New PIN"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            required
-          />
+            <input
+              type="password"
+              placeholder="Confirm New PIN"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
+              required
+            />
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#800000] text-white py-2 rounded-lg font-semibold"
-          >
-            {loading ? "Updating..." : "Reset Password"}
-          </button>
-        </form>
-
-        <p className="text-sm text-center text-gray-600 mt-4">
-          You can close this page after resetting your password.
-        </p>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#800000] text-white py-2 rounded-lg font-semibold hover:bg-red-900 transition-colors disabled:opacity-50"
+            >
+              {loading ? "Updating..." : "Reset Password"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

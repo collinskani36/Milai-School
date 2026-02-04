@@ -24,11 +24,12 @@ import TeacherForgotPassword from "./pages/TeacherForgotPassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-    },
+    queries: { refetchOnWindowFocus: false },
   },
 });
+
+// Helper to detect recovery flow from URL
+export const isRecoveryFlow = () => window.location.hash.includes("type=recovery");
 
 function AppRoutes() {
   const navigate = useNavigate();
@@ -38,106 +39,118 @@ function AppRoutes() {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [logoutOrigin, setLogoutOrigin] = useState<"teacher" | "student" | null>(null);
+  
+  // Ref to track if the current session is strictly for password recovery
+  const recoverySession = useRef(false); 
 
   const lastCheckedId = useRef<string | null>(null);
   const isCheckingAdmin = useRef(false);
 
-  // 1. Stable Admin Check
   const checkIfAdmin = useCallback(async (authId: string) => {
     if (isCheckingAdmin.current) return;
     isCheckingAdmin.current = true;
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("teachers")
         .select("is_admin")
         .eq("auth_id", authId)
         .maybeSingle();
-
-      if (!error && data) {
-        setIsAdmin(data.is_admin === true);
-      } else {
-        setIsAdmin(false);
-      }
+      setIsAdmin(data?.is_admin === true || false);
       lastCheckedId.current = authId;
-    } catch (err) {
+    } catch {
       setIsAdmin(false);
     } finally {
       isCheckingAdmin.current = false;
     }
   }, []);
 
-  // 2. Auth Listener
+  // Auth listener + Session initialization
   useEffect(() => {
+    // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        setUser(session.user);
+        if (isRecoveryFlow()) {
+          recoverySession.current = true;
+          // Note: We DO NOT set User state here if it's recovery
+        } else {
+          setUser(session.user);
+        }
       }
       setLoading(false);
     });
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const current = session?.user ?? null;
-      setUser((prev: any) => (prev?.id === current?.id ? prev : current));
-
       if (event === "SIGNED_OUT") {
+        setUser(null);
         setIsAdmin(false);
         lastCheckedId.current = null;
+        recoverySession.current = false;
+        return;
+      }
+
+      if (session?.user) {
+        if (isRecoveryFlow()) {
+          recoverySession.current = true;
+        } else {
+          setUser((prev: any) => (prev?.id === session.user.id ? prev : session.user));
+        }
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // 3. Admin Verification Trigger
+  // Admin check logic
   useEffect(() => {
-    const isTeacherRelated = location.pathname.includes("teacher") || location.pathname.includes("admin");
+    const isTeacherRelated =
+      location.pathname.includes("teacher") ||
+      location.pathname.includes("admin");
     if (user && (isTeacherRelated || location.pathname === "/teacher-login")) {
-      if (lastCheckedId.current !== user.id) {
-        checkIfAdmin(user.id);
-      }
+      if (lastCheckedId.current !== user.id) checkIfAdmin(user.id);
     }
   }, [location.pathname, user, checkIfAdmin]);
 
-  // 4. DETERMINISTIC REDIRECTS (FIXED FOR ADMIN REDIRECT)
+  // Deterministic redirects (The Traffic Controller)
   useEffect(() => {
     if (loading) return;
 
-    const isAuthPage = 
-      location.pathname === "/login" || 
+    // GUARD: If user is on the reset page or the URL contains recovery data,
+    // we stop all automatic redirects to let ResetPassword.tsx do its job.
+    if (location.pathname === "/reset-password" || isRecoveryFlow()) {
+      return; 
+    }
+
+    const isAuthPage =
+      location.pathname === "/login" ||
       location.pathname === "/teacher-login" ||
       location.pathname === "/" ||
       location.pathname.includes("forgot-password");
 
-    if (!user) {
+    // Logic for Logged-Out users or Recovery sessions
+    if (!user || recoverySession.current) {
       if (logoutOrigin) {
         navigate(logoutOrigin === "student" ? "/login" : "/teacher-login", { replace: true });
         setLogoutOrigin(null);
       } else if (!isAuthPage) {
-          // If not logged in and trying to access protected route
-          if (location.pathname.startsWith("/student-dashboard")) navigate("/login", { replace: true });
-          if (location.pathname.startsWith("/teacher-dashboard") || location.pathname.startsWith("/admin-dashboard")) {
-              navigate("/teacher-login", { replace: true });
-          }
-      }
-    } else {
-      // Logic for Logged-In Users
-      if (location.pathname === "/login") {
-        navigate("/student-dashboard", { replace: true });
-      } 
-      
-      // Specifically handle the teacher-login to dashboard jump
-      if (location.pathname === "/teacher-login") {
-        if (isAdmin === true) {
-          navigate("/admin-dashboard", { replace: true });
-        } else if (isAdmin === false) {
-          navigate("/teacher-dashboard", { replace: true });
+        // Redirect to login if trying to access dashboard without a real session
+        if (location.pathname.startsWith("/student-dashboard")) navigate("/login", { replace: true });
+        if (location.pathname.startsWith("/teacher-dashboard") || location.pathname.startsWith("/admin-dashboard")) {
+          navigate("/teacher-login", { replace: true });
         }
-        // If isAdmin is null, we wait for the useEffect above to finish the fetch
       }
-
-      // Backup guard: If an admin is on the teacher dashboard, move them to admin
+    } 
+    // Logic for Logged-In users
+    else {
+      if (location.pathname === "/login" || location.pathname === "/") {
+        navigate("/student-dashboard", { replace: true });
+      }
+      if (location.pathname === "/teacher-login") {
+        if (isAdmin === true) navigate("/admin-dashboard", { replace: true });
+        else if (isAdmin === false) navigate("/teacher-dashboard", { replace: true });
+      }
       if (location.pathname === "/teacher-dashboard" && isAdmin === true) {
-          navigate("/admin-dashboard", { replace: true });
+        navigate("/admin-dashboard", { replace: true });
       }
     }
   }, [loading, user, isAdmin, location.pathname, navigate, logoutOrigin]);
@@ -146,12 +159,10 @@ function AppRoutes() {
     const wasTeacher = location.pathname.includes("teacher") || location.pathname.includes("admin");
     setLogoutOrigin(wasTeacher ? "teacher" : "student");
     await supabase.auth.signOut();
-    setUser(null);
-    setIsAdmin(false);
-    lastCheckedId.current = null;
   };
 
-  if (loading && !user) {
+  // Loading state
+  if (loading && !user && !isRecoveryFlow()) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", backgroundColor: "#020617" }}>
         <div style={{ color: "#3b82f6", fontWeight: "600" }} className="animate-pulse">Loading Portal...</div>
@@ -159,10 +170,11 @@ function AppRoutes() {
     );
   }
 
-  const StudentRoute = ({ children }: { children: JSX.Element }) => 
-    user ? children : <Navigate to="/login" replace />;
+  // Route Guarding Components
+  const StudentRoute = ({ children }: { children: JSX.Element }) =>
+    user && !recoverySession.current ? children : <Navigate to="/login" replace />;
 
-  const TeacherRoute = ({ children }: { children: JSX.Element }) => 
+  const TeacherRoute = ({ children }: { children: JSX.Element }) =>
     user ? children : <Navigate to="/teacher-login" replace />;
 
   const AdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -188,6 +200,7 @@ function AppRoutes() {
   );
 }
 
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -197,3 +210,4 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+ 

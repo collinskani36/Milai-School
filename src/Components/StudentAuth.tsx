@@ -13,7 +13,6 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Scroll inputs into view on focus (mobile WebView-friendly)
   useEffect(() => {
     const handleFocus = (e: any) => {
       const target = e.target;
@@ -78,7 +77,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
       if (typeof onLogin === "function") onLogin(profileData);
 
       navigate("/student-dashboard", { replace: true });
-    } catch (err: any) {
+    } catch {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -86,34 +85,34 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#020617] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] p-4">
-      <div className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl p-6 w-full max-w-sm relative overflow-hidden">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#f6f2f2] via-[#fdfbfb] to-[#f3eded] p-4">
+      <div className="bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl p-6 w-full max-w-sm relative overflow-hidden">
 
-        {/* Background glow with vibrant blue */}
-        <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#3b82f6]/20 blur-3xl rounded-full" />
+        {/* Subtle maroon glow */}
+        {/* Subtle maroon glow */}
+<div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
 
-        {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <div className="p-2 bg-[#3b82f6]/20 rounded-2xl border border-[#3b82f6]/40">
-            <img
-              src="/logo.png"
-              alt="School Logo"
-              className="w-16 h-16 object-contain"
-            />
-          </div>
-        </div>
+{/* Logo */}
+<div className="flex justify-center mb-6">
+  <img
+    src="/logo.png"
+    alt="School Logo"
+    className="w-16 h-16 object-contain"
+  />
+</div>
+
 
         {/* Title */}
-        <h2 className="text-2xl font-extrabold text-center text-white mb-2 tracking-tight">
+        <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">
           Student Login
         </h2>
-        <p className="text-slate-400 text-center text-sm mb-6 font-light">
+        <p className="text-[#6b4b50] text-center text-sm mb-6 font-medium">
           Enter your credentials to access your portal
         </p>
 
         {/* Error */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded-xl mb-4 text-sm text-center">
+          <div className="bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 text-[#7a1f2b] p-2 rounded-xl mb-4 text-sm text-center">
             {error}
           </div>
         )}
@@ -125,7 +124,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
             placeholder="Registration Number"
             value={registration}
             onChange={(e) => setRegistration(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all uppercase"
+            className="w-full px-3 py-2 bg-[#f6f2f2] border border-[#7a1f2b]/20 rounded-xl text-[#3a1b1f] placeholder:text-[#9b7a7f] focus:outline-none focus:ring-2 focus:ring-[#7a1f2b]/30 focus:border-[#7a1f2b] transition-all uppercase"
             required
           />
           <input
@@ -133,14 +132,14 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
             placeholder="PIN"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800/50 border border-[#3b82f6]/30 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 focus:border-[#3b82f6] transition-all"
+            className="w-full px-3 py-2 bg-[#f6f2f2] border border-[#7a1f2b]/20 rounded-xl text-[#3a1b1f] placeholder:text-[#9b7a7f] focus:outline-none focus:ring-2 focus:ring-[#7a1f2b]/30 focus:border-[#7a1f2b] transition-all"
             required
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#3b82f6] hover:bg-[#60a5fa] active:bg-[#1e40af] text-white py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-[#3b82f6]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#7a1f2b] hover:bg-[#6a1a24] active:bg-[#5a161f] text-white py-2.5 rounded-xl font-bold transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2 text-sm">
@@ -153,7 +152,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
           </button>
 
           <p
-            className="text-sm text-center text-[#3b82f6] cursor-pointer hover:text-[#60a5fa] hover:underline mt-4 transition-colors font-medium"
+            className="text-sm text-center text-[#7a1f2b] cursor-pointer hover:text-[#6a1a24] hover:underline mt-4 transition-colors font-medium"
             onClick={() => navigate("/forgot-password")}
           >
             Forgot password?

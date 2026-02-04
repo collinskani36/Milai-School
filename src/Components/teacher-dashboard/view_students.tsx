@@ -447,91 +447,94 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
       </div>
 
       <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl">Student Directory</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Tap on a student to view detailed performance analysis
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0 sm:p-6 pt-0">
-          <div className="overflow-x-auto -mx-3 sm:mx-0">
-            <div className="min-w-[600px] px-3 sm:min-w-0 sm:px-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Student</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Reg No</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Class</TableHead> {/* Removed hidden sm:table-cell */}
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs hidden xs:table-cell">Guardian</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((student) => (
-                    <TableRow key={student.id} className="hover:bg-muted/50">
-                      <TableCell 
-                        className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
-                        onClick={() => setSelectedStudentId(student.id)}
-                      >
-                        <div className="font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">
-                          {student.first_name} {student.last_name}
-                        </div>
-                      </TableCell>
-                      <TableCell 
-                        className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
-                        onClick={() => setSelectedStudentId(student.id)}
-                      >
-                        <code className="text-xs bg-muted px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-nowrap">
-                          {student.Reg_no}
-                        </code>
-                      </TableCell>
-                      <TableCell 
-                        className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" // Removed hidden sm:table-cell
-                        onClick={() => setSelectedStudentId(student.id)}
-                      >
-                        <div className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
-                          {student.enrollments && student.enrollments[0] ? (
-                            classMap[student.enrollments[0].class_id] || 'N/A'
-                          ) : 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell 
-                        className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer hidden xs:table-cell"
-                        onClick={() => setSelectedStudentId(student.id)}
-                      >
-                        <div className="flex items-center space-x-1 text-xs sm:text-sm">
-                          <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                          <span className="truncate max-w-[80px] sm:max-w-[120px]">
-                            {student.profiles?.[0]?.guardian_phone ?? 'No contact'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setSelectedStudentId(student.id)}
-                          className="h-7 text-xs px-2 sm:h-8 sm:px-3 sm:text-sm"
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+  <CardHeader className="p-4 sm:p-6">
+    <CardTitle className="text-lg sm:text-xl">Student Directory</CardTitle>
+    <CardDescription className="text-xs sm:text-sm">
+      Tap on a student to view detailed performance analysis
+    </CardDescription>
+  </CardHeader>
+  <CardContent className="p-0 sm:p-6 pt-0">
+    <div className="overflow-x-auto -mx-3 sm:mx-0">
+      <div className="min-w-[600px] px-3 sm:min-w-0 sm:px-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Student</TableHead>
+              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Reg No</TableHead>
+              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Class</TableHead>
+              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs hidden xs:table-cell">Guardian</TableHead>
+              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {students.map((student) => (
+              <TableRow key={student.id} className="hover:bg-muted/50">
+                <TableCell
+                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
+                  onClick={() => setSelectedStudentId(student.id)}
+                >
+                  <div className="font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">
+                    {student.first_name} {student.last_name}
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
+                  onClick={() => setSelectedStudentId(student.id)}
+                >
+                  <code className="text-xs bg-muted px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-nowrap">
+                    {student.Reg_no}
+                  </code>
+                </TableCell>
+                <TableCell
+                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
+                  onClick={() => setSelectedStudentId(student.id)}
+                >
+                  <div className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
+                    {student.enrollments && student.enrollments[0]
+                      ? classMap[student.enrollments[0].class_id] || 'N/A'
+                      : 'N/A'}
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer hidden xs:table-cell"
+                  onClick={() => setSelectedStudentId(student.id)}
+                >
+                  <div className="flex items-center space-x-1 text-xs sm:text-sm">
+                    <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <span className="truncate max-w-[80px] sm:max-w-[120px]">
+                      {student.profiles?.[0]?.guardian_phone ?? 'No contact'}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell className="py-2 px-2 sm:py-3 sm:px-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedStudentId(student.id)}
+                    className="h-7 text-xs px-2 sm:h-8 sm:px-3 sm:text-sm"
+                  >
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
 
-          {students.length === 0 && (
-            <div className="text-center py-6 sm:py-8 px-4">
-              <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground">There are no students enrolled in your classes yet.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+    {students.length === 0 && (
+      <div className="text-center py-6 sm:py-8 px-4">
+        <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
+        <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          There are no students enrolled in your classes yet.
+        </p>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
     </div>
   );
 }

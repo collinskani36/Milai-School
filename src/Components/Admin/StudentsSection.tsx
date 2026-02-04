@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/Components/ui/input';
-import { Plus, Search, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from '@/Components/ui/dialog';
@@ -476,119 +476,245 @@ export default function StudentsSection() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {creationSuccess && (
-        <div className="w-full bg-green-100 text-green-700 rounded px-4 py-2 mb-2 text-center font-medium">
+        <div className="w-full bg-green-100 text-green-700 rounded px-4 py-2 mb-2 text-center font-medium text-sm sm:text-base">
           {creationSuccess}
         </div>
       )}
+      
       <Card className="border-none shadow-sm">
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <UserPlus className="w-6 h-6 text-blue-600" />
-              Students Management
+        <CardHeader className="pb-3 sm:pb-6">
+          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
+            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              <span className="text-lg sm:text-2xl">Students</span>
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button onClick={handleAddNew} className="bg-blue-600 hover:bg-blue-700">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+                <Input 
+                  placeholder="Search students..." 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                  className="pl-9 sm:pl-10 text-sm sm:text-base h-10"
+                />
+              </div>
+              <Button 
+                onClick={handleAddNew} 
+                className="bg-blue-600 hover:bg-blue-700 h-10 sm:h-auto"
+                size="sm"
+              >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Student
+                <span className="hidden sm:inline">Add Student</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <Input placeholder="Search by name, reg no, or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-            </div>
-          </div>
+        
+        <CardContent className="p-4 sm:p-6">
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 sm:h-16" />)}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('reg_no')}>
-                      Reg No <SortIndicator columnKey="reg_no" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('first_name')}>
-                      Name <SortIndicator columnKey="first_name" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('gender')}>
-                      Gender <SortIndicator columnKey="gender" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('student_type')}>
-                      Student Type <SortIndicator columnKey="student_type" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('email')}>
-                      Email <SortIndicator columnKey="email" />
-                    </TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-medium">{student.profile?.reg_no}</TableCell>
-                      <TableCell>{`${student.profile?.first_name || ''} ${student.profile?.last_name || ''}`}</TableCell>
-                      <TableCell>{student.profile?.gender}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          student.profile?.student_type === 'Boarding' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
-                        }`}>
-                          {student.profile?.student_type || 'Day Scholar'}
-                        </span>
-                      </TableCell>
-                      <TableCell>{student.profile?.email}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(student)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(student)} disabled={isDeleting}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+            <div className="overflow-hidden">
+              {/* Mobile-friendly card view for small screens */}
+              <div className="sm:hidden space-y-3">
+                {filteredStudents.map((student) => (
+                  <Card key={student.id} className="p-4 shadow-xs">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="font-medium text-base">
+                          {`${student.profile?.first_name || ''} ${student.profile?.last_name || ''}`}
                         </div>
-                      </TableCell>
+                        <div className="text-sm text-gray-500">
+                          {student.profile?.reg_no}
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        student.profile?.student_type === 'Boarding' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {student.profile?.student_type || 'Day Scholar'}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                      <div>
+                        <span className="text-gray-500">Gender:</span>
+                        <span className="ml-1">{student.profile?.gender}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Email:</span>
+                        <span className="ml-1 truncate block">{student.profile?.email || 'N/A'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 pt-2 border-t">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleEdit(student)}
+                        className="h-8 px-2"
+                      >
+                        <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="ml-1 text-xs">Edit</span>
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDelete(student)} 
+                        disabled={isDeleting}
+                        className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="ml-1 text-xs">Delete</span>
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+                
+                {filteredStudents.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Search className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p>No students found</p>
+                    <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Table view for medium screens and up */}
+              <div className="hidden sm:block overflow-x-auto -mx-2 sm:mx-0">
+                <Table className="min-w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="cursor-pointer hover:bg-gray-50 py-3" onClick={() => handleSort('reg_no')}>
+                        <div className="flex items-center">
+                          Reg No
+                          <SortIndicator columnKey="reg_no" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer hover:bg-gray-50 py-3" onClick={() => handleSort('first_name')}>
+                        <div className="flex items-center">
+                          Name
+                          <SortIndicator columnKey="first_name" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer hover:bg-gray-50 py-3" onClick={() => handleSort('gender')}>
+                        <div className="flex items-center">
+                          Gender
+                          <SortIndicator columnKey="gender" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer hover:bg-gray-50 py-3" onClick={() => handleSort('student_type')}>
+                        <div className="flex items-center">
+                          Student Type
+                          <SortIndicator columnKey="student_type" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer hover:bg-gray-50 py-3" onClick={() => handleSort('email')}>
+                        <div className="flex items-center">
+                          Email
+                          <SortIndicator columnKey="email" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="py-3">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {filteredStudents.length === 0 && (
-                <p className="text-center py-8 text-gray-500">No students found</p>
-              )}
+                  </TableHeader>
+                  <TableBody>
+                    {filteredStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell className="font-medium py-3">{student.profile?.reg_no}</TableCell>
+                        <TableCell className="py-3">{`${student.profile?.first_name || ''} ${student.profile?.last_name || ''}`}</TableCell>
+                        <TableCell className="py-3">{student.profile?.gender}</TableCell>
+                        <TableCell className="py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            student.profile?.student_type === 'Boarding' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                          }`}>
+                            {student.profile?.student_type || 'Day Scholar'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3 truncate max-w-[200px]">{student.profile?.email}</TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(student)} className="h-8 w-8 p-0">
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(student)} disabled={isDeleting} className="h-8 w-8 p-0">
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {filteredStudents.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Search className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p>No students found</p>
+                    <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
+      
       <Dialog open={showAddModal} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-4 sm:p-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg sm:text-xl">
+              {editingStudent ? 'Edit Student' : 'Add New Student'}
+            </DialogTitle>
           </DialogHeader>
+          
           <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-2 sm:py-4">
               <div className="space-y-2">
-                <Label htmlFor="reg_no">Registration Number</Label>
-                <Input id="reg_no" name="reg_no" value={formData.reg_no} onChange={(e) => handleInputChange('reg_no', e.target.value)} required />
+                <Label htmlFor="reg_no" className="text-sm sm:text-base">Registration Number</Label>
+                <Input 
+                  id="reg_no" 
+                  name="reg_no" 
+                  value={formData.reg_no} 
+                  onChange={(e) => handleInputChange('reg_no', e.target.value)} 
+                  required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="first_name">First Name</Label>
-                <Input id="first_name" name="first_name" value={formData.first_name} onChange={(e) => handleInputChange('first_name', e.target.value)} required />
+                <Label htmlFor="first_name" className="text-sm sm:text-base">First Name</Label>
+                <Input 
+                  id="first_name" 
+                  name="first_name" 
+                  value={formData.first_name} 
+                  onChange={(e) => handleInputChange('first_name', e.target.value)} 
+                  required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last_name">Last Name</Label>
-                <Input id="last_name" name="last_name" value={formData.last_name} onChange={(e) => handleInputChange('last_name', e.target.value)} required />
+                <Label htmlFor="last_name" className="text-sm sm:text-base">Last Name</Label>
+                <Input 
+                  id="last_name" 
+                  name="last_name" 
+                  value={formData.last_name} 
+                  onChange={(e) => handleInputChange('last_name', e.target.value)} 
+                  required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="gender">Gender</Label>
-                <Select name="gender" value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} required >
-                  <SelectTrigger id="gender">
+                <Label htmlFor="gender" className="text-sm sm:text-base">Gender</Label>
+                <Select 
+                  name="gender" 
+                  value={formData.gender} 
+                  onValueChange={(value) => handleInputChange('gender', value)} 
+                  required
+                >
+                  <SelectTrigger id="gender" className="h-10 sm:h-auto text-sm sm:text-base">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,9 +725,14 @@ export default function StudentsSection() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="class_id">Class</Label>
-                <Select name="class_id" value={formData.class_id} onValueChange={(value) => handleInputChange('class_id', value)} required >
-                  <SelectTrigger id="class_id">
+                <Label htmlFor="class_id" className="text-sm sm:text-base">Class</Label>
+                <Select 
+                  name="class_id" 
+                  value={formData.class_id} 
+                  onValueChange={(value) => handleInputChange('class_id', value)} 
+                  required
+                >
+                  <SelectTrigger id="class_id" className="h-10 sm:h-auto text-sm sm:text-base">
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
@@ -612,9 +743,13 @@ export default function StudentsSection() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="student_type">Student Type</Label>
-                <Select name="student_type" value={formData.student_type} onValueChange={(value) => handleInputChange('student_type', value)} >
-                  <SelectTrigger id="student_type">
+                <Label htmlFor="student_type" className="text-sm sm:text-base">Student Type</Label>
+                <Select 
+                  name="student_type" 
+                  value={formData.student_type} 
+                  onValueChange={(value) => handleInputChange('student_type', value)}
+                >
+                  <SelectTrigger id="student_type" className="h-10 sm:h-auto text-sm sm:text-base">
                     <SelectValue placeholder="Select student type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -623,9 +758,10 @@ export default function StudentsSection() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Add guardian_email field */}
-              <div className="space-y-2">
-                <Label htmlFor="guardian_email">
+              
+              {/* guardian_email field - full width on mobile */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="guardian_email" className="text-sm sm:text-base">
                   Guardian Email {!editingStudent && <span className="text-red-500">*</span>}
                 </Label>
                 <Input
@@ -636,44 +772,93 @@ export default function StudentsSection() {
                   onChange={(e) => handleInputChange('guardian_email', e.target.value)}
                   required={!editingStudent}
                   placeholder="guardian@example.com"
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
                 <p className="text-xs text-gray-500">
                   Used for password recovery. Students can still login with registration number.
                 </p>
               </div>
+              
               {!editingStudent && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password (optional)</Label>
-                  <Input id="password" name="password" type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="Set a password or leave blank" />
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="password" className="text-sm sm:text-base">Password (optional)</Label>
+                  <Input 
+                    id="password" 
+                    name="password" 
+                    type="password" 
+                    value={formData.password} 
+                    onChange={(e) => handleInputChange('password', e.target.value)} 
+                    placeholder="Set a password or leave blank" 
+                    className="h-10 sm:h-auto text-sm sm:text-base"
+                  />
                 </div>
               )}
+              
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" name="phone" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} />
+                <Label htmlFor="phone" className="text-sm sm:text-base">Phone</Label>
+                <Input 
+                  id="phone" 
+                  name="phone" 
+                  value={formData.phone} 
+                  onChange={(e) => handleInputChange('phone', e.target.value)} 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date_of_birth">Date of Birth</Label>
-                <Input id="date_of_birth" name="date_of_birth" type="date" value={formData.date_of_birth} onChange={(e) => handleInputChange('date_of_birth', e.target.value)} />
+                <Label htmlFor="date_of_birth" className="text-sm sm:text-base">Date of Birth</Label>
+                <Input 
+                  id="date_of_birth" 
+                  name="date_of_birth" 
+                  type="date" 
+                  value={formData.date_of_birth} 
+                  onChange={(e) => handleInputChange('date_of_birth', e.target.value)} 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guardian_name">Guardian Name</Label>
-                <Input id="guardian_name" name="guardian_name" value={formData.guardian_name} onChange={(e) => handleInputChange('guardian_name', e.target.value)} />
+                <Label htmlFor="guardian_name" className="text-sm sm:text-base">Guardian Name</Label>
+                <Input 
+                  id="guardian_name" 
+                  name="guardian_name" 
+                  value={formData.guardian_name} 
+                  onChange={(e) => handleInputChange('guardian_name', e.target.value)} 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guardian_phone">Guardian Phone</Label>
-                <Input id="guardian_phone" name="guardian_phone" value={formData.guardian_phone} onChange={(e) => handleInputChange('guardian_phone', e.target.value)} />
+                <Label htmlFor="guardian_phone" className="text-sm sm:text-base">Guardian Phone</Label>
+                <Input 
+                  id="guardian_phone" 
+                  name="guardian_phone" 
+                  value={formData.guardian_phone} 
+                  onChange={(e) => handleInputChange('guardian_phone', e.target.value)} 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
+                />
               </div>
             </div>
-            <DialogFooter>
+            
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 sm:pt-6 border-t">
               {formError && (
-                <div className="text-sm text-red-600 mr-auto">{formError}</div>
+                <div className="text-sm text-red-600 mr-auto text-left w-full sm:w-auto">{formError}</div>
               )}
-              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" loading={isCreatingOrUpdating} disabled={isCreatingOrUpdating}>
-                {editingStudent ? 'Update' : 'Create'} Student
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowAddModal(false)}
+                  className="h-10 sm:h-auto w-full sm:w-auto order-2 sm:order-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-blue-600 hover:bg-blue-700 h-10 sm:h-auto w-full sm:w-auto order-1 sm:order-2" 
+                  loading={isCreatingOrUpdating} 
+                  disabled={isCreatingOrUpdating}
+                >
+                  {editingStudent ? 'Update' : 'Create'} Student
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

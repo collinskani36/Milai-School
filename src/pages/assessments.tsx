@@ -1,4 +1,13 @@
 // assessments.tsx
+// Polyfill Buffer for Expo / React Native
+import { Buffer } from "buffer";
+
+if (typeof globalThis.Buffer === "undefined") {
+  globalThis.Buffer = Buffer;
+}
+
+
+
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";

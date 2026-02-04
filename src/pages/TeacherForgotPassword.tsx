@@ -22,11 +22,11 @@ export default function TeacherForgotPassword() {
         return;
       }
 
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "http://localhost:8080/reset-password", // change when deployed
-      });
+     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+  redirectTo: "https://fredanacademy.vercel.app/reset-password",
+});
 
-      if (resetError) throw resetError;
+if (resetError) throw resetError;
 
       setSuccess("Password reset link has been sent to your email.");
     } catch (err: any) {

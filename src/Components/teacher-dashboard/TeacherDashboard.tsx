@@ -191,40 +191,51 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
 
   // Fetch students count
   useEffect(() => {
-    if (!teacherClasses.length || !profile?.id) return;
+  if (!teacherClasses.length) return;
 
-    const fetchStudents = async () => {
-      try {
-        const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-        
-        const { data: enrollments, error: enrollError } = await supabase
-          .from("enrollments")
-          .select("student_id")
-          .in("class_id", classIds);
+  const fetchStudents = async () => {
+    try {
+      const classIds = teacherClasses.map(tc => tc.class_id);
 
-        if (enrollError) throw enrollError;
+      const { data, error } = await supabase
+        .from("enrollments")
+        .select(`
+          student_id,
+          students ( id )
+        `)
+        .in("class_id", classIds);
 
-        if (!enrollments) {
-          setStudents([]);
-          return;
-        }
-
-        const studentIds = enrollments.map(e => e.student_id);
-        const { data: studentsData, error: studentsError } = await supabase
-          .from("students")
-          .select("id")
-          .in("id", studentIds);
-
-        if (studentsError) throw studentsError;
-        setStudents(studentsData || []);
-      } catch (error) {
-        console.error("Error fetching students:", error);
+      if (error || !data) {
         setStudents([]);
+        return;
       }
-    };
 
-    fetchStudents();
-  }, [teacherClasses, profile?.id]);
+      // Deduplicate students safely
+      const uniqueStudents = new Map<string, boolean>();
+
+      data.forEach(row => {
+        // Handle students as array
+        const studentRow = Array.isArray(row.students) ? row.students[0] : row.students;
+        const studentId = studentRow?.id;
+        if (studentId) {
+          uniqueStudents.set(studentId, true);
+        }
+      });
+
+      // Map keys to student objects
+      const studentList = Array.from(uniqueStudents.keys()).map(id => ({ id }));
+      setStudents(studentList);
+
+    } catch (err) {
+      console.error("Error fetching students:", err);
+      setStudents([]);
+    }
+  };
+
+  fetchStudents();
+}, [teacherClasses]);
+
+
 
   // Fetch class performance data
   useEffect(() => {
@@ -233,64 +244,80 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
       return;
     }
 
-    const fetchClassPerformance = async () => {
-      try {
-        const results: ClassPerformanceData[] = [];
-        const classIds = teacherClasses.map(tc => tc.class_id);
+   const fetchClassPerformance = async () => {
+  try {
+    const classIds = teacherClasses.map(tc => tc.class_id);
+    const subjectIds = teacherClasses.map(tc => tc.subject_id);
 
-        const ASSESSMENT_PAGE_SIZE = 50;
-        const { data: assessments, error: assessError } = await supabase
-          .from("assessments")
-          .select("*")
-          .in("class_id", classIds)
-          .order("created_at", { ascending: false })
-          .range(0, ASSESSMENT_PAGE_SIZE - 1);
+    // 1️⃣ Fetch recent assessments ONCE
+    const { data: assessments, error: assessError } = await supabase
+      .from("assessments")
+      .select("id, title, class_id")
+      .in("class_id", classIds)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-        if (assessError) throw assessError;
+    if (assessError || !assessments?.length) {
+      setClassPerformanceData([]);
+      return;
+    }
 
-        for (const tc of teacherClasses) {
-          const classAssessments = (assessments || [])
-            .filter(a => a.class_id === tc.class_id)
-            .slice(0, 2);
+    const assessmentIds = assessments.map(a => a.id);
 
-          for (const assessment of classAssessments) {
-            const RESULT_PAGE_SIZE = 100;
-            const { data: resultsData, error: resultsError } = await supabase
-              .from("assessment_results")
-              .select("score")
-              .eq("assessment_id", assessment.id)
-              .eq("subject_id", tc.subject_id)
-              .range(0, RESULT_PAGE_SIZE - 1);
+    // 2️⃣ Fetch ALL results in ONE call
+    const { data: results, error: resultsError } = await supabase
+      .from("assessment_results")
+      .select("assessment_id, subject_id, score")
+      .in("assessment_id", assessmentIds)
+      .in("subject_id", subjectIds);
 
-            if (resultsError) continue;
+    if (resultsError || !results) {
+      setClassPerformanceData([]);
+      return;
+    }
 
-            if (resultsData && resultsData.length > 0) {
-              const scores = resultsData
-                .map(r => Number(r.score))
-                .filter(s => Number.isFinite(s));
+    // 3️⃣ Compute means locally
+    const output: ClassPerformanceData[] = [];
 
-              if (!scores.length) continue;
+    for (const tc of teacherClasses) {
+      const cls = firstRel(tc.classes);
+      const subj = firstRel(tc.subjects);
 
-              const mean = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-              const subj = firstRel(tc.subjects);
-              const cls = firstRel(tc.classes);
+      const relevantAssessments = assessments.filter(
+        a => a.class_id === tc.class_id
+      );
 
-              results.push({
-                assessment: assessment.title,
-                subject: subj?.name || "Unknown Subject",
-                class: cls?.name || "Unknown Class",
-                mean: Number(mean.toFixed(2)),
-              });
-            }
-          }
-        }
+      for (const assessment of relevantAssessments.slice(0, 2)) {
+        const scores = results
+          .filter(
+            r =>
+              r.assessment_id === assessment.id &&
+              r.subject_id === tc.subject_id
+          )
+          .map(r => Number(r.score))
+          .filter(s => Number.isFinite(s));
 
-        setClassPerformanceData(results);
-      } catch (error) {
-        console.error("Error fetching class performance:", error);
-        setClassPerformanceData([]);
+        if (!scores.length) continue;
+
+        const mean =
+          scores.reduce((sum, s) => sum + s, 0) / scores.length;
+
+        output.push({
+          assessment: assessment.title,
+          subject: subj?.name || "Unknown Subject",
+          class: cls?.name || "Unknown Class",
+          mean: Number(mean.toFixed(2)),
+        });
       }
-    };
+    }
+
+    setClassPerformanceData(output);
+  } catch (err) {
+    console.error("Error fetching class performance:", err);
+    setClassPerformanceData([]);
+  }
+};
+
 
     fetchClassPerformance();
   }, [teacherClasses]);
@@ -303,58 +330,57 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
     }
 
     const fetchGradeDistribution = async () => {
-      try {
-        let allScores: number[] = [];
-        const classIds = teacherClasses.map(tc => tc.class_id);
+  try {
+    const classIds = teacherClasses.map(tc => tc.class_id);
+    const subjectIds = teacherClasses.map(tc => tc.subject_id);
 
-        const PAGE_SIZE = 10;
-        const page = 0;
+    // 1️⃣ Fetch recent assessments ONCE
+    const { data: assessments, error: assessError } = await supabase
+      .from("assessments")
+      .select("id")
+      .in("class_id", classIds)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-        const { data: assessments, error: assessError } = await supabase
-          .from("assessments")
-          .select("id")
-          .in("class_id", classIds)
-          .order("created_at", { ascending: false })
-          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    if (assessError || !assessments?.length) {
+      setGradeDistribution([]);
+      return;
+    }
 
-        if (assessError) throw assessError;
-        if (!assessments) return;
+    const assessmentIds = assessments.map(a => a.id);
 
-        const subjectIds = teacherClasses.map(tc => tc.subject_id);
+    // 2️⃣ Fetch ALL scores in ONE call
+    const { data: results, error: resultsError } = await supabase
+      .from("assessment_results")
+      .select("score")
+      .in("assessment_id", assessmentIds)
+      .in("subject_id", subjectIds);
 
-        for (const assessment of assessments) {
-          const RESULT_PAGE_SIZE = 200;
+    if (resultsError || !results) {
+      setGradeDistribution([]);
+      return;
+    }
 
-          const { data: results, error: resultsError } = await supabase
-            .from("assessment_results")
-            .select("score")
-            .eq("assessment_id", assessment.id)
-            .in("subject_id", subjectIds)
-            .range(0, RESULT_PAGE_SIZE - 1);
+    const allScores = results
+      .map(r => Number(r.score))
+      .filter(s => Number.isFinite(s));
 
-          if (!resultsError && results) {
-            allScores.push(
-              ...results
-                .map(r => Number(r.score))
-                .filter(s => Number.isFinite(s))
-            );
-          }
-        }
+    // 3️⃣ Build KJSEA distribution locally
+    const dist = KJSEA_LEVELS.map(level => ({
+      grade: level.label,
+      count: allScores.filter(
+        s => s >= level.min && s <= level.max
+      ).length,
+      color: level.color,
+    }));
 
-        const dist = KJSEA_LEVELS.map(level => ({
-          grade: level.label,
-          count: allScores.filter(
-            s => s >= level.min && s <= level.max
-          ).length,
-          color: level.color,
-        }));
+    setGradeDistribution(dist);
+  } catch (err) {
+    console.error("Error fetching grade distribution:", err);
+    setGradeDistribution([]);
+  }
+};
 
-        setGradeDistribution(dist);
-      } catch (error) {
-        console.error("Error fetching grade distribution:", error);
-        setGradeDistribution([]);
-      }
-    };
 
     fetchGradeDistribution();
   }, [teacherClasses]);

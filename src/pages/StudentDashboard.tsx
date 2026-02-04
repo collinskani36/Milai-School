@@ -1,4 +1,4 @@
-// StudentDashboard.tsx (updated with 5 mobile bottom tabs)
+// StudentDashboard.tsx (updated with academic progress card)
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";
@@ -18,6 +18,9 @@ import AssignmentAnnouncement from "./assignment_announcement";
 // Import the new Fees Dialog
 import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
 
+// Import utility functions from assessments
+import { calculateKJSEAGrade } from "@/utils/assessmentUtils";
+
 interface AttendanceData {
   totalDays: number;
   presentDays: number;
@@ -35,6 +38,13 @@ interface StudentProfile {
   guardian_phone?: string;
 }
 
+interface PerformanceData {
+  totalExams: number;
+  averageScore: number;
+  currentLevel: string;
+  recentPerformance: any[];
+}
+
 export default function StudentDashboard({ handleLogout }) {
   // State for main dashboard only
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -47,7 +57,17 @@ export default function StudentDashboard({ handleLogout }) {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
+  const [authUser, setAuthUser] = useState<any>(null);
   const navigate = useNavigate();
+
+  // State for academic performance data (fetched from assessments)
+  const [performanceData, setPerformanceData] = useState<PerformanceData>({
+    totalExams: 0,
+    averageScore: 0,
+    currentLevel: "Pending",
+    recentPerformance: []
+  });
+  const [performanceLoading, setPerformanceLoading] = useState(false);
 
   // Tab state for mobile navigation (5 tabs)
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
@@ -99,50 +119,130 @@ export default function StudentDashboard({ handleLogout }) {
     return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
   };
 
-  // Fetch student profile (only essential data) - SIMILAR TO TEACHER DASHBOARD
+  // Calculate KJSEA Grade based on average percentage
+  const calculateGradeFromAverage = (averagePercentage: number): string => {
+    return calculateKJSEAGrade(averagePercentage / 100);
+  };
+
+  // Fetch student performance data (similar to assessments.tsx)
+  const fetchPerformanceData = async () => {
+    if (!studentId || !classId) return;
+    
+    setPerformanceLoading(true);
+    try {
+      // Fetch student rankings from the view
+      const { data: rankingsData, error } = await supabase
+        .from("student_rankings")
+        .select("*")
+        .eq("student_id", studentId)
+        .eq("class_id", classId)
+        .order("assessment_date", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching rankings:", error);
+        return;
+      }
+
+      if (rankingsData && rankingsData.length > 0) {
+        const recentExams = rankingsData.slice(0, 10); // Last 10 exams
+        const totalExams = recentExams.length;
+        
+        // Calculate average percentage
+        const totalPercentage = recentExams.reduce((sum, exam) => sum + exam.percentage, 0);
+        const averageScore = totalExams > 0 ? Math.round(totalPercentage / totalExams) : 0;
+        
+        // Calculate current level based on average
+        const currentLevel = calculateGradeFromAverage(averageScore);
+        
+        // Get recent performance for insights
+        const recentPerformance = recentExams.map(exam => ({
+          title: exam.exam_title,
+          percentage: exam.percentage,
+          classPosition: exam.class_position,
+          date: exam.assessment_date
+        }));
+
+        setPerformanceData({
+          totalExams,
+          averageScore,
+          currentLevel,
+          recentPerformance
+        });
+      } else {
+        // No performance data yet
+        setPerformanceData({
+          totalExams: 0,
+          averageScore: 0,
+          currentLevel: "No data",
+          recentPerformance: []
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching performance data:", err);
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
+  // Fetch authenticated user once and store it
   useEffect(() => {
-    const fetchStudentData = async () => {
-      setLoading(true);
+    const fetchAuthUser = async () => {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
-        const user = userData.user;
-        if (!user) throw new Error("User not signed in");
+        setAuthUser(userData.user);
+      } catch (err: any) {
+        console.error("Error fetching auth user:", err);
+        setError(err.message);
+      }
+    };
+    
+    fetchAuthUser();
+  }, []);
+
+  // Fetch all student data in one optimized query to prevent multiple round trips
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      if (!authUser) return; // Wait for auth user to be available
+      
+      setLoading(true);
+      try {
+        if (!authUser) throw new Error("User not signed in");
         
-        // Get student data
+        // Single query to get student data with enrollment and class info in one go
         const { data: studentData, error: studentError } = await supabase
           .from("students")
-          .select("id, Reg_no, first_name, last_name, auth_id")
-          .eq("auth_id", user.id)
+          .select(`
+            id,
+            Reg_no,
+            first_name,
+            last_name,
+            auth_id,
+            profiles!student_id (*),
+            enrollments!student_id (
+              class_id,
+              classes (name)
+            )
+          `)
+          .eq("auth_id", authUser.id)
           .single();
         
         if (studentError) throw studentError;
         if (!studentData) throw new Error("No student found");
+        
         setStudent(studentData);
         setStudentId(studentData.id);
-
-        // Get student profile
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("student_id", studentData.id)
-          .single();
         
-        if (profileError) throw profileError;
-        if (!profileData) throw new Error("No student profile found");
-        setProfile(profileData);
-
-        // Get enrollment and class info
-        const { data: enrollmentData, error: enrollmentError } = await supabase
-          .from("enrollments")
-          .select(`
-            class_id,
-            classes (name)
-          `)
-          .eq("student_id", studentData.id)
-          .single();
+        // Get profile from the joined data
+        const profileData = firstRel(studentData.profiles);
+        if (profileData) {
+          setProfile(profileData);
+        } else {
+          throw new Error("No student profile found");
+        }
         
-        if (enrollmentError) throw enrollmentError;
+        // Get enrollment and class info from the joined data
+        const enrollmentData = firstRel(studentData.enrollments);
         const classId = enrollmentData?.class_id || null;
         const className = firstRel(enrollmentData?.classes as any)?.name || "Unknown";
         setClassId(classId);
@@ -157,37 +257,16 @@ export default function StudentDashboard({ handleLogout }) {
     };
 
     fetchStudentData();
-  }, []);
+  }, [authUser]); // Only run when authUser changes
 
-  // Fetch attendance (essential for dashboard)
+  // Fetch attendance data only when studentId is available
   useEffect(() => {
     const fetchAttendance = async () => {
+      if (!studentId) return; // Wait for studentId to be available
+      
       setAttendanceLoading(true);
       setAttendanceError(null);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.error("No logged-in user found");
-          setAttendanceData(null);
-          setAttendanceLoading(false);
-          return;
-        }
-
-        const { data: studentData, error: studentError } = await supabase
-          .from("students")
-          .select("id")
-          .eq("auth_id", user.id)
-          .single();
-
-        if (studentError || !studentData) {
-          console.error("Error fetching student:", studentError);
-          setAttendanceData(null);
-          setAttendanceLoading(false);
-          return;
-        }
-
-        const studentId = studentData.id;
-
         const { data: attendanceRecords, error: attendanceError } = await supabase
           .from("attendance")
           .select("monday, tuesday, wednesday, thursday, friday, week_start, week_end")
@@ -230,10 +309,18 @@ export default function StudentDashboard({ handleLogout }) {
         setAttendanceLoading(false);
       }
     };
+    
     fetchAttendance();
-  }, []);
+  }, [studentId]); // Only run when studentId changes
 
-  // Handle fees management
+  // Fetch performance data when studentId and classId are available
+  useEffect(() => {
+    if (studentId && classId) {
+      fetchPerformanceData();
+    }
+  }, [studentId, classId]);
+
+  // Handle fees management - reuses existing profile and student data
   const handleFeesManagement = () => {
     if (!profile || !student) return;
     
@@ -247,7 +334,7 @@ export default function StudentDashboard({ handleLogout }) {
     setIsFeesDialogOpen(true);
   };
 
-  // Password update handler
+  // Password update handler - uses existing profile data
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsLoading(true);
@@ -260,7 +347,7 @@ export default function StudentDashboard({ handleLogout }) {
 
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile.email,
+        email: profile!.email, // Use existing profile data
         password: currentPassword,
       });
 
@@ -337,6 +424,10 @@ export default function StudentDashboard({ handleLogout }) {
                 <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
                 <span>Class: <span className="font-semibold">{className}</span></span>
               </div>
+              <div className="flex items-center gap-2">
+                <Award className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                <span>Current Level: <span className="font-semibold">{performanceData.currentLevel}</span></span>
+              </div>
             </div>
             
             {/* Buttons for web view - hidden on mobile */}
@@ -398,9 +489,61 @@ export default function StudentDashboard({ handleLogout }) {
         </div>
       </div>
 
-      {/* DASHBOARD SUMMARY CARDS - REARRANGED: Today's Summary comes before Quick Access */}
+      {/* DASHBOARD SUMMARY CARDS - 3 CARDS ONLY */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {/* Today's Summary Card - Now first */}
+        {/* Academic Progress Card - Data fetched from performance data */}
+        <Card className="bg-maroon-50 border-l-4 border-l-maroon">
+          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-maroon" />
+            </div>
+            <div>
+              <CardTitle className="text-base sm:text-lg text-gray-900">Academic Progress</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-gray-600">Overall performance</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {performanceLoading ? (
+              <div className="space-y-2 sm:space-y-3">
+                <div className="animate-pulse flex justify-between items-center">
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 rounded w-16"></div>
+                </div>
+                <div className="animate-pulse flex justify-between items-center">
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 rounded w-8"></div>
+                </div>
+                <div className="animate-pulse flex justify-between items-center">
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 rounded w-12"></div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm text-gray-700">Current Level</span>
+                  <Badge variant="secondary" className="bg-maroon/10 text-maroon text-xs">
+                    {performanceData.currentLevel}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm text-gray-700">Exams Completed</span>
+                  <span className="text-xs sm:text-sm font-medium text-gray-900">
+                    {performanceData.totalExams}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm text-gray-700">Average Score</span>
+                  <span className="text-xs sm:text-sm font-medium text-gray-900">
+                    {performanceData.averageScore}%
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Today's Summary Card */}
         <Card className="border-l-4 border-l-green-500 bg-white">
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
@@ -431,54 +574,7 @@ export default function StudentDashboard({ handleLogout }) {
           </CardContent>
         </Card>
 
-        {/* Quick Access Card - Now second */}
-        <Card className="bg-maroon-50 border-l-4 border-l-maroon">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-maroon" />
-            </div>
-            <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Quick Access</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">View your academic data</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="space-y-2 sm:space-y-3">
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-left h-auto py-2 hover:bg-maroon/5"
-                onClick={() => handleTabSwitch("assessments")}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <BarChart3 className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Assessments</p>
-                    <p className="text-xs text-gray-500">View exam results and analysis</p>
-                  </div>
-                </div>
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-left h-auto py-2 hover:bg-maroon/5"
-                onClick={() => handleTabSwitch("assignments")}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <Bell className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Assignments</p>
-                    <p className="text-xs text-gray-500">Check due work and announcements</p>
-                  </div>
-                </div>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Attendance Card - Now third */}
+        {/* Attendance Card */}
         <Card className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
@@ -590,7 +686,7 @@ export default function StudentDashboard({ handleLogout }) {
 
       try {
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: profile.email,
+          email: profile!.email, // Use existing profile data
           password: mobileCurrentPassword,
         });
 

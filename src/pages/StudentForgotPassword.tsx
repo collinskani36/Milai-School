@@ -46,13 +46,16 @@ export default function StudentForgotPassword() {
 
       const guardianEmail = profileData.guardian_email;
 
-      // 2️⃣ Send reset email to guardian with correct redirect
-      const { error: resetError } =
-        await supabase.auth.resetPasswordForEmail(guardianEmail, {
-          redirectTo: "http://localhost:8080/reset-password", // ✅ fixed
-        });
+      // ✅ STEP 1 FIX: redirect to DEPLOYED reset-password page
+const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+  guardianEmail, 
+  {
+    // window.location.origin will automatically become https://fredanacademy.vercel.app
+    redirectTo: `${window.location.origin}/reset-password`,
+  }
+);
 
-      if (resetError) throw resetError;
+if (resetError) throw resetError;
 
       setSuccess(
         "Password reset link has been sent to the guardian's email."

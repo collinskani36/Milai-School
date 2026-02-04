@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/Components/ui/input';
-import { Plus, Search, Pencil, Trash2, Shield, BookOpen, Users, X } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Shield, BookOpen, Users, X, Phone, Mail, User, Hash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
 import {
@@ -149,74 +149,69 @@ export default function TeachersSection() {
   });
 
   // Create teacher with edge function
-  // In the createMutation
-const createMutation = useMutation({
-  mutationFn: async (data: FormData) => {
-    const payload = {
-      email: data.email,
-      password: data.password,
-      teacher_code: data.teacher_code,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      phone: data.phone,
-      is_admin: data.is_admin,
-    };
+  const createMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const payload = {
+        email: data.email,
+        password: data.password,
+        teacher_code: data.teacher_code,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone,
+        is_admin: data.is_admin,
+      };
 
-    const res = await supabase.functions.invoke('create-teacher', { body: payload });
+      const res = await supabase.functions.invoke('create-teacher', { body: payload });
 
-    // 1. Check if HTTP-level error occurred
-    if (res.error) {
-      throw new Error(`Failed to create teacher: ${res.error.message}`);
-    }
+      if (res.error) {
+        throw new Error(`Failed to create teacher: ${res.error.message}`);
+      }
 
-    // 2. Parse response properly
-    let result;
-    if (typeof res.data === 'string') {
-      result = JSON.parse(res.data);
-    } else if (res.data instanceof ArrayBuffer) {
-      const text = new TextDecoder().decode(res.data);
-      result = JSON.parse(text);
-    } else {
-      result = res.data;
-    }
+      let result;
+      if (typeof res.data === 'string') {
+        result = JSON.parse(res.data);
+      } else if (res.data instanceof ArrayBuffer) {
+        const text = new TextDecoder().decode(res.data);
+        result = JSON.parse(text);
+      } else {
+        result = res.data;
+      }
 
-    // 3. Check function-level error
-    if (!result?.ok) {
-      throw new Error(result?.error || 'Create operation failed');
-    }
+      if (!result?.ok) {
+        throw new Error(result?.error || 'Create operation failed');
+      }
 
-    return result;
-  },
+      return result;
+    },
 
-  onSuccess: (result) => {
-    queryClient.invalidateQueries({ queryKey: ['teachers'] });
-    setShowAddModal(false);
-    setEditingTeacher(null);
-    resetForm();
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      setShowAddModal(false);
+      setEditingTeacher(null);
+      resetForm();
 
-    let message = "Teacher was successfully created!";
-    if (!formData.password) message += " A temporary password was auto-generated.";
+      let message = "Teacher was successfully created!";
+      if (!formData.password) message += " A temporary password was auto-generated.";
 
-    setCreationSuccess(message);
-    setTimeout(() => setCreationSuccess(null), 3500);
+      setCreationSuccess(message);
+      setTimeout(() => setCreationSuccess(null), 3500);
 
-    toast({
-      title: 'Teacher created',
-      description: 'The teacher was added successfully.',
-      variant: 'default'
-    });
-  },
+      toast({
+        title: 'Teacher created',
+        description: 'The teacher was added successfully.',
+        variant: 'default'
+      });
+    },
 
-  onError: (err: Error) => {
-    setFormError(err.message);
-    toast({
-      title: 'Create failed',
-      description: err.message,
-      variant: 'destructive'
-    });
-  },
-});
-
+    onError: (err: Error) => {
+      setFormError(err.message);
+      toast({
+        title: 'Create failed',
+        description: err.message,
+        variant: 'destructive'
+      });
+    },
+  });
 
   // Update teacher basic info
   const updateMutation = useMutation({
@@ -345,8 +340,8 @@ const createMutation = useMutation({
     mutationFn: async ({ teacherId, authId }: { teacherId: string; authId?: string }) => {
       const payload = { teacherId, userId: authId };
       const res = await supabase.functions.invoke('delete-teacher', { 
-  body: JSON.stringify(payload) 
-});
+        body: JSON.stringify(payload) 
+      });
       
       if (res.error) {
         throw new Error(`Failed to delete teacher: ${res.error.message}`);
@@ -533,7 +528,7 @@ const createMutation = useMutation({
     const classIds = Object.keys(assignments);
 
     if (classIds.length === 0) {
-      return <span className="text-gray-500">No assignments</span>;
+      return <span className="text-gray-500 text-sm">No assignments</span>;
     }
 
     return (
@@ -548,17 +543,17 @@ const createMutation = useMutation({
             <div key={classId} className="border rounded-lg p-3 bg-gray-50">
               <div className="font-medium text-sm flex items-center gap-2 mb-2">
                 <Users className="w-4 h-4" />
-                {classInfo.name} ({classInfo.grade_level})
+                <span className="truncate">{classInfo.name} ({classInfo.grade_level})</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {subjects.map(subject => (
                   <div key={subject.assignment_id || subject.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded border text-xs">
-                    <BookOpen className="w-3 h-3" />
-                    {subject.code} - {subject.name}
+                    <BookOpen className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate max-w-[80px] sm:max-w-none">{subject.code}</span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-4 w-4 ml-1"
+                      className="h-4 w-4 ml-1 flex-shrink-0"
                       onClick={() => handleRemoveAssignment(
                         subject.assignment_id,
                         `${teacher.first_name} ${teacher.last_name}`,
@@ -585,111 +580,211 @@ const createMutation = useMutation({
   ) || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {creationSuccess && (
-        <div className="w-full bg-green-100 text-green-700 rounded px-4 py-2 mb-2 text-center font-medium">
+        <div className="w-full bg-green-100 text-green-700 rounded px-4 py-2 mb-2 text-center font-medium text-sm sm:text-base">
           {creationSuccess}
         </div>
       )}
       
       <Card className="border-none shadow-sm">
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Shield className="w-6 h-6 text-purple-600" />
-              Teachers Management
+        <CardHeader className="pb-3 sm:pb-6">
+          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
+            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+              <span className="text-lg sm:text-2xl">Teachers</span>
             </CardTitle>
-            <Button onClick={handleAddNew} className="bg-purple-600 hover:bg-purple-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Teacher
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+                <Input
+                  placeholder="Search teachers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 sm:pl-10 text-sm sm:text-base h-10"
+                />
+              </div>
+              <Button 
+                onClick={handleAddNew} 
+                className="bg-purple-600 hover:bg-purple-700 h-10 sm:h-auto"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                <span className="hidden sm:inline">Add Teacher</span>
+                <span className="sm:hidden">Add</span>
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <Input
-                placeholder="Search by name, teacher code, or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
+        
+        <CardContent className="p-4 sm:p-6">
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 sm:h-16" />)}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Teacher Code</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Assignments</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTeachers.map((teacher) => (
-                    <TableRow key={teacher.id}>
-                      <TableCell className="font-medium">{teacher.teacher_code}</TableCell>
-                      <TableCell>{`${teacher.first_name} ${teacher.last_name}`}</TableCell>
-                      <TableCell>{teacher.email || '-'}</TableCell>
-                      <TableCell>{teacher.phone || '-'}</TableCell>
-                      <TableCell className="max-w-md">
-                        <div className="space-y-2">
-                          {renderTeacherAssignments(teacher)}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddAssignment(teacher)}
-                            className="mt-2"
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            Add Assignment
-                          </Button>
+            <div className="overflow-hidden">
+              {/* Mobile-friendly card view for small screens */}
+              <div className="sm:hidden space-y-3">
+                {filteredTeachers.map((teacher) => (
+                  <Card key={teacher.id} className="p-4 shadow-xs">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <div className="font-medium text-base flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-500" />
+                          {`${teacher.first_name} ${teacher.last_name}`}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {teacher.is_admin ? (
-                          <Badge className="bg-purple-100 text-purple-700">Admin</Badge>
-                        ) : (
-                          <Badge variant="secondary">Teacher</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(teacher)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(teacher)}
-                            disabled={isDeleting}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                          <Hash className="w-3 h-3" />
+                          {teacher.teacher_code}
                         </div>
-                      </TableCell>
+                      </div>
+                      {teacher.is_admin ? (
+                        <Badge className="bg-purple-100 text-purple-700 text-xs">Admin</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">Teacher</Badge>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2 text-sm mb-3">
+                      {teacher.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                          <span className="truncate">{teacher.email}</span>
+                        </div>
+                      )}
+                      {teacher.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                          <span>{teacher.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="mb-3">
+                      <div className="font-medium text-sm mb-2">Assignments:</div>
+                      <div className="max-h-32 overflow-y-auto">
+                        {renderTeacherAssignments(teacher)}
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between gap-2 pt-3 border-t">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleAddAssignment(teacher)}
+                        className="h-8 px-2 text-xs flex-1"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Assign
+                      </Button>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleEdit(teacher)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleDelete(teacher)} 
+                          disabled={isDeleting}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+                
+                {filteredTeachers.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Search className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p>No teachers found</p>
+                    <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Table view for medium screens and up */}
+              <div className="hidden sm:block overflow-x-auto -mx-2 sm:mx-0">
+                <Table className="min-w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="py-3">Teacher Code</TableHead>
+                      <TableHead className="py-3">Name</TableHead>
+                      <TableHead className="py-3">Email</TableHead>
+                      <TableHead className="py-3">Phone</TableHead>
+                      <TableHead className="py-3">Assignments</TableHead>
+                      <TableHead className="py-3">Role</TableHead>
+                      <TableHead className="py-3">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {filteredTeachers.length === 0 && (
-                <p className="text-center py-8 text-gray-500">No teachers found</p>
-              )}
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTeachers.map((teacher) => (
+                      <TableRow key={teacher.id}>
+                        <TableCell className="font-medium py-3">{teacher.teacher_code}</TableCell>
+                        <TableCell className="py-3">{`${teacher.first_name} ${teacher.last_name}`}</TableCell>
+                        <TableCell className="py-3 truncate max-w-[180px]">{teacher.email || '-'}</TableCell>
+                        <TableCell className="py-3">{teacher.phone || '-'}</TableCell>
+                        <TableCell className="py-3 max-w-md">
+                          <div className="space-y-2">
+                            {renderTeacherAssignments(teacher)}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddAssignment(teacher)}
+                              className="mt-2"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Add Assignment
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {teacher.is_admin ? (
+                            <Badge className="bg-purple-100 text-purple-700">Admin</Badge>
+                          ) : (
+                            <Badge variant="secondary">Teacher</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(teacher)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(teacher)}
+                              disabled={isDeleting}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {filteredTeachers.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Search className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p>No teachers found</p>
+                    <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
@@ -697,98 +792,116 @@ const createMutation = useMutation({
 
       {/* Add/Edit Teacher Modal */}
       <Dialog open={showAddModal} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingTeacher ? 'Edit Teacher' : 'Add New Teacher'}</DialogTitle>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-4 sm:p-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg sm:text-xl">
+              {editingTeacher ? 'Edit Teacher' : 'Add New Teacher'}
+            </DialogTitle>
           </DialogHeader>
+          
           <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-2 sm:py-4">
               <div className="space-y-2">
-                <Label htmlFor="teacher_code">Teacher Code *</Label>
+                <Label htmlFor="teacher_code" className="text-sm sm:text-base">Teacher Code *</Label>
                 <Input 
                   id="teacher_code"
                   value={formData.teacher_code}
                   onChange={(e) => handleInputChange('teacher_code', e.target.value)}
                   required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="first_name">First Name *</Label>
+                <Label htmlFor="first_name" className="text-sm sm:text-base">First Name *</Label>
                 <Input 
                   id="first_name"
                   value={formData.first_name}
                   onChange={(e) => handleInputChange('first_name', e.target.value)}
                   required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last_name">Last Name *</Label>
+                <Label htmlFor="last_name" className="text-sm sm:text-base">Last Name *</Label>
                 <Input 
                   id="last_name"
                   value={formData.last_name}
                   onChange={(e) => handleInputChange('last_name', e.target.value)}
                   required 
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-sm sm:text-base">Email</Label>
                 <Input 
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   placeholder="Optional - will auto-generate if empty"
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone" className="text-sm sm:text-base">Phone</Label>
                 <Input 
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className="h-10 sm:h-auto text-sm sm:text-base"
                 />
               </div>
 
               {!editingTeacher && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password (optional)</Label>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="password" className="text-sm sm:text-base">Password (optional)</Label>
                   <Input 
                     id="password"
                     type="password" 
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="Set a password or leave blank for auto-generate"
+                    className="h-10 sm:h-auto text-sm sm:text-base"
                   />
+                  <p className="text-xs text-gray-500">
+                    If left blank, a temporary password will be auto-generated and can be reset later.
+                  </p>
                 </div>
               )}
               
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 pt-2">
                 <Checkbox
                   id="is_admin"
                   checked={formData.is_admin}
                   onCheckedChange={(checked) => handleInputChange('is_admin', checked)}
                 />
-                <Label htmlFor="is_admin">Grant Admin Access</Label>
+                <Label htmlFor="is_admin" className="text-sm sm:text-base cursor-pointer">
+                  Grant Admin Access
+                </Label>
               </div>
             </div>
-            <DialogFooter>
+            
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 sm:pt-6 border-t">
               {formError && (
-                <div className="text-sm text-red-600 mr-auto">{formError}</div>
+                <div className="text-sm text-red-600 mr-auto text-left w-full sm:w-auto">{formError}</div>
               )}
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setShowAddModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="bg-purple-600 hover:bg-purple-700"
-                disabled={isSaving}
-              >
-                {isSaving ? 'Loading...' : editingTeacher ? 'Update Teacher' : 'Create Teacher'}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowAddModal(false)}
+                  className="h-10 sm:h-auto w-full sm:w-auto order-2 sm:order-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-700 h-10 sm:h-auto w-full sm:w-auto order-1 sm:order-2"
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Loading...' : editingTeacher ? 'Update Teacher' : 'Create Teacher'}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -796,22 +909,23 @@ const createMutation = useMutation({
 
       {/* Add Assignment Modal */}
       <Dialog open={showAssignmentModal} onOpenChange={handleAssignmentModalChange}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-4 sm:p-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg sm:text-xl">
               Add Assignment for {selectedTeacher?.first_name} {selectedTeacher?.last_name}
             </DialogTitle>
           </DialogHeader>
+          
           <form onSubmit={handleAssignmentSubmit}>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-3 sm:gap-4 py-2 sm:py-4">
               <div className="space-y-2">
-                <Label htmlFor="assignment_class_id">Class *</Label>
+                <Label htmlFor="assignment_class_id" className="text-sm sm:text-base">Class *</Label>
                 <Select 
                   value={assignmentForm.class_id}
                   onValueChange={(value) => handleAssignmentChange('class_id', value)}
                   required
                 >
-                  <SelectTrigger id="assignment_class_id">
+                  <SelectTrigger id="assignment_class_id" className="h-10 sm:h-auto text-sm sm:text-base">
                     <SelectValue placeholder="Select a class" />
                   </SelectTrigger>
                   <SelectContent>
@@ -825,19 +939,21 @@ const createMutation = useMutation({
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="assignment_subjects">Subjects *</Label>
-                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Label htmlFor="assignment_subjects" className="text-sm sm:text-base">Subjects *</Label>
+                <div className="border rounded-lg p-3 sm:p-4 max-h-60 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {subjects.map((subject) => (
                       <div key={subject.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`subject-${subject.id}`}
                           checked={assignmentForm.subject_ids?.includes(subject.id) || false}
                           onCheckedChange={() => handleSubjectToggle(subject.id)}
+                          className="flex-shrink-0"
                         />
                         <Label 
                           htmlFor={`subject-${subject.id}`}
-                          className="text-sm cursor-pointer flex-1"
+                          className="text-sm cursor-pointer flex-1 truncate"
+                          title={`${subject.code} - ${subject.name}`}
                         >
                           {subject.code} - {subject.name}
                         </Label>
@@ -850,17 +966,19 @@ const createMutation = useMutation({
                 </p>
               </div>
             </div>
-            <DialogFooter>
+            
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 sm:pt-6 border-t">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setShowAssignmentModal(false)}
+                className="h-10 sm:h-auto w-full sm:w-auto order-2 sm:order-1"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="bg-purple-600 hover:bg-purple-700"
+                className="bg-purple-600 hover:bg-purple-700 h-10 sm:h-auto w-full sm:w-auto order-1 sm:order-2"
                 disabled={isAddingAssignments}
               >
                 {isAddingAssignments ? 'Adding...' : 'Add Assignments'}
