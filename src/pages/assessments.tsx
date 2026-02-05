@@ -19,6 +19,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from "../lib/supabaseClient";
 import { BookOpen, TrendingUp, Calendar, FileText, Download, BarChart3, User, Mail, Phone, ShieldAlert, ChevronLeft, ChevronRight, Maximize2, Minimize2, ArrowLeft, ArrowRight } from "lucide-react";
 import { PDFDownloadLink } from '@react-pdf/renderer';
+import { Capacitor } from '@capacitor/core';
 
 // Import helper functions and types
 import {
@@ -38,7 +39,10 @@ import {
 import ExamPDF from '@/Components/ExamPDF';
 import PerformanceHistoryPDF from '@/Components/PerformanceHistoryPDF';
 
+
+
 // Simple loading component for PDF rendering
+const isNative = Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform();
 const PDFLoadingFallback = () => (
   <div className="h-3 w-3 animate-spin rounded-full border-b-2 border-maroon"></div>
 );
@@ -47,6 +51,10 @@ const PDFLoadingFallback = () => (
 const usePerformanceData = (studentId: string | null, classId: string | null) => {
   const [data, setData] = useState<PerformanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  // Just for Web
+
+
+
 
   useEffect(() => {
     if (!studentId || !classId) return;
@@ -76,6 +84,34 @@ const usePerformanceData = (studentId: string | null, classId: string | null) =>
   }, [studentId, classId]);
 
   return { data, loading };
+};
+
+const downloadPdfNative = async (
+  record: any,
+  profile: any,
+  className: string,
+  logoUrl: string
+) => {
+  try {
+    const { pdf } = await import("@react-pdf/renderer");
+
+    const blob = await pdf(
+      <ExamPDF
+        examRecord={record}
+        profile={profile}
+        className={className}
+        logoUrl={logoUrl}
+      />
+    ).toBlob();
+
+    const url = URL.createObjectURL(blob);
+
+    // Android WebView will hand this to DownloadManager
+    window.open(url, "_blank");
+  } catch (error) {
+    console.error("PDF download failed:", error);
+    alert("Failed to generate exam PDF");
+  }
 };
 
 const processPerformanceData = async (rankingsData: any[], studentId: string) => {
@@ -237,23 +273,45 @@ const PerformanceCard = React.memo(({ record, profile, className, logoUrl }: any
         <Badge variant="outline" className={`${getGradeColor(record.grade)} text-xs`}>
           {record.grade.split(" ")[0]}
         </Badge>
-        <PDFDownloadLink
-          document={<ExamPDF examRecord={record} profile={profile} className={className} logoUrl={logoUrl} />}
-          fileName={`Milai_School_${record.title.replace(/\s+/g, '_')}_${profile?.reg_no || 'result'}.pdf`}
+        <TableCell>
+  {isNative ? (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 w-7 p-0"
+      title="Download PDF"
+      onClick={() =>
+        downloadPdfNative(record, profile, className, logoUrl)
+      }
+    >
+      <Download className="h-3 w-3" />
+    </Button>
+  ) : (
+    <PDFDownloadLink
+      document={
+        <ExamPDF
+          examRecord={record}
+          profile={profile}
+          className={className}
+          logoUrl={logoUrl}
+        />
+      }
+      fileName={`Milai_School_${record.title.replace(/\s+/g, '_')}_${profile?.reg_no || 'result'}.pdf`}
+    >
+      {({ loading }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 w-7 p-0"
+          disabled={loading}
         >
-          {({ loading }) => (
-            <Button variant="outline" size="sm" className="h-7 px-2 text-xs flex items-center gap-1" disabled={loading}>
-              {loading ? (
-                <PDFLoadingFallback />
-              ) : (
-                <>
-                  <Download className="h-3 w-3" />
-                  <span className="hidden xs:inline">PDF</span>
-                </>
-              )}
-            </Button>
-          )}
-        </PDFDownloadLink>
+          <Download className="h-3 w-3" />
+        </Button>
+      )}
+    </PDFDownloadLink>
+  )}
+</TableCell>
+
       </div>
     </CardContent>
   </Card>
