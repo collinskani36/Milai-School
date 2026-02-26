@@ -38,10 +38,9 @@ function AppRoutes() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [logoutOrigin, setLogoutOrigin] = useState<"teacher" | "student" | null>(null);
-  
+
   // Ref to track if the current session is strictly for password recovery
-  const recoverySession = useRef(false); 
+  const recoverySession = useRef(false);
 
   const lastCheckedId = useRef<string | null>(null);
   const isCheckingAdmin = useRef(false);
@@ -71,7 +70,6 @@ function AppRoutes() {
       if (session?.user) {
         if (isRecoveryFlow()) {
           recoverySession.current = true;
-          // Note: We DO NOT set User state here if it's recovery
         } else {
           setUser(session.user);
         }
@@ -118,7 +116,7 @@ function AppRoutes() {
     // GUARD: If user is on the reset page or the URL contains recovery data,
     // we stop all automatic redirects to let ResetPassword.tsx do its job.
     if (location.pathname === "/reset-password" || isRecoveryFlow()) {
-      return; 
+      return;
     }
 
     const isAuthPage =
@@ -129,17 +127,14 @@ function AppRoutes() {
 
     // Logic for Logged-Out users or Recovery sessions
     if (!user || recoverySession.current) {
-      if (logoutOrigin) {
-        navigate(logoutOrigin === "student" ? "/login" : "/teacher-login", { replace: true });
-        setLogoutOrigin(null);
-      } else if (!isAuthPage) {
+      if (!isAuthPage) {
         // Redirect to login if trying to access dashboard without a real session
         if (location.pathname.startsWith("/student-dashboard")) navigate("/login", { replace: true });
         if (location.pathname.startsWith("/teacher-dashboard") || location.pathname.startsWith("/admin-dashboard")) {
           navigate("/teacher-login", { replace: true });
         }
       }
-    } 
+    }
     // Logic for Logged-In users
     else {
       if (location.pathname === "/login" || location.pathname === "/") {
@@ -153,22 +148,13 @@ function AppRoutes() {
         navigate("/admin-dashboard", { replace: true });
       }
     }
-  }, [loading, user, isAdmin, location.pathname, navigate, logoutOrigin]);
+  }, [loading, user, isAdmin, location.pathname, navigate]);
 
+  // Logout — navigate to landing page directly, no race condition
   const handleLogout = async () => {
-    const wasTeacher = location.pathname.includes("teacher") || location.pathname.includes("admin");
-    setLogoutOrigin(wasTeacher ? "teacher" : "student");
     await supabase.auth.signOut();
+    navigate("/", { replace: true });
   };
-
-  // Loading state
-  if (loading && !user && !isRecoveryFlow()) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", backgroundColor: "#020617" }}>
-        <div style={{ color: "#3b82f6", fontWeight: "600" }} className="animate-pulse">Loading Portal...</div>
-      </div>
-    );
-  }
 
   // Route Guarding Components
   const StudentRoute = ({ children }: { children: JSX.Element }) =>
@@ -200,7 +186,6 @@ function AppRoutes() {
   );
 }
 
-
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -210,4 +195,3 @@ export default function App() {
     </QueryClientProvider>
   );
 }
- 

@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
-import { ArrowLeft, Pencil, Trash2, Search, FileSignature } from 'lucide-react';
+import { ArrowLeft, Search, FileSignature } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
 import {
   Dialog,
@@ -16,19 +15,39 @@ import {
 } from '@/Components/ui/dialog';
 import { Label } from '@/Components/ui/label';
 import { Skeleton } from '@/Components/ui/skeleton';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/Components/ui/alert-dialog';
+import { Badge } from '@/Components/ui/badge';
 import { format } from 'date-fns';
 
+// ── Performance level badge ───────────────────────────────────────────────────
+function PerformanceLevelBadge({ level }: { level: string | null }) {
+  if (!level) return <span className="text-gray-400">-</span>;
+
+  const styles: Record<string, string> = {
+    EE:  'bg-green-100 text-green-800 border-green-200',
+    EE1: 'bg-green-100 text-green-800 border-green-200',
+    EE2: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    ME:  'bg-blue-100 text-blue-800 border-blue-200',
+    ME1: 'bg-blue-100 text-blue-800 border-blue-200',
+    ME2: 'bg-sky-100 text-sky-800 border-sky-200',
+    AE:  'bg-yellow-100 text-yellow-800 border-yellow-200',
+    AE1: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    AE2: 'bg-amber-100 text-amber-800 border-amber-200',
+    BE:  'bg-red-100 text-red-800 border-red-200',
+    BE1: 'bg-red-100 text-red-800 border-red-200',
+    BE2: 'bg-rose-100 text-rose-800 border-rose-200',
+  };
+
+  const normalized = level.toUpperCase().trim();
+  const style = styles[normalized] || 'bg-gray-100 text-gray-800 border-gray-200';
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold ${style}`}>
+      {normalized}
+    </span>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function AssessmentResultsView({ assessment, onBack = () => {} }) {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,14 +58,28 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
   const [showStudentEdit, setShowStudentEdit] = useState(false);
   const [studentMarks, setStudentMarks] = useState<Record<string, number | ''>>({});
 
+  // Determine if this is a formative/portfolio assessment
+  const isFormative = assessment?.category === 'formative' || assessment?.category === 'portfolio';
+
+  // ── Print ────────────────────────────────────────────────────────────────
+
   const printStudentResult = (student) => {
-    // Generate simple printable HTML and open in new window
     const rows = subjectsForAssessment.map(subj => {
       const r = resultLookup.get(`${student.id}_${subj.id}`);
+      if (isFormative) {
+        return `<tr><td>${subj.name}</td><td>${r?.performance_level || '-'}</td><td>${r?.teacher_remarks || '-'}</td></tr>`;
+      }
       return `<tr><td>${subj.name}</td><td>${r ? r.score : '-'}</td><td>${r ? r.max_marks : '-'}</td></tr>`;
     }).join('');
-    const total = studentTotals.get(student.id) ?? '-';
-    const position = studentPositions.get(student.id) ?? '-';
+
+    const summaryRow = isFormative
+      ? ''
+      : `<p><strong>Total:</strong> ${studentTotals.get(student.id) ?? '-'} &nbsp; <strong>Position:</strong> ${studentPositions.get(student.id) ?? '-'}</p>`;
+
+    const tableHeader = isFormative
+      ? `<thead><tr><th>Subject</th><th>Performance Level</th><th>Remarks</th></tr></thead>`
+      : `<thead><tr><th>Subject</th><th>Score</th><th>Max Marks</th></tr></thead>`;
+
     const html = `
       <html>
         <head>
@@ -56,11 +89,12 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
         <body>
           <h2>Result for ${student.first_name} ${student.last_name}</h2>
           <p>Assessment: ${assessment?.title || ''}</p>
+          <p>Category: ${assessment?.category || ''}</p>
           <table>
-            <thead><tr><th>Subject</th><th>Score</th><th>Max Marks</th></tr></thead>
+            ${tableHeader}
             <tbody>${rows}</tbody>
           </table>
-          <p><strong>Total:</strong> ${total} &nbsp; <strong>Position:</strong> ${position}</p>
+          ${summaryRow}
         </body>
       </html>`;
     const w = window.open('', '_blank');
@@ -73,6 +107,8 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
       alert('Pop-up blocked. Please allow pop-ups for this site to print.');
     }
   };
+
+  // ── Edit student marks ────────────────────────────────────────────────────
 
   const openStudentEdit = (student) => {
     setSelectedStudent(student);
@@ -91,7 +127,6 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     for (const subjId of Object.keys(studentMarks)) {
       const score = studentMarks[subjId];
       if (score === '' || score == null) continue;
-      // Prepare row payload
       const existing = resultLookup.get(`${selectedStudent.id}_${subjId}`);
       const payload: any = {
         assessment_id: assessment.id,
@@ -109,18 +144,18 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
       return;
     }
     try {
-      // Use upsert to insert/update rows; on conflict by id will update
-      const { data: res, error } = await supabase.from('assessment_results').upsert(rowsToUpsert, { onConflict: 'id' });
+      const { error } = await supabase.from('assessment_results').upsert(rowsToUpsert, { onConflict: 'id' });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment.id] });
       setShowStudentEdit(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save student marks', err);
       alert('Failed to save marks: ' + (err?.message || err));
     }
   };
 
-  // Fetch all necessary data
+  // ── Queries ───────────────────────────────────────────────────────────────
+
   const { data: results, isLoading: isLoadingResults } = useQuery({
     queryKey: ['assessmentResults', assessment?.id ?? 'none'],
     queryFn: async () => {
@@ -156,11 +191,13 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     initialData: [],
   });
 
-  // Create maps for efficient lookups
+  // ── Maps ──────────────────────────────────────────────────────────────────
+
   const studentMap = useMemo(() => new Map(students.map(s => [s.id, `${s.first_name} ${s.last_name}`])), [students]);
   const subjectMap = useMemo(() => new Map(subjects.map(s => [s.id, s.name])), [subjects]);
 
-  // Mutations for Edit and Delete
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
   const updateMutation = useMutation<any, any, any>({
     mutationFn: async ({ id, data }) => {
       const { error } = await supabase.from('assessment_results').update(data).eq('id', id);
@@ -182,7 +219,6 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     },
   });
 
-  // Handle edit submission
   const handleEditSubmit = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -193,7 +229,8 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     }
   };
 
-  // Pivot data: subjects as columns, students as rows
+  // ── Pivot data ────────────────────────────────────────────────────────────
+
   const subjectsForAssessment = useMemo(() => {
     const subjectIds = new Set(results.map(r => r.subject_id));
     return subjects.filter(s => subjectIds.has(s.id));
@@ -212,8 +249,9 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     return map;
   }, [results]);
 
-  // Compute per-student total marks and class positions (rank)
+  // Summative only: totals and positions
   const studentTotals = useMemo(() => {
+    if (isFormative) return new Map();
     const m = new Map();
     for (const s of studentsForAssessment) {
       let total = 0;
@@ -225,12 +263,12 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
       m.set(s.id, total);
     }
     return m;
-  }, [studentsForAssessment, subjectsForAssessment, resultLookup]);
+  }, [studentsForAssessment, subjectsForAssessment, resultLookup, isFormative]);
 
   const studentPositions = useMemo(() => {
-    // Map total -> position (1-based), ties get same position
+    if (isFormative) return new Map();
     const totals = Array.from(studentTotals.values());
-    const uniqueSorted = Array.from(new Set(totals)).sort((a, b) => b - a);
+    const uniqueSorted = Array.from(new Set(totals)).sort((a, b) => (b as number) - (a as number));
     const posMap = new Map();
     uniqueSorted.forEach((t, i) => posMap.set(t, i + 1));
     const byStudent = new Map();
@@ -238,16 +276,16 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
       byStudent.set(studentId, posMap.get(total));
     }
     return byStudent;
-  }, [studentTotals]);
+  }, [studentTotals, isFormative]);
 
-  // Filter students based on search term (student name or subject name)
+  // ── Search filter ─────────────────────────────────────────────────────────
+
   const filteredStudents = useMemo(() => {
     if (!searchTerm) return studentsForAssessment;
     const q = searchTerm.toLowerCase();
     return studentsForAssessment.filter(s => {
       const studentName = `${s.first_name} ${s.last_name}`.toLowerCase();
       if (studentName.includes(q)) return true;
-      // check if any subject column matches query
       for (const subj of subjectsForAssessment) {
         if ((subj.name || '').toLowerCase().includes(q)) return true;
       }
@@ -257,6 +295,9 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
 
   const isLoading = isLoadingResults || isLoadingStudents || isLoadingSubjects;
 
+  // Extra columns: summative has Total + Position = 2 extra, formative has Remarks = 1 extra
+  const extraColCount = isFormative ? 2 : 3; // name + total + position OR name + remarks
+
   return (
     <div>
       {!assessment && (
@@ -265,6 +306,7 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
           <p className="text-sm text-muted-foreground">Open the Assessments list and click "View Results" on an assessment to see its results.</p>
         </div>
       )}
+
       <div className="flex items-center gap-4 mb-6">
         <Button variant="outline" size="icon" onClick={onBack}>
           <ArrowLeft className="w-4 h-4" />
@@ -273,6 +315,11 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
           <h2 className="text-2xl font-bold text-gray-900">Results for: {assessment.title}</h2>
           <p className="text-sm text-gray-500">
             {studentsForAssessment.length} students × {subjectsForAssessment.length} subjects
+            {isFormative && (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold bg-teal-100 text-teal-800 border-teal-200 capitalize">
+                {assessment.category}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -301,69 +348,136 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
             }
           }}>{showRaw ? 'Hide raw results' : 'Show raw results'}</Button>
         </div>
-      </div>
-
-      <div className="overflow-x-auto border rounded-lg">
-        {isLoading ? (
-          <div className="p-6">
-            {[1,2,3].map(i => <Skeleton key={i} className="h-8 w-full mb-3" />)}
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student Name</TableHead>
-                {subjectsForAssessment.map(subj => (
-                  <TableHead key={subj.id}>{subj.name}</TableHead>
-                ))}
-                <TableHead>Total</TableHead>
-                <TableHead>Position</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredStudents.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={subjectsForAssessment.length + 4} className="text-center h-24 text-gray-500">
-                    No results found for this assessment.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredStudents.map(student => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">{`${student.first_name} ${student.last_name}`}</TableCell>
-                    {subjectsForAssessment.map(subj => {
-                      const key = `${student.id}_${subj.id}`;
-                      const r = resultLookup.get(key);
-                      return (
-                        <TableCell key={subj.id} className="text-center">
-                          <span>{r ? r.score : '-'}</span>
-                        </TableCell>
-                      );
-                    })}
-                    <TableCell className="text-center font-medium">{studentTotals.get(student.id) ?? '-'}</TableCell>
-                    <TableCell className="text-center">{studentPositions.get(student.id) ?? '-'}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => openStudentEdit(student)}>
-                          Edit Marks
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => printStudentResult(student)}>
-                          Print
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        {showRaw && (
+          <pre className="mt-2 text-xs bg-gray-50 border rounded p-3 overflow-auto max-h-48">
+            {JSON.stringify(rawRows, null, 2)}
+          </pre>
         )}
       </div>
 
-      {/* Edit Result Modal */}
+      {/* ── FORMATIVE TABLE ── */}
+      {isFormative ? (
+        <div className="overflow-x-auto border rounded-lg">
+          {isLoading ? (
+            <div className="p-6">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full mb-3" />)}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student Name</TableHead>
+                  {subjectsForAssessment.map(subj => (
+                    <TableHead key={subj.id}>{subj.name}</TableHead>
+                  ))}
+                  <TableHead>Remarks</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={subjectsForAssessment.length + 3} className="text-center h-24 text-gray-500">
+                      No results found for this assessment.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredStudents.map(student => {
+                    // Collect remarks across subjects for this student
+                    const allRemarks = subjectsForAssessment
+                      .map(subj => resultLookup.get(`${student.id}_${subj.id}`)?.teacher_remarks)
+                      .filter(Boolean)
+                      .join('; ');
 
-      {/* Student Edit Modal */}
+                    return (
+                      <TableRow key={student.id}>
+                        <TableCell className="font-medium">{`${student.first_name} ${student.last_name}`}</TableCell>
+                        {subjectsForAssessment.map(subj => {
+                          const r = resultLookup.get(`${student.id}_${subj.id}`);
+                          return (
+                            <TableCell key={subj.id} className="text-center">
+                              <PerformanceLevelBadge level={r?.performance_level ?? null} />
+                            </TableCell>
+                          );
+                        })}
+                        <TableCell className="text-sm text-gray-600 max-w-xs truncate">
+                          {allRemarks || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => printStudentResult(student)}>
+                            Print
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      ) : (
+        // ── SUMMATIVE TABLE ──
+        <div className="overflow-x-auto border rounded-lg">
+          {isLoading ? (
+            <div className="p-6">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full mb-3" />)}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student Name</TableHead>
+                  {subjectsForAssessment.map(subj => (
+                    <TableHead key={subj.id}>{subj.name}</TableHead>
+                  ))}
+                  <TableHead>Total</TableHead>
+                  <TableHead>Position</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={subjectsForAssessment.length + 4} className="text-center h-24 text-gray-500">
+                      No results found for this assessment.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredStudents.map(student => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">{`${student.first_name} ${student.last_name}`}</TableCell>
+                      {subjectsForAssessment.map(subj => {
+                        const key = `${student.id}_${subj.id}`;
+                        const r = resultLookup.get(key);
+                        return (
+                          <TableCell key={subj.id} className="text-center">
+                            <span>{r ? r.score : '-'}</span>
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="text-center font-medium">{studentTotals.get(student.id) ?? '-'}</TableCell>
+                      <TableCell className="text-center">{studentPositions.get(student.id) ?? '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => openStudentEdit(student)}>
+                            Edit Marks
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => printStudentResult(student)}>
+                            Print
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      )}
+
+      {/* ── Student Edit Modal (summative only) ── */}
       {showStudentEdit && selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded shadow-lg w-full max-w-2xl p-6">
@@ -381,7 +495,9 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
                       setStudentMarks(prev => ({ ...prev, [subj.id]: v === '' ? '' : Number(v) }));
                     }}
                   />
-                  <div className="text-sm text-gray-500">Max: {resultLookup.get(`${selectedStudent.id}_${subj.id}`)?.max_marks ?? '-'}</div>
+                  <div className="text-sm text-gray-500">
+                    Max: {resultLookup.get(`${selectedStudent.id}_${subj.id}`)?.max_marks ?? '-'}
+                  </div>
                 </div>
               ))}
             </div>
@@ -392,11 +508,13 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
           </div>
         </div>
       )}
+
+      {/* ── Edit Result Modal ── */}
       <Dialog open={!!editingResult} onOpenChange={() => setEditingResult(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileSignature className="w-5 h-5"/>
+              <FileSignature className="w-5 h-5" />
               Edit Result
             </DialogTitle>
             <DialogDescription>
@@ -416,9 +534,7 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
                   required
                 />
               </div>
-              <p className="text-sm text-gray-500">
-                Max Marks: {editingResult?.max_marks}
-              </p>
+              <p className="text-sm text-gray-500">Max Marks: {editingResult?.max_marks}</p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingResult(null)}>Cancel</Button>

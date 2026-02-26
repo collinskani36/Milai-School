@@ -4,9 +4,10 @@ import { Button } from "@/Components/ui/button";
 import { Badge } from "@/Components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/Components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
-import { Users, Phone, X } from "lucide-react";
+import { Users, Phone } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import StudentPerformanceDetailView from "./StudentPerformanceDetailView"; // We'll need to extract this component too
+import StudentPerformanceDetailView from "./StudentPerformanceDetailView";
+import { PerformanceBadge } from "@/Components/PerformanceBadge";
 
 // ---------- Types ----------
 interface TeacherClass {
@@ -170,8 +171,10 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
           .select(`
             id,
             score,
+            performance_level,
+            teacher_remarks,
+            is_absent,
             assessment_date,
-            max_marks,
             subject_id,
             assessments (
               id,
@@ -179,7 +182,12 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
               term,
               year,
               class_id,
-              created_at
+              max_marks,
+              category,
+              strand_id,
+              sub_strand_id,
+              strands (name, code),
+              sub_strands (name, code)
             ),
             subjects (
               name
@@ -187,8 +195,9 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
           `)
           .eq("student_id", studentId)
           .in("subject_id", subjectIds)
+          .eq("status", "published")
           .order("assessment_date", { ascending: false })
-          .limit(20);
+          .limit(50);
 
         if (resultsError) throw resultsError;
 
@@ -200,106 +209,106 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
         
         const assessments: any[] = (assessmentResults || [])
           .filter(ar => ar.assessments && ar.subjects && subjectMap[ar.subject_id])
-          .map(ar => ({
-            id: ar.id,
-            title: firstRel(ar.assessments as any)?.title,
-            score: parseFloat(ar.score),
-            max_marks: ar.max_marks || 100,
-            percentage: (parseFloat(ar.score) / (ar.max_marks || 100)) * 100,
-            assessment_date: ar.assessment_date,
-            subject: firstRel(ar.subjects as any)?.name,
-            term: firstRel(ar.assessments as any)?.term,
-            year: firstRel(ar.assessments as any)?.year
-          }))
-          .slice(0, 10);
+          .map(ar => {
+            const assessment = Array.isArray(ar.assessments) ? ar.assessments[0] : ar.assessments;
+            const subject = Array.isArray(ar.subjects) ? ar.subjects[0] : ar.subjects;
+            const isSummative = !assessment?.category || assessment?.category === 'summative';
+            return {
+              id: ar.id,
+              title: assessment?.title,
+              score: ar.score,
+              performance_level: ar.performance_level,
+              teacher_remarks: ar.teacher_remarks,
+              is_absent: ar.is_absent,
+              max_marks: assessment?.max_marks || 100,
+              // Only compute percentage for summative
+              percentage: isSummative && ar.score !== null
+                ? (ar.score / (assessment?.max_marks || 100)) * 100
+                : null,
+              assessment_date: ar.assessment_date,
+              subject: subject?.name,
+              term: assessment?.term,
+              year: assessment?.year,
+              category: assessment?.category || 'summative',
+              strand: assessment?.strands,
+              sub_strand: assessment?.sub_strands,
+            };
+          });
+
+        // Stats computed on summative only
+        const summativeAssessments = assessments.filter(a => a.category === 'summative');
 
         const subjectAverages = teacherSubjectsForStudentClass.map(tc => {
-          const subjectAssessments = assessments.filter(a => 
-            a.subject === firstRel(tc.subjects)?.name
-          );
-          const average = subjectAssessments.length > 0 
-            ? subjectAssessments.reduce((sum, a) => sum + a.percentage, 0) / subjectAssessments.length
+          const subjectName = firstRel(tc.subjects)?.name;
+          const subjectSummative = summativeAssessments.filter(a => a.subject === subjectName);
+          const average = subjectSummative.length > 0
+            ? subjectSummative.reduce((sum, a) => sum + (a.percentage || 0), 0) / subjectSummative.length
             : 0;
           return {
-            subject: firstRel(tc.subjects)?.name || "Unknown",
+            subject: subjectName || "Unknown",
             average: parseFloat(average.toFixed(1))
           };
         }).filter(sa => sa.average > 0);
 
-        const overallAverage = assessments.length > 0
-          ? assessments.reduce((sum, a) => sum + a.percentage, 0) / assessments.length
+        const overallAverage = summativeAssessments.length > 0
+          ? summativeAssessments.reduce((sum, a) => sum + (a.percentage || 0), 0) / summativeAssessments.length
           : 0;
 
         let trend: 'improving' | 'declining' | 'stable' = 'stable';
         let recentTrend = 0;
 
-        if (assessments.length >= 4) {
-          const sortedAssessments = [...assessments].sort((a, b) => 
+        if (summativeAssessments.length >= 4) {
+          const sorted = [...summativeAssessments].sort((a, b) =>
             new Date(a.assessment_date).getTime() - new Date(b.assessment_date).getTime()
           );
-          
-          const n = sortedAssessments.length;
+          const n = sorted.length;
           let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-          
-          sortedAssessments.forEach((assessment, index) => {
-            const x = index;
-            const y = assessment.percentage;
-            sumX += x;
-            sumY += y;
-            sumXY += x * y;
-            sumX2 += x * x;
+          sorted.forEach((a, i) => {
+            sumX += i; sumY += a.percentage || 0;
+            sumXY += i * (a.percentage || 0); sumX2 += i * i;
           });
-          
           const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
           recentTrend = parseFloat((slope * 10).toFixed(1));
-          
           if (recentTrend > 2) trend = 'improving';
           else if (recentTrend < -2) trend = 'declining';
-          else trend = 'stable';
-        } else if (assessments.length >= 2) {
-          const sortedAssessments = [...assessments].sort((a, b) => 
+        } else if (summativeAssessments.length >= 2) {
+          const sorted = [...summativeAssessments].sort((a, b) =>
             new Date(a.assessment_date).getTime() - new Date(b.assessment_date).getTime()
           );
-          const firstHalf = sortedAssessments.slice(0, Math.ceil(sortedAssessments.length / 2));
-          const secondHalf = sortedAssessments.slice(-Math.floor(sortedAssessments.length / 2));
-          
-          const firstAvg = firstHalf.reduce((sum, a) => sum + a.percentage, 0) / firstHalf.length;
-          const secondAvg = secondHalf.reduce((sum, a) => sum + a.percentage, 0) / secondHalf.length;
+          const firstHalf = sorted.slice(0, Math.ceil(sorted.length / 2));
+          const secondHalf = sorted.slice(-Math.floor(sorted.length / 2));
+          const firstAvg = firstHalf.reduce((sum, a) => sum + (a.percentage || 0), 0) / firstHalf.length;
+          const secondAvg = secondHalf.reduce((sum, a) => sum + (a.percentage || 0), 0) / secondHalf.length;
           recentTrend = parseFloat((secondAvg - firstAvg).toFixed(1));
-          
           if (recentTrend > 5) trend = 'improving';
           else if (recentTrend < -5) trend = 'declining';
-          else trend = 'stable';
         }
 
         const gradeDistribution = [
-          { label: "EE1 (L8)", min: 90, max: 100, color: "#10B981" },
-          { label: "EE2 (L7)", min: 75, max: 89, color: "#22C55E" },
-          { label: "ME1 (L6)", min: 58, max: 74, color: "#3B82F6" },
-          { label: "ME2 (L5)", min: 41, max: 57, color: "#8B5CF6" },
-          { label: "AE1 (L4)", min: 31, max: 40, color: "#F59E0B" },
-          { label: "AE2 (L3)", min: 21, max: 30, color: "#F97316" },
-          { label: "BE1 (L2)", min: 11, max: 20, color: "#EF4444" },
-          { label: "BE2 (L1)", min: 0, max: 10, color: "#6B7280" },
+          { label: "EE1 (L8)", min: 90, max: 100 },
+          { label: "EE2 (L7)", min: 75, max: 89 },
+          { label: "ME1 (L6)", min: 58, max: 74 },
+          { label: "ME2 (L5)", min: 41, max: 57 },
+          { label: "AE1 (L4)", min: 31, max: 40 },
+          { label: "AE2 (L3)", min: 21, max: 30 },
+          { label: "BE1 (L2)", min: 11, max: 20 },
+          { label: "BE2 (L1)", min: 0,  max: 10  },
         ].map(level => ({
           grade: level.label,
-          count: assessments.filter(a => a.percentage >= level.min && a.percentage <= level.max).length
+          count: summativeAssessments.filter(a =>
+            a.percentage !== null && a.percentage >= level.min && a.percentage <= level.max
+          ).length
         }));
 
-        const performanceData: StudentPerformanceDetail = {
-          student: {
-            ...studentData,
-            class: studentClassName
-          },
-          assessments,
+        setPerformanceDetail({
+          student: { ...studentData, class: studentClassName },
+          assessments, // all assessments (both summative + formative) passed to view
           averageScore: parseFloat(overallAverage.toFixed(1)),
           trend,
           subjectAverages,
           gradeDistribution,
           recentTrend
-        };
-
-        setPerformanceDetail(performanceData);
+        });
       } catch (error) {
         console.error("Error fetching student performance detail:", error);
         setPerformanceDetail(null);
@@ -325,20 +334,14 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
     isActive && !!selectedStudentId
   );
 
-  // Create class map for student class names
   const classMap = teacherClasses.reduce((acc, tc) => {
     const classObj = firstRel(tc.classes);
-    if (classObj) {
-      acc[tc.class_id] = classObj.name;
-    }
+    if (classObj) acc[tc.class_id] = classObj.name;
     return acc;
   }, {} as Record<string, string>);
 
-  // Fetch students only when component is active (tab is selected)
   useEffect(() => {
-    if (!isActive || !teacherClasses.length || !teacherId) {
-      return;
-    }
+    if (!isActive || !teacherClasses.length || !teacherId) return;
 
     const fetchStudentsData = async () => {
       setLoading(true);
@@ -380,13 +383,10 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
 
         if (studentsError) throw studentsError;
 
-        const studentsWithEnrollments = studentsData?.map(student => {
-          const studentEnrollments = enrollments.filter(e => e.student_id === student.id);
-          return {
-            ...student,
-            enrollments: studentEnrollments
-          };
-        }) || [];
+        const studentsWithEnrollments = studentsData?.map(student => ({
+          ...student,
+          enrollments: enrollments.filter(e => e.student_id === student.id)
+        })) || [];
 
         setStudents(studentsWithEnrollments);
       } catch (error) {
@@ -410,7 +410,6 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Student Performance Detail Dialog */}
       <Dialog open={!!selectedStudentId} onOpenChange={(open) => !open && setSelectedStudentId(null)}>
         <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
           <DialogHeader className="space-y-1 sm:space-y-2">
@@ -447,94 +446,81 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
       </div>
 
       <Card>
-  <CardHeader className="p-4 sm:p-6">
-    <CardTitle className="text-lg sm:text-xl">Student Directory</CardTitle>
-    <CardDescription className="text-xs sm:text-sm">
-      Tap on a student to view detailed performance analysis
-    </CardDescription>
-  </CardHeader>
-  <CardContent className="p-0 sm:p-6 pt-0">
-    <div className="overflow-x-auto -mx-3 sm:mx-0">
-      <div className="min-w-[600px] px-3 sm:min-w-0 sm:px-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Student</TableHead>
-              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Reg No</TableHead>
-              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Class</TableHead>
-              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs hidden xs:table-cell">Guardian</TableHead>
-              <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {students.map((student) => (
-              <TableRow key={student.id} className="hover:bg-muted/50">
-                <TableCell
-                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
-                  onClick={() => setSelectedStudentId(student.id)}
-                >
-                  <div className="font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">
-                    {student.first_name} {student.last_name}
-                  </div>
-                </TableCell>
-                <TableCell
-                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
-                  onClick={() => setSelectedStudentId(student.id)}
-                >
-                  <code className="text-xs bg-muted px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-nowrap">
-                    {student.Reg_no}
-                  </code>
-                </TableCell>
-                <TableCell
-                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer"
-                  onClick={() => setSelectedStudentId(student.id)}
-                >
-                  <div className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
-                    {student.enrollments && student.enrollments[0]
-                      ? classMap[student.enrollments[0].class_id] || 'N/A'
-                      : 'N/A'}
-                  </div>
-                </TableCell>
-                <TableCell
-                  className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer hidden xs:table-cell"
-                  onClick={() => setSelectedStudentId(student.id)}
-                >
-                  <div className="flex items-center space-x-1 text-xs sm:text-sm">
-                    <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                    <span className="truncate max-w-[80px] sm:max-w-[120px]">
-                      {student.profiles?.[0]?.guardian_phone ?? 'No contact'}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="py-2 px-2 sm:py-3 sm:px-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedStudentId(student.id)}
-                    className="h-7 text-xs px-2 sm:h-8 sm:px-3 sm:text-sm"
-                  >
-                    View
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl">Student Directory</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Tap on a student to view detailed performance analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-6 pt-0">
+          <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <div className="min-w-[600px] px-3 sm:min-w-0 sm:px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Student</TableHead>
+                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Reg No</TableHead>
+                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Class</TableHead>
+                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs hidden xs:table-cell">Guardian</TableHead>
+                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {students.map((student) => (
+                    <TableRow key={student.id} className="hover:bg-muted/50">
+                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                        <div className="font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">
+                          {student.first_name} {student.last_name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-nowrap">
+                          {student.Reg_no}
+                        </code>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                        <div className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
+                          {student.enrollments && student.enrollments[0]
+                            ? classMap[student.enrollments[0].class_id] || 'N/A'
+                            : 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer hidden xs:table-cell" onClick={() => setSelectedStudentId(student.id)}>
+                        <div className="flex items-center space-x-1 text-xs sm:text-sm">
+                          <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                          <span className="truncate max-w-[80px] sm:max-w-[120px]">
+                            {student.profiles?.[0]?.guardian_phone ?? 'No contact'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedStudentId(student.id)}
+                          className="h-7 text-xs px-2 sm:h-8 sm:px-3 sm:text-sm"
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
 
-    {students.length === 0 && (
-      <div className="text-center py-6 sm:py-8 px-4">
-        <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
-        <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          There are no students enrolled in your classes yet.
-        </p>
-      </div>
-    )}
-  </CardContent>
-</Card>
-
+          {students.length === 0 && (
+            <div className="text-center py-6 sm:py-8 px-4">
+              <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                There are no students enrolled in your classes yet.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -2,7 +2,6 @@ import React from 'react';
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { getOrdinalSuffix, getPerformanceLevel, calculateKJSEAGrade } from '@/utils/assessmentUtils';
 
-// Register fonts
 Font.register({
   family: 'Helvetica',
   fonts: [
@@ -11,132 +10,74 @@ Font.register({
   ],
 });
 
-// Define styles for PDF - REDUCED FONT SIZES TO FIT ONE PAGE
 const styles = StyleSheet.create({
   page: {
-    padding: 20,
+    padding: 24,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
     borderBottomWidth: 2,
     borderBottomColor: '#800000',
     borderBottomStyle: 'solid',
     paddingBottom: 10,
   },
-  logoContainer: {
-    width: 40,
-    height: 40,
-    marginRight: 10,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-  },
-  schoolInfo: {
-    flex: 1,
-  },
-  schoolName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#800000',
-    marginBottom: 2,
-  },
-  schoolTagline: {
-    fontSize: 8,
-    color: '#666666',
-  },
-  studentInfoContainer: {
+  logoContainer: { width: 38, height: 38, marginRight: 10 },
+  logo: { width: '100%', height: '100%' },
+  schoolInfo: { flex: 1 },
+  schoolName: { fontSize: 15, fontWeight: 'bold', color: '#800000', marginBottom: 2 },
+  schoolTagline: { fontSize: 8, color: '#666666' },
+
+  // ── Student info strip ───────────────────────────────────────────────────────
+  studentStrip: {
     backgroundColor: '#f9f0f0',
-    padding: 12,
-    borderRadius: 5,
-    marginBottom: 15,
     borderLeftWidth: 4,
     borderLeftColor: '#800000',
     borderLeftStyle: 'solid',
-  },
-  studentInfoRow: {
+    padding: 10,
+    borderRadius: 4,
+    marginBottom: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  studentInfoLabel: {
-    fontSize: 9,
-    color: '#333333',
-    fontWeight: 'bold',
-  },
-  studentInfoValue: {
-    fontSize: 9,
-    color: '#000000',
-  },
-  examHeader: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#800000',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  examDetailsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 5,
-  },
-  examDetailsColumn: {
-    width: '48%',
-  },
-  examDetail: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  examDetailLabel: {
-    fontSize: 9,
-    color: '#666666',
-    width: 70,
-    fontWeight: 'bold',
-  },
-  examDetailValue: {
-    fontSize: 9,
-    color: '#000000',
-    flex: 1,
-  },
-  performanceSummary: {
-    marginBottom: 15,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderStyle: 'solid',
-  },
-  performanceGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     flexWrap: 'wrap',
   },
-  performanceItem: {
-    width: '32%',
+  stripItem: { width: '50%', marginBottom: 3, flexDirection: 'row' },
+  stripLabel: { fontSize: 8, fontWeight: 'bold', color: '#444444', width: 80 },
+  stripValue: { fontSize: 8, color: '#000000', flex: 1 },
+
+  // ── Report title ─────────────────────────────────────────────────────────────
+  reportTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#800000',
+    textAlign: 'center',
     marginBottom: 10,
   },
-  performanceLabel: {
-    fontSize: 9,
-    color: '#666666',
-    marginBottom: 2,
-    fontWeight: 'bold',
+
+  // ── Summary stats row ────────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  performanceValue: {
-    fontSize: 10,
-    color: '#000000',
-    fontWeight: 'bold',
+  statBox: {
+    width: '23%',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 4,
+    padding: 8,
+    alignItems: 'center',
+    borderTopWidth: 2,
+    borderTopColor: '#800000',
+    borderTopStyle: 'solid',
   },
-  subjectTable: {
-    marginTop: 10,
-  },
+  statLabel: { fontSize: 7, color: '#666666', marginBottom: 3, textAlign: 'center' },
+  statValue: { fontSize: 13, fontWeight: 'bold', color: '#800000' },
+
+  // ── Main exams table ──────────────────────────────────────────────────────────
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#800000',
@@ -146,7 +87,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 4,
   },
   tableHeaderCell: {
-    flex: 1,
     fontSize: 8,
     color: '#ffffff',
     fontWeight: 'bold',
@@ -157,59 +97,74 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#eeeeee',
     borderBottomStyle: 'solid',
   },
-  tableRowEven: {
-    backgroundColor: '#f9f9f9',
+  tableRowEven: { backgroundColor: '#faf8f8' },
+  tableRowTop3: { backgroundColor: '#f0fff0' },
+  tableCell: { fontSize: 8, color: '#222222', textAlign: 'center' },
+
+  // Totals / averages row
+  tableSummaryRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: '#f0e8e8',
+    borderTopWidth: 1,
+    borderTopColor: '#800000',
+    borderTopStyle: 'solid',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
   },
-  tableCell: {
-    flex: 1,
-    fontSize: 8,
-    color: '#000000',
-    textAlign: 'center',
-  },
-  gradeBadge: {
-    fontSize: 7,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
-    backgroundColor: '#e8f5e9',
-    color: '#2e7d32',
-  },
+  tableSummaryCell: { fontSize: 8, color: '#800000', fontWeight: 'bold', textAlign: 'center' },
+
+  gradeBadgeEE: { fontSize: 7, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, backgroundColor: '#e8f5e9', color: '#2e7d32' },
+  gradeBadgeME: { fontSize: 7, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, backgroundColor: '#e3f2fd', color: '#1565c0' },
+  gradeBadgeAE: { fontSize: 7, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, backgroundColor: '#fff8e1', color: '#e65100' },
+  gradeBadgeBE: { fontSize: 7, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, backgroundColor: '#fce4ec', color: '#b71c1c' },
+
+  // ── Footer ───────────────────────────────────────────────────────────────────
   footer: {
     position: 'absolute',
     bottom: 20,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     textAlign: 'center',
     fontSize: 7,
-    color: '#666666',
+    color: '#888888',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
     borderTopStyle: 'solid',
-    paddingTop: 8,
+    paddingTop: 6,
   },
   pageNumber: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 8,
     left: 0,
     right: 0,
     textAlign: 'center',
     fontSize: 7,
-    color: '#666666',
-  },
-  noDataMessage: {
-    fontSize: 9,
-    color: '#666666',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 15,
-    padding: 8,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 4,
+    color: '#aaaaaa',
   },
 });
+
+// ── Column widths (must sum to ~100%) ────────────────────────────────────────
+const COL = {
+  exam:     { flex: 2.2 },
+  term:     { flex: 0.8 },
+  date:     { flex: 1.2 },
+  score:    { flex: 1.0 },
+  pct:      { flex: 0.9 },
+  grade:    { flex: 1.0 },
+  position: { flex: 0.9 },
+};
+
+const gradeBadgeStyle = (grade: string) => {
+  if (grade.startsWith('EE')) return styles.gradeBadgeEE;
+  if (grade.startsWith('ME')) return styles.gradeBadgeME;
+  if (grade.startsWith('AE')) return styles.gradeBadgeAE;
+  return styles.gradeBadgeBE;
+};
 
 interface PerformanceHistoryPDFProps {
   performanceHistory: any[];
@@ -218,42 +173,32 @@ interface PerformanceHistoryPDFProps {
   logoUrl: string;
 }
 
-const PerformanceHistoryPDF: React.FC<PerformanceHistoryPDFProps> = ({ performanceHistory, profile, className, logoUrl }) => {
-  // Calculate summary statistics
-  const getSummaryStats = () => {
-    const totalExams = performanceHistory.length;
-    const avgPercentage = Math.round(performanceHistory.reduce((sum, record) => sum + record.percentage, 0) / totalExams);
-    const bestPosition = Math.min(...performanceHistory.map(r => r.classPosition));
-    const worstPosition = Math.max(...performanceHistory.map(r => r.classPosition));
-    const excellentGrades = performanceHistory.filter(record => record.grade.includes("EE1") || record.grade.includes("EE2")).length;
-    const averageGrades = performanceHistory.filter(record => record.grade.includes("ME1") || record.grade.includes("ME2")).length;
-    const belowAverageGrades = performanceHistory.filter(record => record.grade.includes("AE") || record.grade.includes("BE")).length;
-    const top3Positions = performanceHistory.filter(record => record.classPosition <= 3).length;
+const PerformanceHistoryPDF: React.FC<PerformanceHistoryPDFProps> = ({
+  performanceHistory,
+  profile,
+  className,
+  logoUrl,
+}) => {
+  const total      = performanceHistory.length;
+  const avgPct     = total > 0 ? Math.round(performanceHistory.reduce((s, r) => s + r.percentage, 0) / total) : 0;
+  const bestPos    = total > 0 ? Math.min(...performanceHistory.map(r => r.classPosition).filter(Boolean)) : null;
+  const excellentN = performanceHistory.filter(r => r.grade?.startsWith('EE')).length;
 
-    return {
-      totalExams,
-      avgPercentage,
-      bestPosition,
-      worstPosition,
-      excellentGrades,
-      averageGrades,
-      belowAverageGrades,
-      top3Positions
-    };
-  };
-
-  const stats = getSummaryStats();
+  const reportPeriod = total > 0
+    ? `${performanceHistory[performanceHistory.length - 1].year} – ${performanceHistory[0].year}`
+    : 'N/A';
 
   return (
     <Document>
-      {/* Cover Page - UPDATED with reduced font sizes */}
-      <Page size="A4" style={[styles.page, { padding: 25 }]}>
+      <Page size="A4" style={styles.page}>
+
+        {/* ── School header ── */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             {logoUrl && (logoUrl.startsWith('data:') || logoUrl.startsWith('http')) ? (
               <Image src={logoUrl} style={styles.logo} />
             ) : (
-              <Text style={styles.logo}>[LOGO]</Text>
+              <Text>[LOGO]</Text>
             )}
           </View>
           <View style={styles.schoolInfo}>
@@ -262,300 +207,141 @@ const PerformanceHistoryPDF: React.FC<PerformanceHistoryPDFProps> = ({ performan
           </View>
         </View>
 
-        <View style={{ marginTop: 40, alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#800000', marginBottom: 8 }}>
-            Academic Performance History
-          </Text>
-          <Text style={{ fontSize: 12, color: '#666666', marginBottom: 20 }}>
-            Comprehensive Report
-          </Text>
+        {/* ── Report title ── */}
+        <Text style={styles.reportTitle}>Academic Performance History Report</Text>
+
+        {/* ── Student info strip ── */}
+        <View style={styles.studentStrip}>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Student Name:</Text>
+            <Text style={styles.stripValue}>{profile?.first_name || ''} {profile?.last_name || ''}</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Student ID:</Text>
+            <Text style={styles.stripValue}>{profile?.reg_no || 'N/A'}</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Class:</Text>
+            <Text style={styles.stripValue}>{className || 'N/A'}</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Report Period:</Text>
+            <Text style={styles.stripValue}>{reportPeriod}</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Generated:</Text>
+            <Text style={styles.stripValue}>{new Date().toLocaleDateString()}</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <Text style={styles.stripLabel}>Total Exams:</Text>
+            <Text style={styles.stripValue}>{total}</Text>
+          </View>
         </View>
 
-        <View style={styles.studentInfoContainer}>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Student Name:</Text>
-            <Text style={styles.studentInfoValue}>{profile?.first_name || ''} {profile?.last_name || ''}</Text>
+        {/* ── Summary stat boxes ── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Exams Tracked</Text>
+            <Text style={styles.statValue}>{total}</Text>
           </View>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Student ID:</Text>
-            <Text style={styles.studentInfoValue}>{profile?.reg_no || 'N/A'}</Text>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Average Score</Text>
+            <Text style={styles.statValue}>{avgPct}%</Text>
           </View>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Class:</Text>
-            <Text style={styles.studentInfoValue}>{className || 'N/A'}</Text>
-          </View>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Report Period:</Text>
-            <Text style={styles.studentInfoValue}>
-              {performanceHistory.length > 0 
-                ? `${performanceHistory[performanceHistory.length - 1].year} - ${performanceHistory[0].year}`
-                : 'N/A'
-              }
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Best Position</Text>
+            <Text style={styles.statValue}>
+              {bestPos != null ? `${bestPos}${getOrdinalSuffix(bestPos)}` : 'N/A'}
             </Text>
           </View>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Total Exams:</Text>
-            <Text style={styles.studentInfoValue}>{performanceHistory.length}</Text>
-          </View>
-          <View style={styles.studentInfoRow}>
-            <Text style={styles.studentInfoLabel}>Report Generated:</Text>
-            <Text style={styles.studentInfoValue}>{new Date().toLocaleDateString()}</Text>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Excellent (EE)</Text>
+            <Text style={styles.statValue}>{excellentN}</Text>
           </View>
         </View>
 
-        <View style={{ marginTop: 30, alignItems: 'center' }}>
-          <Text style={{ fontSize: 10, color: '#666666', textAlign: 'center', marginTop: 15 }}>
-            This report contains performance data for all recorded exams.
-            Each exam is presented on a separate page with detailed analysis.
+        {/* ── All exams table ── */}
+        {/* Table header */}
+        <View style={styles.tableHeader}>
+          <Text style={[styles.tableHeaderCell, COL.exam,     { textAlign: 'left' }]}>Exam</Text>
+          <Text style={[styles.tableHeaderCell, COL.term                            ]}>Term</Text>
+          <Text style={[styles.tableHeaderCell, COL.date                            ]}>Date</Text>
+          <Text style={[styles.tableHeaderCell, COL.score                           ]}>Score</Text>
+          <Text style={[styles.tableHeaderCell, COL.pct                             ]}>%</Text>
+          <Text style={[styles.tableHeaderCell, COL.grade                           ]}>Grade</Text>
+          <Text style={[styles.tableHeaderCell, COL.position                        ]}>Position</Text>
+        </View>
+
+        {/* Table rows — all exams, no page break per exam */}
+        {performanceHistory.map((record: any, index: number) => {
+          const isTop3 = record.classPosition != null && record.classPosition <= 3;
+          const rowStyle = isTop3
+            ? styles.tableRowTop3
+            : index % 2 === 0
+            ? styles.tableRowEven
+            : {};
+          const gradeLabel = (record.grade || '').split(' ')[0];
+
+          return (
+            <View key={index} style={[styles.tableRow, rowStyle]}>
+              <Text style={[styles.tableCell, COL.exam, { textAlign: 'left' }]}>
+                {record.title}
+              </Text>
+              <Text style={[styles.tableCell, COL.term]}>
+                T{record.term} {record.year}
+              </Text>
+              <Text style={[styles.tableCell, COL.date]}>
+                {record.assessment_date
+                  ? new Date(record.assessment_date).toLocaleDateString()
+                  : '—'}
+              </Text>
+              <Text style={[styles.tableCell, COL.score]}>
+                {record.score}/{record.total_score}
+              </Text>
+              <Text style={[styles.tableCell, COL.pct]}>
+                {typeof record.percentage === 'number'
+                  ? `${record.percentage.toFixed(1)}%`
+                  : '—'}
+              </Text>
+              <View style={[COL.grade, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={gradeBadgeStyle(gradeLabel)}>{gradeLabel}</Text>
+              </View>
+              <Text style={[styles.tableCell, COL.position]}>
+                {record.classPosition != null
+                  ? `${record.classPosition}${getOrdinalSuffix(record.classPosition)}`
+                  : '—'}
+              </Text>
+            </View>
+          );
+        })}
+
+        {/* Summary / averages row */}
+        <View style={styles.tableSummaryRow}>
+          <Text style={[styles.tableSummaryCell, COL.exam, { textAlign: 'left' }]}>
+            AVERAGE / BEST
+          </Text>
+          <Text style={[styles.tableSummaryCell, COL.term]}>—</Text>
+          <Text style={[styles.tableSummaryCell, COL.date]}>—</Text>
+          <Text style={[styles.tableSummaryCell, COL.score]}>—</Text>
+          <Text style={[styles.tableSummaryCell, COL.pct]}>{avgPct}%</Text>
+          <Text style={[styles.tableSummaryCell, COL.grade]}>—</Text>
+          <Text style={[styles.tableSummaryCell, COL.position]}>
+            {bestPos != null ? `${bestPos}${getOrdinalSuffix(bestPos)}` : '—'}
           </Text>
         </View>
 
+        {/* ── Footer ── */}
         <View style={styles.footer}>
-          <Text>Milai School - Confidential Academic Report</Text>
-        </View>
-        <Text style={styles.pageNumber} render={({ pageNumber }) => (
-          `Page ${pageNumber}`
-        )} fixed />
-      </Page>
-
-      {/* Summary Page - UPDATED with reduced font sizes */}
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            {logoUrl && (logoUrl.startsWith('data:') || logoUrl.startsWith('http')) ? (
-              <Image src={logoUrl} style={styles.logo} />
-            ) : (
-              <Text style={styles.logo}>[LOGO]</Text>
-            )}
-          </View>
-          <View style={styles.schoolInfo}>
-            <Text style={styles.schoolName}>Performance Summary</Text>
-            <Text style={styles.schoolTagline}>Milai School Academic Report</Text>
-          </View>
-        </View>
-
-        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#800000', marginBottom: 15, marginTop: 8 }}>
-          Overall Performance Statistics
-        </Text>
-
-        <View style={{ marginTop: 15 }}>
-          <View style={styles.performanceGrid}>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Total Exams</Text>
-              <Text style={styles.performanceValue}>{stats.totalExams}</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Average Score</Text>
-              <Text style={styles.performanceValue}>{stats.avgPercentage}%</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Best Position</Text>
-              <Text style={styles.performanceValue}>
-                {stats.bestPosition}{getOrdinalSuffix(stats.bestPosition)}
-              </Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Top 3 Positions</Text>
-              <Text style={styles.performanceValue}>{stats.top3Positions}</Text>
-            </View>
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <Text style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 12, color: '#800000' }}>
-              Performance Distribution
-            </Text>
-            
-            <View style={{ marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 9 }}>Excellent (EE1/EE2)</Text>
-                <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{stats.excellentGrades} exams</Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: '#e0e0e0', borderRadius: 3 }}>
-                <View style={{ 
-                  width: `${(stats.excellentGrades / stats.totalExams) * 100}%`, 
-                  height: '100%', 
-                  backgroundColor: '#2e7d32',
-                  borderRadius: 3 
-                }} />
-              </View>
-            </View>
-
-            <View style={{ marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 9 }}>Good (ME1/ME2)</Text>
-                <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{stats.averageGrades} exams</Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: '#e0e0e0', borderRadius: 3 }}>
-                <View style={{ 
-                  width: `${(stats.averageGrades / stats.totalExams) * 100}%`, 
-                  height: '100%', 
-                  backgroundColor: '#1976d2',
-                  borderRadius: 3 
-                }} />
-              </View>
-            </View>
-
-            <View style={{ marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 9 }}>Needs Improvement</Text>
-                <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{stats.belowAverageGrades} exams</Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: '#e0e0e0', borderRadius: 3 }}>
-                <View style={{ 
-                  width: `${(stats.belowAverageGrades / stats.totalExams) * 100}%`, 
-                  height: '100%', 
-                  backgroundColor: '#ed6c02',
-                  borderRadius: 3 
-                }} />
-              </View>
-            </View>
-          </View>
-
-          <View style={{ marginTop: 20, padding: 12, backgroundColor: '#f9f0f0', borderRadius: 4 }}>
-            <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 8, color: '#800000' }}>
-              Performance Insights
-            </Text>
-            <Text style={{ fontSize: 9, lineHeight: 1.4 }}>
-              {stats.avgPercentage >= 75 
-                ? "The student demonstrates excellent academic performance with consistent high scores across all exams."
-                : stats.avgPercentage >= 50
-                ? "The student shows satisfactory performance with room for improvement in specific areas."
-                : "The student requires additional support and focused attention to improve academic performance."
-              }
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.footer}>
-          <Text>Milai School - Academic Performance Summary</Text>
-        </View>
-        <Text style={styles.pageNumber} render={({ pageNumber }) => (
-          `Page ${pageNumber}`
-        )} fixed />
-      </Page>
-
-      {/* Individual Exam Pages - UPDATED with reduced font sizes and removed Status */}
-      {performanceHistory.map((examRecord, index) => (
-        <Page key={index} size="A4" style={styles.page}>
-          <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              {logoUrl && (logoUrl.startsWith('data:') || logoUrl.startsWith('http')) ? (
-                <Image src={logoUrl} style={styles.logo} />
-              ) : (
-                <Text style={styles.logo}>[LOGO]</Text>
-              )}
-            </View>
-            <View style={styles.schoolInfo}>
-              <Text style={styles.schoolName}>Milai School</Text>
-              <Text style={styles.schoolTagline}>Exam Performance Report</Text>
-            </View>
-          </View>
-
-          <Text style={styles.examHeader}>
-            {examRecord.title} ({examRecord.term} {examRecord.year})
+          <Text>
+            Milai School — Academic Performance History | System generated. Does not require a signature.
           </Text>
-
-          <View style={styles.examDetailsContainer}>
-            <View style={styles.examDetailsColumn}>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Student:</Text>
-                <Text style={styles.examDetailValue}>{profile?.first_name} {profile?.last_name}</Text>
-              </View>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Class:</Text>
-                <Text style={styles.examDetailValue}>{className}</Text>
-              </View>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Subject:</Text>
-                <Text style={styles.examDetailValue}>{examRecord.subjects?.name || 'Overall'}</Text>
-              </View>
-            </View>
-            <View style={styles.examDetailsColumn}>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Date:</Text>
-                <Text style={styles.examDetailValue}>
-                  {new Date(examRecord.assessment_date).toLocaleDateString()}
-                </Text>
-              </View>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Total Marks:</Text>
-                <Text style={styles.examDetailValue}>{examRecord.score} / {examRecord.total_score}</Text>
-              </View>
-              <View style={styles.examDetail}>
-                <Text style={styles.examDetailLabel}>Percentage:</Text>
-                <Text style={styles.examDetailValue}>{examRecord.percentage}%</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Performance Metrics - UPDATED: Removed Status field */}
-          <View style={styles.performanceGrid}>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Class Position</Text>
-              <Text style={[styles.performanceValue, { color: examRecord.classPosition <= 3 ? '#2e7d32' : '#000' }]}>
-                {examRecord.classPosition}{getOrdinalSuffix(examRecord.classPosition)}
-              </Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>KJSEA Level</Text>
-              <Text style={styles.performanceValue}>{examRecord.grade}</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Performance</Text>
-              <Text style={styles.performanceValue}>
-                {getPerformanceLevel(examRecord.percentage)}
-              </Text>
-            </View>
-            {/* Status field REMOVED as requested */}
-          </View>
-
-          {/* Subject-wise Performance if available */}
-          {examRecord.subjectBreakdown && examRecord.subjectBreakdown.length > 0 ? (
-            <View style={{ marginTop: 20 }}>
-              <Text style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 8, color: '#800000' }}>
-                Subject-wise Performance
-              </Text>
-              
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Subject</Text>
-                <Text style={styles.tableHeaderCell}>Score</Text>
-                <Text style={styles.tableHeaderCell}>Total</Text>
-                <Text style={styles.tableHeaderCell}>Percentage</Text>
-                <Text style={styles.tableHeaderCell}>Grade</Text>
-              </View>
-
-              {examRecord.subjectBreakdown.map((subject: any, idx: number) => (
-                <View 
-                  key={idx} 
-                  style={[
-                    styles.tableRow,
-                    idx % 2 === 0 && styles.tableRowEven
-                  ]}
-                >
-                  <Text style={[styles.tableCell, { flex: 1.5, textAlign: 'left' }]}>{subject.subject}</Text>
-                  <Text style={styles.tableCell}>{subject.score}</Text>
-                  <Text style={styles.tableCell}>{subject.total_score}</Text>
-                  <Text style={styles.tableCell}>{subject.percentage}%</Text>
-                  <View style={styles.tableCell}>
-                    <Text style={styles.gradeBadge}>{subject.grade.split(' ')[0]}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.noDataMessage}>
-              <Text>Detailed subject breakdown not available for this exam.</Text>
-            </View>
-          )}
-
-          <View style={styles.footer}>
-            <Text>Exam {index + 1} of {performanceHistory.length} | Milai School Academic Report</Text>
-          </View>
-          <Text style={styles.pageNumber} render={({ pageNumber }) => (
-            `Page ${pageNumber}`
-          )} fixed />
-        </Page>
-      ))}
+        </View>
+        <Text
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
+          fixed
+        />
+      </Page>
     </Document>
   );
 };

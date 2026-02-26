@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
-import { Plus, Pencil, Trash2, BookOpen, Users, GraduationCap, User, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Users, GraduationCap, User, X, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
 import {
@@ -30,6 +30,13 @@ export default function ClassesSection() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [optionalSubjects, setOptionalSubjects] = useState([]);
+  // New state for timetables
+  const [selectedTerm, setSelectedTerm] = useState('');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState(new Date().getFullYear().toString());
+  const [titleInput, setTitleInput] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const queryClient = useQueryClient();
 
   // Helper to normalize Supabase relations which may come back as an object or a single-item array
@@ -230,6 +237,100 @@ export default function ClassesSection() {
     },
     enabled: !!selectedClass,
   });
+
+  // ---------- Timetables ----------
+  // Fetch timetables for selected class
+  const { data: timetables, refetch: refetchTimetables } = useQuery({
+    queryKey: ['timetables', selectedClass?.id],
+    queryFn: async () => {
+      if (!selectedClass) return [];
+      const { data, error } = await supabase
+        .from('timetables')
+        .select('*')
+        .eq('class_id', selectedClass.id)
+        .order('academic_year', { ascending: false })
+        .order('term');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedClass,
+  });
+
+  // Upload timetable mutation
+  const uploadTimetableMutation = useMutation({
+    mutationFn: async ({ file, classId, term, academicYear, title }: any) => {
+      // 1. Upload file to storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${classId}/${academicYear}/term-${term}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('Timetables')
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      // 2. Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('Timetables')
+        .getPublicUrl(fileName);
+      const fileUrl = publicUrlData.publicUrl;
+
+      // 3. Upsert database record
+      const { error: dbError } = await supabase
+        .from('timetables')
+        .upsert({
+          class_id: classId,
+          term,
+          academic_year: academicYear,
+          title,
+          file_url: fileUrl,
+          // uploaded_by: you may add current admin's teacher id if available
+        }, { onConflict: 'class_id,term,academic_year' });
+      if (dbError) throw dbError;
+    },
+    onSuccess: () => {
+      refetchTimetables();
+      setIsUploading(false);
+      setUploadFile(null);
+      setTitleInput('');
+    },
+    onError: (error) => {
+      console.error('Upload failed:', error);
+      setIsUploading(false);
+      alert('Upload failed: ' + error.message);
+    },
+  });
+
+  // Delete timetable mutation
+  const deleteTimetableMutation = useMutation({
+    mutationFn: async ({ id, fileUrl }: { id: string; fileUrl: string }) => {
+      // Extract file path from URL (remove origin and bucket name)
+      const url = new URL(fileUrl);
+      // Expected path: /storage/v1/object/public/Timetables/{classId}/{year}/term-{term}.pdf
+      const pathParts = url.pathname.split('/');
+      // Find index of 'Timetables' and take everything after it
+      const timetablesIndex = pathParts.findIndex(part => part === 'Timetables');
+      if (timetablesIndex === -1) throw new Error('Invalid file URL');
+      const path = pathParts.slice(timetablesIndex + 1).join('/');
+
+      const { error: storageError } = await supabase.storage
+        .from('Timetables')
+        .remove([path]);
+      if (storageError) throw storageError;
+
+      const { error: dbError } = await supabase
+        .from('timetables')
+        .delete()
+        .eq('id', id);
+      if (dbError) throw dbError;
+    },
+    onSuccess: () => {
+      refetchTimetables();
+    },
+    onError: (error) => {
+      console.error('Delete failed:', error);
+      alert('Delete failed: ' + error.message);
+    },
+  });
+  // ---------- End Timetables ----------
 
   // Create class mutation
   const createClassMutation = useMutation<any, any, any>({
@@ -1048,7 +1149,7 @@ export default function ClassesSection() {
         </DialogContent>
       </Dialog>
 
-      {/* Class Detail Modal - Shows Students List */}
+      {/* Class Detail Modal - Shows Students List and now Timetables */}
       <Dialog open={showClassDetailModal} onOpenChange={setShowClassDetailModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1214,6 +1315,120 @@ export default function ClassesSection() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ---------- Timetables Card (NEW) ---------- */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  Timetables
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Upload Form */}
+                <div className="mb-4 p-4 border rounded bg-gray-50">
+                  <h4 className="font-medium mb-2">Upload New Timetable</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="term">Term</Label>
+                      <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select term" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Term 1">Term 1</SelectItem>
+                          <SelectItem value="Term 2">Term 2</SelectItem>
+                          <SelectItem value="Term 3">Term 3</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="academicYear">Academic Year</Label>
+                      <Input
+                        id="academicYear"
+                        type="text"
+                        value={selectedAcademicYear}
+                        onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                        placeholder="e.g., 2025"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="title">Title (optional)</Label>
+                      <Input
+                        id="title"
+                        value={titleInput}
+                        onChange={(e) => setTitleInput(e.target.value)}
+                        placeholder="e.g., Form 1A Term 1 Timetable"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="file">File (PDF or Image)</Label>
+                      <Input
+                        id="file"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    className="mt-4"
+                    disabled={!selectedTerm || !selectedAcademicYear || !uploadFile || isUploading}
+                    onClick={() => {
+                      if (!uploadFile) return;
+                      setIsUploading(true);
+                      const title = titleInput || `${selectedClass?.name} ${selectedTerm} ${selectedAcademicYear} Timetable`;
+                      uploadTimetableMutation.mutate({
+                        file: uploadFile,
+                        classId: selectedClass.id,
+                        term: selectedTerm,
+                        academicYear: selectedAcademicYear,
+                        title,
+                      });
+                    }}
+                  >
+                    {isUploading ? 'Uploading...' : 'Upload Timetable'}
+                  </Button>
+                </div>
+
+                {/* List of existing timetables */}
+                {timetables && timetables.length > 0 ? (
+                  <div className="space-y-2">
+                    {timetables.map((tt) => (
+                      <div key={tt.id} className="flex items-center justify-between p-3 border rounded">
+                        <div>
+                          <p className="font-medium">{tt.title}</p>
+                          <p className="text-sm text-gray-500">
+                            {tt.term} • {tt.academic_year} • Uploaded {new Date(tt.uploaded_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={tt.file_url} target="_blank" rel="noopener noreferrer">
+                              View
+                            </a>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              if (window.confirm('Delete this timetable?')) {
+                                deleteTimetableMutation.mutate({ id: tt.id, fileUrl: tt.file_url });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No timetables uploaded yet.</p>
+                )}
+              </CardContent>
+            </Card>
+            {/* ---------- End Timetables Card ---------- */}
           </div>
         </DialogContent>
       </Dialog>

@@ -541,7 +541,7 @@ export default function AdminDashboard() {
     if (error) {
       console.error('Error signing out:', error.message);
     } else {
-      navigate('/login');
+      navigate('/');
     }
   };
 
