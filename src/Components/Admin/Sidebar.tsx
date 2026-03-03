@@ -17,7 +17,7 @@ import { Button } from "@/Components/ui/button";
 const menuItems = [
   { name: "Dashboard", icon: LayoutDashboard, view: "overview" },
   { name: "Students", icon: Users, view: "students" },
-  { name: "Teachers", icon: GraduationCap, view: "teachers" },
+  { name: "Teachers & Staff", icon: GraduationCap, view: "teachers" },
   { name: "Classes & Subjects", icon: BookOpen, view: "classes" },
   { name: "Assessments", icon: ClipboardList, view: "assessments" },
   { name: "Assignments", icon: FileText, view: "assignments" },

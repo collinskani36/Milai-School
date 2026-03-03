@@ -126,63 +126,95 @@ export default function StudentDashboard({ handleLogout }) {
 
   // Fetch student performance data (similar to assessments.tsx)
   const fetchPerformanceData = async () => {
-    if (!studentId || !classId) return;
-    
-    setPerformanceLoading(true);
-    try {
-      // Fetch student rankings from the view
-      const { data: rankingsData, error } = await supabase
-        .from("student_rankings")
-        .select("*")
-        .eq("student_id", studentId)
-        .eq("class_id", classId)
-        .order("assessment_date", { ascending: false });
+  if (!studentId || !classId) return;
+  
+  setPerformanceLoading(true);
+  try {
+    // Step 1: Fetch all student rankings
+    const { data: rankingsData, error } = await supabase
+      .from("student_rankings")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("class_id", classId)
+      .order("assessment_date", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching rankings:", error);
+    if (error) {
+      console.error("Error fetching rankings:", error);
+      return;
+    }
+
+    if (rankingsData && rankingsData.length > 0) {
+      // Step 2: Cross-reference assessments table to filter summative only
+      // (mirrors what usePerformanceHistory does in assessments.tsx)
+      const assessmentIds = rankingsData.map((r) => r.assessment_id);
+      const { data: assessmentsData, error: catError } = await supabase
+        .from("assessments")
+        .select("id, category")
+        .in("id", assessmentIds);
+
+      if (catError) {
+        console.error("Error fetching assessment categories:", catError);
         return;
       }
 
-      if (rankingsData && rankingsData.length > 0) {
-        const recentExams = rankingsData.slice(0, 10); // Last 10 exams
-        const totalExams = recentExams.length;
-        
-        // Calculate average percentage
-        const totalPercentage = recentExams.reduce((sum, exam) => sum + exam.percentage, 0);
-        const averageScore = totalExams > 0 ? Math.round(totalPercentage / totalExams) : 0;
-        
-        // Calculate current level based on average
-        const currentLevel = calculateGradeFromAverage(averageScore);
-        
-        // Get recent performance for insights
-        const recentPerformance = recentExams.map(exam => ({
-          title: exam.exam_title,
-          percentage: exam.percentage,
-          classPosition: exam.class_position,
-          date: exam.assessment_date
-        }));
+      const categoryMap = (assessmentsData || []).reduce((acc, a) => {
+        acc[a.id] = a.category;
+        return acc;
+      }, {} as Record<string, string>);
 
-        setPerformanceData({
-          totalExams,
-          averageScore,
-          currentLevel,
-          recentPerformance
-        });
-      } else {
-        // No performance data yet
+      // Filter to summative only — same logic as assessments.tsx
+      const summativeRankings = rankingsData.filter(
+        (r) => categoryMap[r.assessment_id] === "summative"
+      );
+
+      const recentExams = summativeRankings.slice(0, 10); // Last 10 summative exams
+      const totalExams = recentExams.length;
+      
+      if (totalExams === 0) {
         setPerformanceData({
           totalExams: 0,
           averageScore: 0,
           currentLevel: "No data",
           recentPerformance: []
         });
+        return;
       }
-    } catch (err) {
-      console.error("Error fetching performance data:", err);
-    } finally {
-      setPerformanceLoading(false);
+
+      // Calculate average percentage
+      const totalPercentage = recentExams.reduce((sum, exam) => sum + exam.percentage, 0);
+      const averageScore = Math.round(totalPercentage / totalExams);
+      
+      // Calculate current level based on average
+      const currentLevel = calculateGradeFromAverage(averageScore);
+      
+      // Get recent performance for insights
+      const recentPerformance = recentExams.map(exam => ({
+        title: exam.exam_title,
+        percentage: exam.percentage,
+        classPosition: exam.class_position,
+        date: exam.assessment_date
+      }));
+
+      setPerformanceData({
+        totalExams,
+        averageScore,
+        currentLevel,
+        recentPerformance
+      });
+    } else {
+      setPerformanceData({
+        totalExams: 0,
+        averageScore: 0,
+        currentLevel: "No data",
+        recentPerformance: []
+      });
     }
-  };
+  } catch (err) {
+    console.error("Error fetching performance data:", err);
+  } finally {
+    setPerformanceLoading(false);
+  }
+};
 
   // Fetch authenticated user once and store it
   useEffect(() => {
