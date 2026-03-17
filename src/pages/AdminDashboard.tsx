@@ -18,7 +18,7 @@ import AttendanceSection from '../Components/Admin/AttendanceSection';
 import AnnouncementsSection from '../Components/Admin/AnnouncementsSection';
 import AdminFees from '../Components/Admin/Adminfees';
 import AcademicCalendar from '../Components/Admin/AcademicCalendar';
-import TimetableSection from '../Components/Admin/TimetableSection'; // ← NEW
+import TimetableSection from "../Components/Admin/Timetablesection";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
