@@ -18,9 +18,18 @@ interface FeeBreakdownCardProps {
   title: string;
   type: "Mandatory" | "Optional";
   totalLabel: string;
+  allStudentFees?: any[]; // kept for compatibility (not used)
+  currentTerm?: { term: string; academic_year: string } | null; // NEW: active term from parent (unused)
 }
 
-export default function FeeBreakdownCard({ fees, title, type, totalLabel }: FeeBreakdownCardProps) {
+export default function FeeBreakdownCard({
+  fees,
+  title,
+  type,
+  totalLabel,
+  allStudentFees, // kept for compatibility (not used)
+  currentTerm,    // NEW (currently unused, added for future sync)
+}: FeeBreakdownCardProps) {
   // Filter fees based on type
   const filteredFees = fees?.filter((f) => f.category === type) ?? [];
   const total = filteredFees.reduce((sum, f) => sum + (f.amount ?? 0), 0);

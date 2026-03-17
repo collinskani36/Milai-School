@@ -38,6 +38,7 @@ interface Assessment {
   sub_strand_id?: string | null;
   strands?: { name: string } | { name: string }[] | null;
   sub_strands?: { name: string } | { name: string }[] | null;
+  assessment_date?: string | null;
 }
 
 interface Student {
@@ -162,8 +163,6 @@ function CategoryBadge({ category }: { category: Assessment["category"] }) {
 }
 
 // ─── Stable input components defined OUTSIDE the parent ──────────────────────
-// These must live outside TeacherMarksEntry so they are never recreated on
-// each render, which would cause the input to lose focus after every keystroke.
 
 const RemarksInput = memo(({
   value,
@@ -355,7 +354,7 @@ const MarksTable = memo(({
                       <TableHead className="w-[70px] text-center">Absent</TableHead>
                       <TableHead>{isFormative ? "Performance Level" : `Score (out of ${selectedAssessment.max_marks})`}</TableHead>
                       <TableHead className="w-[180px]">Remarks</TableHead>
-                      <TableHead className="w-[140px]">Date</TableHead>
+                      {!isFormative && <TableHead className="w-[140px]">Date</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -408,14 +407,16 @@ const MarksTable = memo(({
                               onChange={onRemarksChange}
                             />
                           </TableCell>
-                          <TableCell>
-                            <DateInput
-                              value={entry.date}
-                              studentId={student.id}
-                              disabled={loadingData}
-                              onChange={onDateChange}
-                            />
-                          </TableCell>
+                          {!isFormative && (
+                            <TableCell>
+                              <DateInput
+                                value={entry.date}
+                                studentId={student.id}
+                                disabled={loadingData}
+                                onChange={onDateChange}
+                              />
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
@@ -458,9 +459,19 @@ MarksTable.displayName = "MarksTable";
 export default function TeacherMarksEntry({
   teacherId,
   teacherClasses,
+  academicYear,
+  assessmentYear,
+  // currentTerm comes from the active academic term set by the admin.
+  // When provided, the assessment dropdown is scoped to this term only,
+  // keeping the list short and relevant. History mode is unaffected and
+  // still shows all terms so teachers can edit past entries freely.
+  currentTerm,
 }: {
   teacherId: string;
   teacherClasses: TeacherClass[];
+  academicYear?: string;
+  assessmentYear?: number;
+  currentTerm?: number;
 }) {
   // ── Mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>("summative");
@@ -479,8 +490,8 @@ export default function TeacherMarksEntry({
   const [fStrand, setFStrand]       = useState("");
   const [fSubStrand, setFSubStrand] = useState("");
   const [fDate, setFDate]           = useState(new Date().toISOString().slice(0, 10));
-  const [fTerm, setFTerm]           = useState(String(CURRENT_TERM));
-  const [fYear, setFYear]           = useState(String(CURRENT_YEAR));
+  const [fTerm, setFTerm]           = useState(String(currentTerm ?? CURRENT_TERM));
+  const [fYear, setFYear]           = useState(String(assessmentYear ?? CURRENT_YEAR));
   const [creatingFormative, setCreatingFormative] = useState(false);
   const [createError, setCreateError]             = useState<string | null>(null);
 
@@ -510,6 +521,16 @@ export default function TeacherMarksEntry({
     [teacherClasses]
   );
 
+  // ─── Map class_id to class name for display ───────────────────────────────
+  const classNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    teacherClasses.forEach(tc => {
+      const cls = firstRel(tc.classes);
+      if (cls?.name) map.set(tc.class_id, cls.name);
+    });
+    return map;
+  }, [teacherClasses]);
+
   const teacherClassList = useMemo(() => {
     const seen = new Set<string>();
     return teacherClasses.filter((tc) => {
@@ -531,27 +552,36 @@ export default function TeacherMarksEntry({
       .filter((tc) => !!firstRel(tc.subjects)?.name);
   }, [teacherClasses, selectedAssessment]);
 
-  // ── Fetch summative assessments ───────────────────────────────────────────
+  // ── Fetch summative assessments — scoped to the current active term ───────
+  // This keeps the dropdown short and relevant. Teachers who genuinely need
+  // to edit a past term's scores can use the History tab instead.
   useEffect(() => {
     if (!classIds.length) return;
     setLoadingAssessments(true);
-    supabase
+
+    // Resolve which term to filter by: prefer the prop from the active academic
+    // calendar; fall back to the month-derived constant only if not provided.
+    const termToFilter = currentTerm ?? CURRENT_TERM;
+    const yearToFilter = assessmentYear ?? CURRENT_YEAR;
+
+    let query = supabase
       .from("assessments")
-      .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, strands(name), sub_strands(name)`)
+      .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date, strands(name), sub_strands(name)`)
       .in("class_id", classIds)
       .eq("category", "summative")
-      .order("year",  { ascending: false })
-      .order("term",  { ascending: false })
-      .order("title", { ascending: true })
-      .then(({ data, error: err }) => {
-        if (!isMounted.current) return;
-        if (err) { console.error(err); setError("Failed to load assessments"); }
-        else setAssessments(data || []);
-        setLoadingAssessments(false);
-      });
-  }, [classIds]);
+      .eq("term", termToFilter)       // ← only current term
+      .eq("year", yearToFilter)       // ← only current academic year
+      .order("title", { ascending: true });
 
-  // ── Fetch history ─────────────────────────────────────────────────────────
+    query.then(({ data, error: err }) => {
+      if (!isMounted.current) return;
+      if (err) { console.error(err); setError("Failed to load assessments"); }
+      else setAssessments(data || []);
+      setLoadingAssessments(false);
+    });
+  }, [classIds, currentTerm, assessmentYear]);
+
+  // ── Fetch history — no term filter, shows everything ─────────────────────
   const fetchHistory = async () => {
     if (!classIds.length || !teacherClasses.length) return;
     setLoadingHistory(true);
@@ -573,7 +603,7 @@ export default function TeacherMarksEntry({
       const assessmentIds = [...new Set(results.map((r) => r.assessment_id))];
       const { data: assessmentData, error: aErr } = await supabase
         .from("assessments")
-        .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, strands(name), sub_strands(name)`)
+        .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date, strands(name), sub_strands(name)`)
         .in("id", assessmentIds)
         .in("class_id", classIds);
 
@@ -644,6 +674,7 @@ export default function TeacherMarksEntry({
     classId: string,
     assessmentId: string,
     subjectId: string,
+    defaultDate?: string,
   ) => {
     setLoadingData(true);
     setError(null);
@@ -673,7 +704,7 @@ export default function TeacherMarksEntry({
     const resultsMap: Record<string, ExistingResult> = {};
     (resultsRes.data || []).forEach((r) => { resultsMap[r.student_id] = r; });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const fallbackDate = defaultDate || new Date().toISOString().slice(0, 10);
     const initialEntries: Record<string, EntryRow> = {};
     studentList.forEach((s) => {
       const ex = resultsMap[s.id];
@@ -682,7 +713,7 @@ export default function TeacherMarksEntry({
         performance_level: ex?.performance_level ?? null,
         teacher_remarks:   ex?.teacher_remarks ?? "",
         is_absent:         ex?.is_absent ?? false,
-        date:              ex?.assessment_date ? ex.assessment_date.slice(0, 10) : today,
+        date:              ex?.assessment_date ? ex.assessment_date.slice(0, 10) : fallbackDate,
       };
     });
 
@@ -694,7 +725,8 @@ export default function TeacherMarksEntry({
 
   useEffect(() => {
     if (!selectedAssessment || !selectedSubjectId) { resetMarksState(); return; }
-    loadStudentsAndResults(selectedAssessment.class_id, selectedAssessment.id, selectedSubjectId);
+    const defaultDate = selectedAssessment.assessment_date || new Date().toISOString().slice(0, 10);
+    loadStudentsAndResults(selectedAssessment.class_id, selectedAssessment.id, selectedSubjectId, defaultDate);
   }, [selectedAssessment, selectedSubjectId]);
 
   useEffect(() => {
@@ -722,7 +754,8 @@ export default function TeacherMarksEntry({
     setFClassId(""); setFSubjectId(""); setFTitle("");
     setFStrand(""); setFSubStrand("");
     setFDate(new Date().toISOString().slice(0, 10));
-    setFTerm(String(CURRENT_TERM)); setFYear(String(CURRENT_YEAR));
+    setFTerm(String(currentTerm ?? CURRENT_TERM));
+    setFYear(String(assessmentYear ?? CURRENT_YEAR));
     resetMarksState();
     setError(null); setSuccess(null); setCreateError(null);
     setEditingHistory(false);
@@ -735,7 +768,8 @@ export default function TeacherMarksEntry({
     setSelectedSubjectId(item.subject_id);
     setError(null);
     setSuccess(null);
-    await loadStudentsAndResults(item.assessment.class_id, item.assessment.id, item.subject_id);
+    const defaultDate = item.assessment.assessment_date || new Date().toISOString().slice(0, 10);
+    await loadStudentsAndResults(item.assessment.class_id, item.assessment.id, item.subject_id, defaultDate);
   };
 
   const handleBackToHistory = () => {
@@ -801,8 +835,9 @@ export default function TeacherMarksEntry({
           title: fTitle.trim(), class_id: fClassId, category: "formative",
           max_marks: 0, term: parseInt(fTerm), year: parseInt(fYear),
           teacher_id: teacherId, strand_id: strandId, sub_strand_id: subStrandId,
+          assessment_date: fDate,
         })
-        .select("id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id")
+        .select("id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date")
         .single();
 
       if (aErr) throw aErr;
@@ -813,7 +848,7 @@ export default function TeacherMarksEntry({
         sub_strands: subStrandId ? [{ name: fSubStrand.trim() }] : null,
       });
       setSelectedSubjectId(fSubjectId);
-      await loadStudentsAndResults(fClassId, newAssessment.id, fSubjectId);
+      await loadStudentsAndResults(fClassId, newAssessment.id, fSubjectId, fDate);
       setSuccess(`"${newAssessment.title}" created. Enter performance levels below.`);
     } catch (err: any) {
       console.error(err);
@@ -831,20 +866,12 @@ export default function TeacherMarksEntry({
 
   const handleScoreChange = useCallback((studentId: string, value: string) => {
     setEntries((prev) => {
-      const assessment = prev[studentId]; // we need selectedAssessment here
-      return prev; // placeholder — see below
-    });
-    // We need selectedAssessment in scope, so keep it as a regular function
-    // but stable via the functional updater pattern
-    setEntries((prev) => {
       const n = parseFloat(value);
       return {
         ...prev,
         [studentId]: {
           ...prev[studentId],
           score: value,
-          // performance_level is derived — we pass selectedAssessment via closure
-          // This is fine because handleScoreChange is recreated only when selectedAssessment changes
           performance_level: (!isNaN(n) && selectedAssessment)
             ? getPerformanceLevel(n, selectedAssessment.max_marks)
             : null,
@@ -923,9 +950,16 @@ export default function TeacherMarksEntry({
 
       if (upsertError) throw upsertError;
 
-      setSuccess(isFormativeMode
-        ? `${records.length} result(s) saved and published!`
-        : `${records.length} result(s) saved as draft for admin to publish.`);
+      if (isFormativeMode) {
+        setSelectedAssessment(null);
+        setSelectedSubjectId("");
+        resetMarksState();
+        setSuccess(`${records.length} result(s) saved and published successfully!`);
+        setSaving(false);
+        return;
+      }
+
+      setSuccess(`${records.length} result(s) saved as draft for admin to publish.`);
 
       const { data: refreshed } = await supabase
         .from("assessment_results")
@@ -1028,17 +1062,30 @@ export default function TeacherMarksEntry({
           {mode === "summative" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="assessment">Assessment</Label>
+                <Label htmlFor="assessment">
+                  Assessment
+                  {currentTerm && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      — Term {currentTerm} only
+                    </span>
+                  )}
+                </Label>
                 <Select value={selectedAssessmentId} onValueChange={setSelectedAssessmentId}>
                   <SelectTrigger id="assessment"><SelectValue placeholder="Select an assessment" /></SelectTrigger>
                   <SelectContent>
                     {loadingAssessments ? (
                       <div className="flex items-center justify-center p-3"><Loader2 className="h-4 w-4 animate-spin" /></div>
                     ) : assessments.length === 0 ? (
-                      <div className="p-3 text-sm text-muted-foreground">No exams available for your classes</div>
-                    ) : assessments.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.title} — Term {a.term}, {a.year}</SelectItem>
-                    ))}
+                      <div className="p-3 text-sm text-muted-foreground">
+                        No exams found for Term {currentTerm ?? CURRENT_TERM}. Use History to edit past terms.
+                      </div>
+                    ) : (
+                      assessments.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {classNameMap.get(a.class_id) || 'Unknown Class'}: {a.title} — Term {a.term}, {a.year}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1064,6 +1111,11 @@ export default function TeacherMarksEntry({
           {/* ════════ FORMATIVE CREATION FORM ════════ */}
           {mode === "formative" && !selectedAssessment && (
             <div className="space-y-4">
+              {success && (
+                <div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0" /> {success}
+                </div>
+              )}
               <p className="text-sm text-muted-foreground">
                 Create a new formative assessment. Results publish immediately — no admin approval needed.
               </p>

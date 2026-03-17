@@ -1,43 +1,36 @@
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Badge } from "@/Components/ui/badge";
 import { Input } from "@/Components/ui/input";
 import { Textarea } from "@/Components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/Components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
-import { FileText, MessageSquare, Plus, Upload, Send, Trash2 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader,
+  DialogTitle, DialogTrigger, DialogFooter
+} from "@/Components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue
+} from "@/Components/ui/select";
+import { FileText, MessageSquare, Plus, Upload, Send, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import imageCompression from "browser-image-compression";
+import JSZip from "jszip";
+import { PDFDocument } from "pdf-lib";
 
-// ---------- Types ----------
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 interface TeacherClass {
   id: string;
   teacher_id: string;
   class_id: string;
   subject_id: string;
   created_at: string;
-  classes?: {
-    id: string;
-    name: string;
-    grade_level: string;
-    created_at: string;
-  } | {
-    id: string;
-    name: string;
-    grade_level: string;
-    created_at: string;
-  }[];
-  subjects?: {
-    id: string;
-    name: string;
-    code: string;
-    created_at: string;
-  } | {
-    id: string;
-    name: string;
-    code: string;
-    created_at: string;
-  }[];
+  classes?: { id: string; name: string; grade_level: string; created_at: string } |
+            { id: string; name: string; grade_level: string; created_at: string }[];
+  subjects?: { id: string; name: string; code: string; created_at: string } |
+             { id: string; name: string; code: string; created_at: string }[];
 }
 
 interface Assignment {
@@ -63,29 +56,73 @@ interface Announcement {
   is_for_all_classes: boolean;
 }
 
-// Helper to normalize relation fields
-const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
-  if (!rel) return undefined;
-  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
-};
-
 interface TeacherAssignmentsAnnouncementsProps {
   teacherId: string | undefined;
   teacherClasses: TeacherClass[];
   isActive: boolean;
 }
 
-// ---------- Create Assignment Dialog ----------
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
+  if (!rel) return undefined;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : (rel as T);
+};
+
+// ─────────────────────────────────────────────
+// Compression Utilities
+// ─────────────────────────────────────────────
+async function compressPDF(file: File): Promise<File> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const compressedBytes = await pdfDoc.save({ useObjectStreams: true });
+  return new File([compressedBytes], file.name, { type: "application/pdf" });
+}
+
+async function compressDocx(file: File): Promise<File> {
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const compressedBlob = await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 9 },
+  });
+  return new File([compressedBlob], file.name, { type: file.type });
+}
+
+async function compressImage(file: File): Promise<File> {
+  return await imageCompression(file, {
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+  });
+}
+
+async function compressFile(file: File): Promise<File> {
+  const type = file.type;
+  if (type === "application/pdf") return await compressPDF(file);
+  if (type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    return await compressDocx(file);
+  if (type.startsWith("image/")) return await compressImage(file);
+  return file; // zip, pptx, xlsx, csv, txt — pass through unchanged
+}
+
+// ─────────────────────────────────────────────
+// Create Assignment Dialog
+// ─────────────────────────────────────────────
 const CreateAssignmentDialog: React.FC<{
   teacherClasses: TeacherClass[];
   onAssignmentCreated: () => void;
 }> = ({ teacherClasses, onAssignmentCreated }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [originalSize, setOriginalSize] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
 
@@ -95,7 +132,32 @@ const CreateAssignmentDialog: React.FC<{
     setDescription("");
     setSelectedClass("");
     setFile(null);
+    setOriginalSize(null);
     setError(null);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) { setFile(null); return; }
+
+    if (selected.size > 10 * 1024 * 1024) {
+      setError("File size exceeds 10MB limit");
+      e.target.value = "";
+      setFile(null);
+      return;
+    }
+
+    setError(null);
+    setOriginalSize(selected.size);
+    setCompressing(true);
+    try {
+      const compressed = await compressFile(selected);
+      setFile(compressed);
+    } catch {
+      setFile(selected); // fallback to original if compression fails
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleCreateAssignment = async () => {
@@ -134,50 +196,31 @@ const CreateAssignmentDialog: React.FC<{
       }
 
       let file_url = null;
-      if (file) {
-        const allowedTypes = [
-          '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', 
-          '.zip', '.ppt', '.pptx', '.xlsx', '.csv', '.txt'
-        ];
-        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-        
-        if (!allowedTypes.includes(fileExtension)) {
-          setError(`File type not allowed. Allowed types: ${allowedTypes.join(', ')}`);
-          setLoading(false);
-          return;
-        }
 
-        const MAX_FILE_SIZE = 10 * 1024 * 1024;
-        if (file.size > MAX_FILE_SIZE) {
-          setError("File size exceeds 10MB limit");
+      if (file) {
+        const allowedTypes = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png",
+                              ".zip", ".ppt", ".pptx", ".xlsx", ".csv", ".txt"];
+        const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+
+        if (!allowedTypes.includes(fileExtension)) {
+          setError(`File type not allowed. Allowed: ${allowedTypes.join(", ")}`);
           setLoading(false);
           return;
         }
 
         const sanitizedFileName = file.name
-          .replace(/[^a-zA-Z0-9._-]/g, '_')
-          .replace(/\s+/g, '_');
-        
-        const timestamp = Date.now();
-        const randomString = Math.random().toString(36).substring(2, 15);
-        const filePath = `assignments/${timestamp}_${randomString}_${sanitizedFileName}`;
-        
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .replace(/\s+/g, "_");
+
+        const filePath = `assignments/${Date.now()}_${Math.random().toString(36).substring(2, 15)}_${sanitizedFileName}`;
+
         const { error: storageError } = await supabase.storage
           .from("assignments")
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-        
-        if (storageError) {
-          console.error('Storage error:', storageError);
-          throw new Error(`File upload failed: ${storageError.message}`);
-        }
-        
-        const { data: urlData } = supabase.storage
-          .from("assignments")
-          .getPublicUrl(filePath);
-        
+          .upload(filePath, file, { cacheControl: "3600", upsert: false });
+
+        if (storageError) throw new Error(`File upload failed: ${storageError.message}`);
+
+        const { data: urlData } = supabase.storage.from("assignments").getPublicUrl(filePath);
         file_url = urlData.publicUrl;
       }
 
@@ -191,42 +234,37 @@ const CreateAssignmentDialog: React.FC<{
         file_url,
       }]);
 
-      if (insertError) {
-        console.error("Database insert error:", insertError);
-        throw new Error(`Failed to create assignment: ${insertError.message}`);
-      }
+      if (insertError) throw new Error(`Failed to create assignment: ${insertError.message}`);
 
       resetForm();
       setOpen(false);
       onAssignmentCreated();
     } catch (err: any) {
       console.error("Error creating assignment:", err);
-      setError("Failed to create assignment. Please try again.");
+      setError(err?.message || "Failed to create assignment. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      setOpen(isOpen);
-      if (!isOpen) resetForm();
-    }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) resetForm(); }}>
       <DialogTrigger asChild>
         <Button size="sm" className="h-8 px-2 sm:h-9 sm:px-4 text-xs sm:text-sm">
           <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-          <span>New Assignment</span>
+          New Assignment
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-[95vw] sm:max-w-[500px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader className="space-y-1 sm:space-y-2">
           <DialogTitle className="text-lg sm:text-xl">Create Assignment</DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            Create a new assignment for your class. Maximum file size: 10MB.
+            Files are automatically compressed before upload. Maximum file size: 10MB.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+          {/* Class */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Class *</label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -235,11 +273,7 @@ const CreateAssignmentDialog: React.FC<{
               </SelectTrigger>
               <SelectContent className="text-xs sm:text-sm max-h-[200px]">
                 {teacherClasses.map(tc => (
-                  <SelectItem 
-                    value={tc.class_id} 
-                    key={tc.class_id}
-                    className="text-xs sm:text-sm"
-                  >
+                  <SelectItem value={tc.class_id} key={tc.class_id} className="text-xs sm:text-sm">
                     {firstRel(tc.classes)?.name || tc.class_id}
                   </SelectItem>
                 ))}
@@ -247,6 +281,7 @@ const CreateAssignmentDialog: React.FC<{
             </Select>
           </div>
 
+          {/* Title */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Title *</label>
             <Input
@@ -256,11 +291,10 @@ const CreateAssignmentDialog: React.FC<{
               maxLength={200}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
-            <div className="text-xs text-gray-500 mt-1">
-              {title.length}/200 characters
-            </div>
+            <div className="text-xs text-gray-500 mt-1">{title.length}/200 characters</div>
           </div>
 
+          {/* Description */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Description (optional)</label>
             <Textarea
@@ -270,51 +304,59 @@ const CreateAssignmentDialog: React.FC<{
               className="min-h-[60px] text-xs sm:text-sm"
               maxLength={5000}
             />
-            <div className="text-xs text-gray-500 mt-1">
-              {description.length}/5000 characters
-            </div>
+            <div className="text-xs text-gray-500 mt-1">{description.length}/5000 characters</div>
           </div>
 
+          {/* Due Date */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Due Date *</label>
             <Input
               type="date"
-              placeholder="Due date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
+              min={new Date().toISOString().split("T")[0]}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
           </div>
 
+          {/* File Upload */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">
               Attach File (optional)
-              <span className="text-xs text-gray-500 ml-1 sm:ml-2">Max 10MB</span>
+              <span className="text-xs text-gray-500 ml-1 sm:ml-2">Max 10MB · Auto-compressed</span>
             </label>
             <Input
               type="file"
               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.ppt,.pptx,.xlsx,.csv,.txt"
-              onChange={(e) => {
-                const selectedFile = e.target.files?.[0];
-                if (selectedFile) {
-                  if (selectedFile.size > 10 * 1024 * 1024) {
-                    setError("File size exceeds 10MB limit");
-                    e.target.value = '';
-                    setFile(null);
-                  } else {
-                    setError(null);
-                    setFile(selectedFile);
-                  }
-                } else {
-                  setFile(null);
-                }
-              }}
+              onChange={handleFileChange}
+              disabled={compressing}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
-            {file && (
-              <div className="text-xs sm:text-sm text-gray-600 mt-1 truncate">
-                Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+
+            {/* Compression feedback */}
+            {compressing && (
+              <div className="flex items-center gap-1.5 text-xs text-blue-600 mt-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Compressing file...
+              </div>
+            )}
+            {file && !compressing && originalSize && (
+              <div className="text-xs text-green-600 mt-1">
+                ✓ {file.name} —{" "}
+                {originalSize !== file.size ? (
+                  <>
+                    {(originalSize / 1024 / 1024).toFixed(2)} MB →{" "}
+                    <strong>{(file.size / 1024 / 1024).toFixed(2)} MB</strong>
+                    {" "}({Math.round((1 - file.size / originalSize) * 100)}% smaller)
+                  </>
+                ) : (
+                  <>{(file.size / 1024 / 1024).toFixed(2)} MB</>
+                )}
+              </div>
+            )}
+            {file && !compressing && !originalSize && (
+              <div className="text-xs text-gray-600 mt-1">
+                {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
               </div>
             )}
           </div>
@@ -328,10 +370,13 @@ const CreateAssignmentDialog: React.FC<{
           <Button
             onClick={handleCreateAssignment}
             className="w-full h-9 sm:h-10 text-xs sm:text-sm"
-            disabled={loading}
+            disabled={loading || compressing}
           >
-            <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            {loading ? "Creating..." : "Create Assignment"}
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Creating...</>
+            ) : (
+              <><Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Create Assignment</>
+            )}
           </Button>
         </div>
       </DialogContent>
@@ -339,7 +384,9 @@ const CreateAssignmentDialog: React.FC<{
   );
 };
 
-// ---------- Create Announcement Dialog ----------
+// ─────────────────────────────────────────────
+// Create Announcement Dialog
+// ─────────────────────────────────────────────
 const CreateAnnouncementDialog: React.FC<{
   teacherClasses: TeacherClass[];
   onAnnouncementCreated: () => void;
@@ -354,22 +401,14 @@ const CreateAnnouncementDialog: React.FC<{
   const [isRateLimited, setIsRateLimited] = useState(false);
 
   const resetForm = () => {
-    setTitle("");
-    setContent("");
-    setSelectedClass("");
-    setError(null);
+    setTitle(""); setContent(""); setSelectedClass(""); setError(null);
   };
 
   const checkRateLimit = (): boolean => {
     const now = Date.now();
-    const oneMinuteAgo = now - 60000;
-    const recentAttempts = announcementAttempts.filter(time => time > oneMinuteAgo);
-    setAnnouncementAttempts(recentAttempts);
-    
-    if (recentAttempts.length >= 10) {
-      setIsRateLimited(true);
-      return true;
-    }
+    const recent = announcementAttempts.filter(t => t > now - 60000);
+    setAnnouncementAttempts(recent);
+    if (recent.length >= 10) { setIsRateLimited(true); return true; }
     return false;
   };
 
@@ -379,36 +418,18 @@ const CreateAnnouncementDialog: React.FC<{
       return;
     }
 
-    if (!title.trim()) {
-      setError("Title is required");
-      return;
-    }
-    
-    if (title.trim().length > 200) {
-      setError("Title must be less than 200 characters");
-      return;
-    }
-    
-    if (!content.trim()) {
-      setError("Content is required");
-      return;
-    }
-    
-    if (content.trim().length > 5000) {
-      setError("Content must be less than 5000 characters");
-      return;
-    }
-    
-    if (!selectedClass) {
-      setError("Class selection is required");
-      return;
-    }
+    if (!title.trim()) { setError("Title is required"); return; }
+    if (title.trim().length > 200) { setError("Title must be less than 200 characters"); return; }
+    if (!content.trim()) { setError("Content is required"); return; }
+    if (content.trim().length > 5000) { setError("Content must be less than 5000 characters"); return; }
+    if (!selectedClass) { setError("Class selection is required"); return; }
 
     setLoading(true);
     setError(null);
 
     try {
       setAnnouncementAttempts(prev => [...prev, Date.now()]);
+
       const selectedTeacherClass = teacherClasses.find(tc => tc.class_id === selectedClass);
       if (!selectedTeacherClass) {
         setError("Unauthorized: You don't have access to this class");
@@ -416,30 +437,23 @@ const CreateAnnouncementDialog: React.FC<{
         return;
       }
 
-      const sanitizedTitle = title.trim();
-      const sanitizedContent = content.trim();
-
       const { error: insertError } = await supabase.from("announcements").insert([{
-        title: sanitizedTitle,
-        content: sanitizedContent,
+        title: title.trim(),
+        content: content.trim(),
         class_id: selectedClass,
-        priority: 'normal',
+        priority: "normal",
         created_at: new Date().toISOString(),
         expires_at: null,
         is_for_all_classes: false,
       }]);
 
       if (insertError) {
-        console.error("Database insert error:", insertError);
-        if (insertError.code === '23502') {
-          setError("Required field missing. Please fill in all required fields.");
-        } else if (insertError.code === '23503') {
-          setError("Invalid class reference. Please select a valid class.");
-        } else if (insertError.code === '23514') {
-          setError("Invalid data format. Please check your input.");
-        } else {
-          setError("Failed to send announcement. Please try again.");
-        }
+        const codeMessages: Record<string, string> = {
+          "23502": "Required field missing. Please fill in all required fields.",
+          "23503": "Invalid class reference. Please select a valid class.",
+          "23514": "Invalid data format. Please check your input.",
+        };
+        setError(codeMessages[insertError.code] || "Failed to send announcement. Please try again.");
         throw insertError;
       }
 
@@ -447,10 +461,8 @@ const CreateAnnouncementDialog: React.FC<{
       setOpen(false);
       setIsRateLimited(false);
       onAnnouncementCreated();
-    } catch (err: any) {
-      if (!error) {
-        setError("Failed to send announcement. Please try again.");
-      }
+    } catch {
+      if (!error) setError("Failed to send announcement. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -459,15 +471,12 @@ const CreateAnnouncementDialog: React.FC<{
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       setOpen(isOpen);
-      if (!isOpen) {
-        resetForm();
-        setIsRateLimited(false);
-      }
+      if (!isOpen) { resetForm(); setIsRateLimited(false); }
     }}>
       <DialogTrigger asChild>
         <Button size="sm" disabled={isRateLimited} className="h-8 px-2 sm:h-9 sm:px-4 text-xs sm:text-sm">
           <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-          <span>New Announcement</span>
+          New Announcement
           {isRateLimited && <span className="ml-1 sm:ml-2 text-xs">(Rate Limited)</span>}
         </Button>
       </DialogTrigger>
@@ -477,14 +486,15 @@ const CreateAnnouncementDialog: React.FC<{
           <DialogDescription className="text-xs sm:text-sm">
             Send an announcement to your selected class.
             {isRateLimited && (
-              <div className="text-amber-600 mt-1 text-xs sm:text-sm">
+              <span className="block text-amber-600 mt-1 text-xs sm:text-sm">
                 Rate limited: Please wait before sending another announcement.
-              </div>
+              </span>
             )}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+          {/* Class */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Class *</label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -493,11 +503,7 @@ const CreateAnnouncementDialog: React.FC<{
               </SelectTrigger>
               <SelectContent className="text-xs sm:text-sm max-h-[200px]">
                 {teacherClasses.map(tc => (
-                  <SelectItem 
-                    value={tc.class_id} 
-                    key={tc.class_id}
-                    className="text-xs sm:text-sm"
-                  >
+                  <SelectItem value={tc.class_id} key={tc.class_id} className="text-xs sm:text-sm">
                     {firstRel(tc.classes)?.name || tc.class_id}
                   </SelectItem>
                 ))}
@@ -505,6 +511,7 @@ const CreateAnnouncementDialog: React.FC<{
             </Select>
           </div>
 
+          {/* Title */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Title *</label>
             <Input
@@ -514,11 +521,10 @@ const CreateAnnouncementDialog: React.FC<{
               maxLength={200}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
-            <div className="text-xs text-gray-500 mt-1">
-              {title.length}/200 characters
-            </div>
+            <div className="text-xs text-gray-500 mt-1">{title.length}/200 characters</div>
           </div>
 
+          {/* Content */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Content *</label>
             <Textarea
@@ -528,9 +534,7 @@ const CreateAnnouncementDialog: React.FC<{
               className="min-h-[80px] sm:min-h-[100px] text-xs sm:text-sm"
               maxLength={5000}
             />
-            <div className="text-xs text-gray-500 mt-1">
-              {content.length}/5000 characters
-            </div>
+            <div className="text-xs text-gray-500 mt-1">{content.length}/5000 characters</div>
           </div>
 
           {error && (
@@ -539,15 +543,18 @@ const CreateAnnouncementDialog: React.FC<{
             </div>
           )}
 
-          <Button 
+          <Button
             onClick={handleSendAnnouncement}
-            className="w-full h-9 sm:h-10 text-xs sm:text-sm" 
+            className="w-full h-9 sm:h-10 text-xs sm:text-sm"
             disabled={loading || isRateLimited}
           >
-            <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            {loading ? "Sending..." : "Send Announcement"}
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Sending...</>
+            ) : (
+              <><Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Send Announcement</>
+            )}
           </Button>
-          
+
           {announcementAttempts.length > 0 && (
             <div className="text-xs text-gray-500 text-center">
               Announcements in last minute: {announcementAttempts.length}/10
@@ -559,11 +566,13 @@ const CreateAnnouncementDialog: React.FC<{
   );
 };
 
-// ---------- Main Component ----------
-export default function TeacherAssignmentsAnnouncements({ 
-  teacherId, 
-  teacherClasses, 
-  isActive 
+// ─────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────
+export default function TeacherAssignmentsAnnouncements({
+  teacherId,
+  teacherClasses,
+  isActive,
 }: TeacherAssignmentsAnnouncementsProps) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -572,200 +581,140 @@ export default function TeacherAssignmentsAnnouncements({
   const [announcementToDelete, setAnnouncementToDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data only when component is active (tab is selected)
   useEffect(() => {
-    if (!isActive || !teacherClasses.length || !teacherId) {
-      return;
-    }
-
+    if (!isActive || !teacherClasses.length || !teacherId) return;
     const fetchData = async () => {
       setLoading(true);
       try {
-        await Promise.all([
-          fetchAssignments(),
-          fetchAnnouncements(),
-        ]);
-      } catch (error) {
-        console.error("Error fetching assignments/announcements:", error);
+        await Promise.all([fetchAssignments(), fetchAnnouncements()]);
+      } catch (e) {
+        console.error("Error fetching data:", e);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [isActive, teacherClasses, teacherId]);
 
   const fetchAssignments = useCallback(async () => {
-    if (!teacherClasses.length || !teacherId) {
-      setAssignments([]);
-      return;
-    }
-
+    if (!teacherClasses.length || !teacherId) { setAssignments([]); return; }
     try {
       const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-      const { data, error } = await supabase
-        .from("assignments")
-        .select("*")
-        .in("class_id", classIds);
-
+      const { data, error } = await supabase.from("assignments").select("*").in("class_id", classIds);
       if (error) throw error;
       setAssignments(data || []);
-    } catch (error) {
-      console.error("Error fetching assignments:", error);
+    } catch (e) {
+      console.error("Error fetching assignments:", e);
       setAssignments([]);
     }
   }, [teacherClasses, teacherId]);
 
   const fetchAnnouncements = useCallback(async () => {
-    if (!teacherClasses.length || !teacherId) {
-      setAnnouncements([]);
-      return;
-    }
-
+    if (!teacherClasses.length || !teacherId) { setAnnouncements([]); return; }
     try {
       const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("*")
-        .in("class_id", classIds);
-      
+      const { data, error } = await supabase.from("announcements").select("*").in("class_id", classIds);
       if (error) throw error;
       setAnnouncements(data || []);
-    } catch (error) {
-      console.error("Error fetching announcements:", error);
+    } catch (e) {
+      console.error("Error fetching announcements:", e);
       setAnnouncements([]);
     }
   }, [teacherClasses, teacherId]);
 
   const handleDeleteAssignment = async (id: string) => {
     if (!teacherId) return;
-    
     try {
       const assignment = assignments.find(a => a.id === id);
-      if (!assignment) {
-        setError("Assignment not found");
-        setAssignmentToDelete(null);
-        return;
-      }
-
-      const teacherClassIds = teacherClasses.map(tc => tc.class_id);
-      if (!teacherClassIds.includes(assignment.class_id)) {
+      if (!assignment) { setError("Assignment not found"); setAssignmentToDelete(null); return; }
+      if (!teacherClasses.map(tc => tc.class_id).includes(assignment.class_id)) {
         setError("Unauthorized: You don't have access to delete this assignment");
         setAssignmentToDelete(null);
         return;
       }
-
       const { error } = await supabase.from("assignments").delete().eq("id", id);
       if (error) throw error;
-      
       setAssignmentToDelete(null);
       await fetchAssignments();
     } catch (err: any) {
-      console.error("Delete error:", err);
       setError(err instanceof Error ? err.message : "Failed to delete assignment");
     }
   };
 
   const handleDeleteAnnouncement = async (id: string) => {
     if (!teacherId) return;
-    
     try {
       const announcement = announcements.find(a => a.id === id);
-      if (!announcement) {
-        setError("Announcement not found");
-        setAnnouncementToDelete(null);
-        return;
-      }
-
-      const teacherClassIds = teacherClasses.map(tc => tc.class_id);
-      if (!teacherClassIds.includes(announcement.class_id)) {
+      if (!announcement) { setError("Announcement not found"); setAnnouncementToDelete(null); return; }
+      if (!teacherClasses.map(tc => tc.class_id).includes(announcement.class_id)) {
         setError("Unauthorized: You don't have access to delete this announcement");
         setAnnouncementToDelete(null);
         return;
       }
-
       const { error } = await supabase.from("announcements").delete().eq("id", id);
       if (error) throw error;
-      
       setAnnouncementToDelete(null);
       await fetchAnnouncements();
     } catch (err: any) {
-      console.error("Delete error:", err);
       setError(err instanceof Error ? err.message : "Failed to delete announcement");
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Confirmation Dialogs */}
-      <Dialog open={!!assignmentToDelete} onOpenChange={(open) => !open && setAssignmentToDelete(null)}>
+      {/* Delete Assignment Confirm */}
+      <Dialog open={!!assignmentToDelete} onOpenChange={(o) => !o && setAssignmentToDelete(null)}>
         <DialogContent className="max-w-[95vw] sm:max-w-[425px] p-4 sm:p-6">
-          <DialogHeader className="space-y-1 sm:space-y-2">
+          <DialogHeader>
             <DialogTitle className="text-lg sm:text-xl">Confirm Deletion</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
               Are you sure you want to delete this assignment? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-3 sm:mt-4">
-            <Button 
-              variant="outline" 
-              onClick={() => setAssignmentToDelete(null)}
-              className="h-9 sm:h-10 text-xs sm:text-sm"
-            >
+            <Button variant="outline" onClick={() => setAssignmentToDelete(null)} className="h-9 sm:h-10 text-xs sm:text-sm">
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => assignmentToDelete && handleDeleteAssignment(assignmentToDelete)}
-              className="h-9 sm:h-10 text-xs sm:text-sm"
-            >
+            <Button variant="destructive" onClick={() => assignmentToDelete && handleDeleteAssignment(assignmentToDelete)} className="h-9 sm:h-10 text-xs sm:text-sm">
               Delete Assignment
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!announcementToDelete} onOpenChange={(open) => !open && setAnnouncementToDelete(null)}>
+      {/* Delete Announcement Confirm */}
+      <Dialog open={!!announcementToDelete} onOpenChange={(o) => !o && setAnnouncementToDelete(null)}>
         <DialogContent className="max-w-[95vw] sm:max-w-[425px] p-4 sm:p-6">
-          <DialogHeader className="space-y-1 sm:space-y-2">
+          <DialogHeader>
             <DialogTitle className="text-lg sm:text-xl">Confirm Deletion</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
               Are you sure you want to delete this announcement? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-3 sm:mt-4">
-            <Button 
-              variant="outline" 
-              onClick={() => setAnnouncementToDelete(null)}
-              className="h-9 sm:h-10 text-xs sm:text-sm"
-            >
+            <Button variant="outline" onClick={() => setAnnouncementToDelete(null)} className="h-9 sm:h-10 text-xs sm:text-sm">
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => announcementToDelete && handleDeleteAnnouncement(announcementToDelete)}
-              className="h-9 sm:h-10 text-xs sm:text-sm"
-            >
+            <Button variant="destructive" onClick={() => announcementToDelete && handleDeleteAnnouncement(announcementToDelete)} className="h-9 sm:h-10 text-xs sm:text-sm">
               Delete Announcement
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Global Error Banner */}
       {error && (
         <div className="bg-destructive/15 text-destructive p-3 sm:p-4 rounded-lg flex justify-between items-center text-xs sm:text-sm">
           <span className="flex-1 mr-2">{error}</span>
-          <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 sm:h-8 sm:w-8 p-0">
-            ×
-          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 sm:h-8 sm:w-8 p-0">×</Button>
         </div>
       )}
 
@@ -776,11 +725,7 @@ export default function TeacherAssignmentsAnnouncements({
             <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             <CardTitle className="text-base sm:text-lg">Assignment Management</CardTitle>
           </div>
-
-          <CreateAssignmentDialog 
-            teacherClasses={teacherClasses}
-            onAssignmentCreated={fetchAssignments}
-          />
+          <CreateAssignmentDialog teacherClasses={teacherClasses} onAssignmentCreated={fetchAssignments} />
         </CardHeader>
 
         <CardContent className="p-4 sm:p-6 pt-0">
@@ -790,57 +735,30 @@ export default function TeacherAssignmentsAnnouncements({
                 No assignments yet. Create your first assignment!
               </div>
             )}
-
             {assignments.map((assignment) => (
-              <div
-                key={assignment.id}
-                className="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg"
-              >
+              <div key={assignment.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-sm mb-1 truncate">{assignment.title}</h4>
-
                   {assignment.description && (
                     <p className="text-xs sm:text-sm text-muted-foreground mb-1 sm:mb-2 line-clamp-2">
                       {assignment.description}
                     </p>
                   )}
-
                   <div className="flex items-center flex-wrap gap-x-2 sm:gap-x-4 gap-y-1 text-xs text-muted-foreground mb-1 sm:mb-2">
-                    <span className="whitespace-nowrap">
-                      Due: {assignment.due_date
-                        ? new Date(assignment.due_date).toLocaleDateString()
-                        : "N/A"}
-                    </span>
-
-                    <span className="whitespace-nowrap">
-                      Created: {new Date(assignment.created_at).toLocaleDateString()}
-                    </span>
-
-                    {assignment.total_marks && (
-                      <span className="whitespace-nowrap">Total Marks: {assignment.total_marks}</span>
-                    )}
+                    <span>Due: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : "N/A"}</span>
+                    <span>Created: {new Date(assignment.created_at).toLocaleDateString()}</span>
+                    {assignment.total_marks && <span>Marks: {assignment.total_marks}</span>}
                   </div>
-
                   {assignment.file_url && (
-                    <a
-                      href={assignment.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline flex items-center truncate"
-                    >
+                    <a href={assignment.file_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center truncate">
                       <FileText className="w-3 h-3 mr-1 flex-shrink-0" />
                       <span className="truncate">Download Attached File</span>
                     </a>
                   )}
                 </div>
-
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setAssignmentToDelete(assignment.id)}
-                  title="Delete assignment"
-                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0"
-                >
+                <Button size="icon" variant="ghost" onClick={() => setAssignmentToDelete(assignment.id)}
+                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
                   <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
                 </Button>
               </div>
@@ -856,12 +774,9 @@ export default function TeacherAssignmentsAnnouncements({
             <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             <CardTitle className="text-base sm:text-lg">Announcements</CardTitle>
           </div>
-          
-          <CreateAnnouncementDialog 
-            teacherClasses={teacherClasses}
-            onAnnouncementCreated={fetchAnnouncements}
-          />
+          <CreateAnnouncementDialog teacherClasses={teacherClasses} onAnnouncementCreated={fetchAnnouncements} />
         </CardHeader>
+
         <CardContent className="p-4 sm:p-6 pt-0">
           <div className="space-y-3 sm:space-y-4">
             {announcements.length === 0 && (
@@ -877,8 +792,8 @@ export default function TeacherAssignmentsAnnouncements({
                     <Badge variant="secondary" className="text-xs">
                       {firstRel(teacherClasses.find(tc => tc.class_id === announcement.class_id)?.classes)?.name || "Class"}
                     </Badge>
-                    {announcement.priority !== 'normal' && (
-                      <Badge variant={announcement.priority === 'high' ? 'destructive' : 'default'} className="text-xs">
+                    {announcement.priority !== "normal" && (
+                      <Badge variant={announcement.priority === "high" ? "destructive" : "default"} className="text-xs">
                         {announcement.priority}
                       </Badge>
                     )}
@@ -886,16 +801,11 @@ export default function TeacherAssignmentsAnnouncements({
                   <p className="text-xs sm:text-sm text-foreground mb-1 sm:mb-2 line-clamp-2">{announcement.content}</p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(announcement.created_at).toLocaleString()}
-                    {announcement.expires_at && ` • Expires: ${new Date(announcement.expires_at).toLocaleDateString()}`}
+                    {announcement.expires_at && ` · Expires: ${new Date(announcement.expires_at).toLocaleDateString()}`}
                   </p>
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setAnnouncementToDelete(announcement.id)}
-                  title="Delete announcement"
-                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0"
-                >
+                <Button size="icon" variant="ghost" onClick={() => setAnnouncementToDelete(announcement.id)}
+                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
                   <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
                 </Button>
               </div>

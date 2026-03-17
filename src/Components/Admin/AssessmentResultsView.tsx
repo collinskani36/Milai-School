@@ -18,6 +18,36 @@ import { Skeleton } from '@/Components/ui/skeleton';
 import { Badge } from '@/Components/ui/badge';
 import { format } from 'date-fns';
 
+// ── Type Definitions (based on Supabase schema) ─────────────────────────────
+interface Assessment {
+  id: string;
+  title: string;
+  category: string; // 'formative', 'summative', 'portfolio', etc.
+}
+
+interface Student {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+}
+
+interface AssessmentResult {
+  id: string;
+  assessment_id: string;
+  student_id: string;
+  subject_id: string;
+  score?: number;
+  max_marks?: number;
+  performance_level?: string;
+  teacher_remarks?: string;
+  assessment_date?: string;
+}
+
 // ── Performance level badge ───────────────────────────────────────────────────
 function PerformanceLevelBadge({ level }: { level: string | null }) {
   if (!level) return <span className="text-gray-400">-</span>;
@@ -48,22 +78,180 @@ function PerformanceLevelBadge({ level }: { level: string | null }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function AssessmentResultsView({ assessment, onBack = () => {} }) {
+interface AssessmentResultsViewProps {
+  assessment: Assessment | null;
+  onBack?: () => void;
+}
+
+export default function AssessmentResultsView({ assessment, onBack = () => {} }: AssessmentResultsViewProps) {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingResult, setEditingResult] = useState(null);
+  const [editingResult, setEditingResult] = useState<AssessmentResult | null>(null);
   const [showRaw, setShowRaw] = useState(false);
-  const [rawRows, setRawRows] = useState<any[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [rawRows, setRawRows] = useState<AssessmentResult[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showStudentEdit, setShowStudentEdit] = useState(false);
   const [studentMarks, setStudentMarks] = useState<Record<string, number | ''>>({});
 
   // Determine if this is a formative/portfolio assessment
   const isFormative = assessment?.category === 'formative' || assessment?.category === 'portfolio';
 
-  // ── Print ────────────────────────────────────────────────────────────────
+  // ── Queries ───────────────────────────────────────────────────────────────
+  // 1. Fetch results for this assessment
+  const { data: results = [], isLoading: isLoadingResults } = useQuery({
+    queryKey: ['assessmentResults', assessment?.id ?? 'none'],
+    queryFn: async () => {
+      if (!assessment?.id) return [];
+      const { data, error } = await supabase
+        .from('assessment_results')
+        .select('*')
+        .eq('assessment_id', assessment.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!assessment?.id,
+    // No initialData: [] – let React Query handle loading states correctly
+  });
 
-  const printStudentResult = (student) => {
+  // Extract unique student and subject IDs from results
+  const studentIds = useMemo(() => {
+    if (!results.length) return [];
+    return Array.from(new Set(results.map(r => r.student_id)));
+  }, [results]);
+
+  const subjectIds = useMemo(() => {
+    if (!results.length) return [];
+    return Array.from(new Set(results.map(r => r.subject_id)));
+  }, [results]);
+
+  // 2. Fetch only the students that have results (dependent on results)
+  const { data: students = [], isLoading: isLoadingStudents } = useQuery({
+    queryKey: ['students', studentIds], // Re‑fetch when the list of IDs changes
+    queryFn: async () => {
+      if (studentIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .in('id', studentIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!assessment?.id && studentIds.length > 0,
+    staleTime: 5 * 60 * 1000, // Students rarely change; reduce refetches
+  });
+
+  // 3. Fetch only the subjects that have results
+  const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery({
+    queryKey: ['subjects', subjectIds],
+    queryFn: async () => {
+      if (subjectIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('subjects')
+        .select('*')
+        .in('id', subjectIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!assessment?.id && subjectIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Maps ──────────────────────────────────────────────────────────────────
+  const studentMap = useMemo(() => new Map(students.map(s => [s.id, `${s.first_name} ${s.last_name}`])), [students]);
+  const subjectMap = useMemo(() => new Map(subjects.map(s => [s.id, s.name])), [subjects]);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const updateMutation = useMutation<void, Error, { id: string; data: Partial<AssessmentResult> }>({
+    mutationFn: async ({ id, data }) => {
+      const { error } = await supabase.from('assessment_results').update(data).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment?.id] });
+      setEditingResult(null);
+    },
+  });
+
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('assessment_results').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment?.id] });
+    },
+  });
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const raw = formData.get('score');
+    const score = parseFloat(raw?.toString() ?? '');
+    if (editingResult && !isNaN(score)) {
+      updateMutation.mutate({ id: editingResult.id, data: { score } });
+    }
+  };
+
+  // ── Pivot data ────────────────────────────────────────────────────────────
+  // With the optimised queries, subjects already contain only those present in results.
+  const subjectsForAssessment = subjects; // already filtered by subjectIds
+  const studentsForAssessment = students; // already filtered by studentIds
+
+  const resultLookup = useMemo(() => {
+    const map = new Map<string, AssessmentResult>();
+    for (const r of results) {
+      map.set(`${r.student_id}_${r.subject_id}`, r);
+    }
+    return map;
+  }, [results]);
+
+  // Summative only: totals and positions
+  const studentTotals = useMemo(() => {
+    if (isFormative) return new Map<string, number>();
+    const m = new Map<string, number>();
+    for (const s of studentsForAssessment) {
+      let total = 0;
+      for (const subj of subjectsForAssessment) {
+        const r = resultLookup.get(`${s.id}_${subj.id}`);
+        const score = r?.score ?? 0;
+        total += typeof score === 'number' ? score : 0;
+      }
+      m.set(s.id, total);
+    }
+    return m;
+  }, [studentsForAssessment, subjectsForAssessment, resultLookup, isFormative]);
+
+  const studentPositions = useMemo(() => {
+    if (isFormative) return new Map<string, number>();
+    const totals = Array.from(studentTotals.values());
+    const uniqueSorted = Array.from(new Set(totals)).sort((a, b) => b - a);
+    const posMap = new Map<number, number>();
+    uniqueSorted.forEach((t, i) => posMap.set(t, i + 1));
+    const byStudent = new Map<string, number>();
+    for (const [studentId, total] of studentTotals.entries()) {
+      byStudent.set(studentId, posMap.get(total) ?? 0);
+    }
+    return byStudent;
+  }, [studentTotals, isFormative]);
+
+  // ── Search filter ─────────────────────────────────────────────────────────
+  const filteredStudents = useMemo(() => {
+    if (!searchTerm) return studentsForAssessment;
+    const q = searchTerm.toLowerCase();
+    return studentsForAssessment.filter(s => {
+      const studentName = `${s.first_name} ${s.last_name}`.toLowerCase();
+      if (studentName.includes(q)) return true;
+      for (const subj of subjectsForAssessment) {
+        if ((subj.name || '').toLowerCase().includes(q)) return true;
+      }
+      return false;
+    });
+  }, [studentsForAssessment, subjectsForAssessment, searchTerm]);
+
+  const isLoading = isLoadingResults || isLoadingStudents || isLoadingSubjects;
+
+  // ── Print function ────────────────────────────────────────────────────────
+  const printStudentResult = (student: Student) => {
     const rows = subjectsForAssessment.map(subj => {
       const r = resultLookup.get(`${student.id}_${subj.id}`);
       if (isFormative) {
@@ -109,13 +297,12 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
   };
 
   // ── Edit student marks ────────────────────────────────────────────────────
-
-  const openStudentEdit = (student) => {
+  const openStudentEdit = (student: Student) => {
     setSelectedStudent(student);
     const marks: Record<string, number | ''> = {};
     for (const subj of subjectsForAssessment) {
       const r = resultLookup.get(`${student.id}_${subj.id}`);
-      marks[subj.id] = r ? r.score : '';
+      marks[subj.id] = r?.score ?? '';
     }
     setStudentMarks(marks);
     setShowStudentEdit(true);
@@ -123,20 +310,20 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
 
   const saveStudentMarks = async () => {
     if (!selectedStudent) return;
-    const rowsToUpsert = [];
+    const rowsToUpsert: Partial<AssessmentResult>[] = [];
     for (const subjId of Object.keys(studentMarks)) {
       const score = studentMarks[subjId];
       if (score === '' || score == null) continue;
       const existing = resultLookup.get(`${selectedStudent.id}_${subjId}`);
-      const payload: any = {
-        assessment_id: assessment.id,
+      const payload: Partial<AssessmentResult> = {
+        assessment_id: assessment!.id,
         student_id: selectedStudent.id,
         subject_id: subjId,
         score: Number(score),
         assessment_date: existing?.assessment_date || new Date().toISOString(),
         max_marks: existing?.max_marks || null,
       };
-      if (existing && existing.id) payload.id = existing.id;
+      if (existing?.id) payload.id = existing.id;
       rowsToUpsert.push(payload);
     }
     if (rowsToUpsert.length === 0) {
@@ -146,7 +333,7 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     try {
       const { error } = await supabase.from('assessment_results').upsert(rowsToUpsert, { onConflict: 'id' });
       if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment.id] });
+      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment!.id] });
       setShowStudentEdit(false);
     } catch (err: any) {
       console.error('Failed to save student marks', err);
@@ -154,150 +341,7 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
     }
   };
 
-  // ── Queries ───────────────────────────────────────────────────────────────
-
-  const { data: results, isLoading: isLoadingResults } = useQuery({
-    queryKey: ['assessmentResults', assessment?.id ?? 'none'],
-    queryFn: async () => {
-      if (!assessment?.id) return [];
-      const { data, error } = await supabase
-        .from('assessment_results')
-        .select('*')
-        .eq('assessment_id', assessment.id);
-      if (error) throw error;
-      return data || [];
-    },
-    initialData: [],
-    enabled: !!assessment?.id,
-  });
-
-  const { data: students, isLoading: isLoadingStudents } = useQuery({
-    queryKey: ['students'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('students').select('*');
-      if (error) throw error;
-      return data || [];
-    },
-    initialData: [],
-  });
-
-  const { data: subjects, isLoading: isLoadingSubjects } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('subjects').select('*');
-      if (error) throw error;
-      return data || [];
-    },
-    initialData: [],
-  });
-
-  // ── Maps ──────────────────────────────────────────────────────────────────
-
-  const studentMap = useMemo(() => new Map(students.map(s => [s.id, `${s.first_name} ${s.last_name}`])), [students]);
-  const subjectMap = useMemo(() => new Map(subjects.map(s => [s.id, s.name])), [subjects]);
-
-  // ── Mutations ─────────────────────────────────────────────────────────────
-
-  const updateMutation = useMutation<any, any, any>({
-    mutationFn: async ({ id, data }) => {
-      const { error } = await supabase.from('assessment_results').update(data).eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment.id] });
-      setEditingResult(null);
-    },
-  });
-
-  const deleteMutation = useMutation<any, any, any>({
-    mutationFn: async (id) => {
-      const { error } = await supabase.from('assessment_results').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentResults', assessment.id] });
-    },
-  });
-
-  const handleEditSubmit = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const raw = formData.get('score');
-    const score = parseFloat(typeof raw === 'string' ? raw : String(raw ?? ''));
-    if (editingResult && !isNaN(score)) {
-      updateMutation.mutate({ id: editingResult.id, data: { score } });
-    }
-  };
-
-  // ── Pivot data ────────────────────────────────────────────────────────────
-
-  const subjectsForAssessment = useMemo(() => {
-    const subjectIds = new Set(results.map(r => r.subject_id));
-    return subjects.filter(s => subjectIds.has(s.id));
-  }, [results, subjects]);
-
-  const studentsForAssessment = useMemo(() => {
-    const studentIds = Array.from(new Set(results.map(r => r.student_id)));
-    return students.filter(s => studentIds.includes(s.id));
-  }, [results, students]);
-
-  const resultLookup = useMemo(() => {
-    const map = new Map();
-    for (const r of results) {
-      map.set(`${r.student_id}_${r.subject_id}`, r);
-    }
-    return map;
-  }, [results]);
-
-  // Summative only: totals and positions
-  const studentTotals = useMemo(() => {
-    if (isFormative) return new Map();
-    const m = new Map();
-    for (const s of studentsForAssessment) {
-      let total = 0;
-      for (const subj of subjectsForAssessment) {
-        const r = resultLookup.get(`${s.id}_${subj.id}`);
-        const score = r && typeof r.score === 'number' ? Number(r.score) : (r && r.score ? Number(r.score) : 0);
-        total += isNaN(score) ? 0 : score;
-      }
-      m.set(s.id, total);
-    }
-    return m;
-  }, [studentsForAssessment, subjectsForAssessment, resultLookup, isFormative]);
-
-  const studentPositions = useMemo(() => {
-    if (isFormative) return new Map();
-    const totals = Array.from(studentTotals.values());
-    const uniqueSorted = Array.from(new Set(totals)).sort((a, b) => (b as number) - (a as number));
-    const posMap = new Map();
-    uniqueSorted.forEach((t, i) => posMap.set(t, i + 1));
-    const byStudent = new Map();
-    for (const [studentId, total] of studentTotals.entries()) {
-      byStudent.set(studentId, posMap.get(total));
-    }
-    return byStudent;
-  }, [studentTotals, isFormative]);
-
-  // ── Search filter ─────────────────────────────────────────────────────────
-
-  const filteredStudents = useMemo(() => {
-    if (!searchTerm) return studentsForAssessment;
-    const q = searchTerm.toLowerCase();
-    return studentsForAssessment.filter(s => {
-      const studentName = `${s.first_name} ${s.last_name}`.toLowerCase();
-      if (studentName.includes(q)) return true;
-      for (const subj of subjectsForAssessment) {
-        if ((subj.name || '').toLowerCase().includes(q)) return true;
-      }
-      return false;
-    });
-  }, [studentsForAssessment, subjectsForAssessment, searchTerm]);
-
-  const isLoading = isLoadingResults || isLoadingStudents || isLoadingSubjects;
-
-  // Extra columns: summative has Total + Position = 2 extra, formative has Remarks = 1 extra
-  const extraColCount = isFormative ? 2 : 3; // name + total + position OR name + remarks
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
       {!assessment && (
@@ -312,12 +356,12 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Results for: {assessment.title}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Results for: {assessment?.title}</h2>
           <p className="text-sm text-gray-500">
             {studentsForAssessment.length} students × {subjectsForAssessment.length} subjects
             {isFormative && (
               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold bg-teal-100 text-teal-800 border-teal-200 capitalize">
-                {assessment.category}
+                {assessment?.category}
               </span>
             )}
           </p>
@@ -335,16 +379,11 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
           />
         </div>
         <div className="mt-3">
-          <Button size="sm" variant="outline" onClick={async () => {
+          <Button size="sm" variant="outline" onClick={() => {
             setShowRaw(r => !r);
             if (!showRaw) {
-              const { data, error } = await supabase.from('assessment_results').select('*').eq('assessment_id', assessment.id);
-              if (error) {
-                console.error('Debug fetch assessment_results error', error);
-                setRawRows([]);
-              } else {
-                setRawRows(data || []);
-              }
+              // Use already fetched results instead of making a new API call
+              setRawRows(results);
             }
           }}>{showRaw ? 'Hide raw results' : 'Show raw results'}</Button>
         </div>
@@ -518,7 +557,7 @@ export default function AssessmentResultsView({ assessment, onBack = () => {} })
               Edit Result
             </DialogTitle>
             <DialogDescription>
-              Update the score for {studentMap.get(editingResult?.student_id)} in {subjectMap.get(editingResult?.subject_id)}.
+              Update the score for {studentMap.get(editingResult?.student_id ?? '')} in {subjectMap.get(editingResult?.subject_id ?? '')}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit}>

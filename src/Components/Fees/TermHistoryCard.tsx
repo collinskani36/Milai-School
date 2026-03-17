@@ -4,13 +4,23 @@ import { Badge } from "@/Components/ui/badge";
 import { ScrollArea } from "@/Components/ui/scroll-area";
 import { Calendar, CheckCircle, Clock, AlertTriangle, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
 
+interface TermHistoryCardProps {
+  studentFees?: any[];
+  onSelectTerm: (term: string, year: string) => void;
+  selectedTerm: string;
+  selectedYear: string;
+  isLoading?: boolean;
+  currentTerm?: { term: string; academic_year: string } | null; // NEW: active term from parent
+}
+
 export default function TermHistoryCard({
   studentFees = [],
   onSelectTerm,
   selectedTerm,
   selectedYear,
   isLoading = false,
-}) {
+  currentTerm, // NEW
+}: TermHistoryCardProps) {
   if (!Array.isArray(studentFees)) {
     return <div className="text-red-500">Error: invalid fee data</div>;
   }
@@ -127,6 +137,9 @@ export default function TermHistoryCard({
                 const hasCredit = creditCarried > 0;
 
                 const isSelected = fee.term === selectedTerm && fee.academic_year === selectedYear;
+                const isActive = currentTerm
+                  ? fee.term === currentTerm.term && fee.academic_year === currentTerm.academic_year
+                  : false;
 
                 return (
                   <div
@@ -135,6 +148,8 @@ export default function TermHistoryCard({
                     className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                       isSelected
                         ? "border-emerald-500 bg-emerald-50/50 shadow-md"
+                        : isActive
+                        ? "border-blue-300 bg-blue-50/30 hover:bg-blue-50"
                         : "border-transparent bg-gray-50 hover:bg-gray-100 hover:border-gray-200"
                     }`}
                   >
@@ -144,6 +159,11 @@ export default function TermHistoryCard({
                           <p className="font-semibold text-gray-900">{fee.term}</p>
                           <span className="text-gray-400">•</span>
                           <p className="text-sm text-gray-600">{fee.academic_year}</p>
+                          {isActive && (
+                            <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 border-blue-200">
+                              Active Term
+                            </Badge>
+                          )}
                         </div>
                         {hasCredit && (
                           <div className="flex items-center gap-1 mt-1">

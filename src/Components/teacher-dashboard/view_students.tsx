@@ -4,7 +4,7 @@ import { Button } from "@/Components/ui/button";
 import { Badge } from "@/Components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/Components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
-import { Users, Phone } from "lucide-react";
+import { Users, Phone, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import StudentPerformanceDetailView from "./StudentPerformanceDetailView";
 import { PerformanceBadge } from "@/Components/PerformanceBadge";
@@ -47,33 +47,13 @@ interface Student {
   last_name: string;
   created_at: string;
   auth_id: string | null;
-  enrollments?: {
-    class_id: string;
-    classes: {
-      name: string;
-      grade_level: string;
-    } | {
-      name: string;
-      grade_level: string;
-    }[];
-  }[];
-  profiles?: {
-    email: string;
-    phone: string;
-    date_of_birth: string;
-    guardian_name: string;
-    guardian_phone: string;
-  } | {
-    email: string;
-    phone: string;
-    date_of_birth: string;
-    guardian_name: string;
-    guardian_phone: string;
-  }[];
+  enrollments?: any[];
+  profiles?: any[];
+  class?: string;
 }
 
 interface StudentPerformanceDetail {
-  student: Student & { class?: string };
+  student: Student;
   assessments: any[];
   averageScore: number;
   trend: 'improving' | 'declining' | 'stable';
@@ -92,6 +72,8 @@ interface ViewStudentsProps {
   teacherId: string | undefined;
   teacherClasses: TeacherClass[];
   isActive: boolean;
+  academicYear?: string;
+  assessmentYear?: number;
 }
 
 // Custom hook for student performance detail
@@ -221,7 +203,6 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
               teacher_remarks: ar.teacher_remarks,
               is_absent: ar.is_absent,
               max_marks: assessment?.max_marks || 100,
-              // Only compute percentage for summative
               percentage: isSummative && ar.score !== null
                 ? (ar.score / (assessment?.max_marks || 100)) * 100
                 : null,
@@ -235,7 +216,6 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
             };
           });
 
-        // Stats computed on summative only
         const summativeAssessments = assessments.filter(a => a.category === 'summative');
 
         const subjectAverages = teacherSubjectsForStudentClass.map(tc => {
@@ -301,8 +281,8 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
         }));
 
         setPerformanceDetail({
-          student: { ...studentData, class: studentClassName },
-          assessments, // all assessments (both summative + formative) passed to view
+          student: { ...(studentData as any), class: studentClassName },
+          assessments,
           averageScore: parseFloat(overallAverage.toFixed(1)),
           trend,
           subjectAverages,
@@ -323,16 +303,31 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
   return { performanceDetail, loading };
 };
 
-export default function ViewStudents({ teacherId, teacherClasses, isActive }: ViewStudentsProps) {
+export default function ViewStudents({ teacherId, teacherClasses, isActive, academicYear, assessmentYear }: ViewStudentsProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  
+  // Track which class circles are expanded (by class_id)
+  const [expandedClassIds, setExpandedClassIds] = useState<Set<string>>(new Set());
+
   const { performanceDetail, loading: detailLoading } = useStudentPerformanceDetail(
     selectedStudentId, 
     teacherClasses, 
     isActive && !!selectedStudentId
   );
+
+  // Build a deduplicated map of class_id -> class name from teacherClasses
+  const uniqueClasses: { class_id: string; name: string }[] = [];
+  const seenClassIds = new Set<string>();
+  for (const tc of teacherClasses) {
+    if (!seenClassIds.has(tc.class_id)) {
+      const classObj = firstRel(tc.classes);
+      if (classObj) {
+        uniqueClasses.push({ class_id: tc.class_id, name: classObj.name });
+        seenClassIds.add(tc.class_id);
+      }
+    }
+  }
 
   const classMap = teacherClasses.reduce((acc, tc) => {
     const classObj = firstRel(tc.classes);
@@ -400,6 +395,28 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
     fetchStudentsData();
   }, [isActive, teacherClasses, teacherId]);
 
+  const toggleClass = (classId: string) => {
+    setExpandedClassIds(prev => {
+      const next = new Set(prev);
+      if (next.has(classId)) {
+        next.delete(classId);
+      } else {
+        next.add(classId);
+      }
+      return next;
+    });
+  };
+
+  // Students grouped by class_id
+  const studentsByClass = students.reduce((acc, student) => {
+    const classId = student.enrollments?.[0]?.class_id;
+    if (classId) {
+      if (!acc[classId]) acc[classId] = [];
+      acc[classId].push(student);
+    }
+    return acc;
+  }, {} as Record<string, Student[]>);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -438,6 +455,7 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
         </DialogContent>
       </Dialog>
 
+      {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-xl sm:text-2xl font-bold">Students</h2>
         <div className="flex items-center gap-1 sm:gap-2">
@@ -445,82 +463,164 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive }: Vi
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl">Student Directory</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Tap on a student to view detailed performance analysis
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0 sm:p-6 pt-0">
-          <div className="overflow-x-auto -mx-3 sm:mx-0">
-            <div className="min-w-[600px] px-3 sm:min-w-0 sm:px-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Student</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Reg No</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Class</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs hidden xs:table-cell">Guardian</TableHead>
-                    <TableHead className="py-2 px-2 sm:py-3 sm:px-4 text-xs">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((student) => (
-                    <TableRow key={student.id} className="hover:bg-muted/50">
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                        <div className="font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">
-                          {student.first_name} {student.last_name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                        <code className="text-xs bg-muted px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-nowrap">
-                          {student.Reg_no}
-                        </code>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                        <div className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
-                          {student.enrollments && student.enrollments[0]
-                            ? classMap[student.enrollments[0].class_id] || 'N/A'
-                            : 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4 cursor-pointer hidden xs:table-cell" onClick={() => setSelectedStudentId(student.id)}>
-                        <div className="flex items-center space-x-1 text-xs sm:text-sm">
-                          <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                          <span className="truncate max-w-[80px] sm:max-w-[120px]">
-                            {student.profiles?.[0]?.guardian_phone ?? 'No contact'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 sm:py-3 sm:px-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedStudentId(student.id)}
-                          className="h-7 text-xs px-2 sm:h-8 sm:px-3 sm:text-sm"
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+      {/* Class Circles */}
+      {uniqueClasses.length > 0 && (
+        <div className="flex flex-wrap gap-4 sm:gap-6">
+          {uniqueClasses.map(({ class_id, name }) => {
+            const count = (studentsByClass[class_id] || []).length;
+            const isExpanded = expandedClassIds.has(class_id);
+            return (
+              <button
+                key={class_id}
+                onClick={() => toggleClass(class_id)}
+                className="flex flex-col items-center gap-1.5 group focus:outline-none"
+                aria-expanded={isExpanded}
+              >
+                <div
+                  className={`
+                    w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 flex flex-col items-center justify-center
+                    transition-all duration-200 shadow-sm
+                    ${isExpanded
+                      ? "border-primary bg-primary text-primary-foreground shadow-md scale-105"
+                      : "border-primary/40 bg-primary/5 text-foreground group-hover:border-primary group-hover:bg-primary/10"
+                    }
+                  `}
+                >
+                  <span className="text-2xl sm:text-3xl font-bold leading-none">{count}</span>
+                  <span className="text-[10px] sm:text-xs mt-0.5 opacity-80">students</span>
+                </div>
+                <span
+                  className={`
+                    text-xs sm:text-sm font-semibold underline underline-offset-2 text-center max-w-[80px] sm:max-w-[96px] leading-tight
+                    ${isExpanded ? "text-primary" : "text-foreground group-hover:text-primary"}
+                  `}
+                >
+                  {name}
+                </span>
+                {isExpanded
+                  ? <ChevronUp className="h-3.5 w-3.5 text-primary" />
+                  : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+                }
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-          {students.length === 0 && (
-            <div className="text-center py-6 sm:py-8 px-4">
-              <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                There are no students enrolled in your classes yet.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Expanded class student lists */}
+      {uniqueClasses
+        .filter(({ class_id }) => expandedClassIds.has(class_id))
+        .map(({ class_id, name }) => {
+          const classStudents = studentsByClass[class_id] || [];
+          return (
+            <Card key={class_id} className="border-primary/20">
+              <CardHeader className="p-4 sm:p-5 pb-2">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  {name}
+                  <Badge variant="secondary" className="ml-1 text-xs">{classStudents.length} students</Badge>
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Tap a student to view their detailed performance analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-5 pt-2">
+                {/* Mobile: stacked cards. Desktop: table */}
+                <div className="sm:hidden space-y-2">
+                  {classStudents.map((student) => (
+                    <div
+                      key={student.id}
+                      onClick={() => setSelectedStudentId(student.id)}
+                      className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 active:bg-muted cursor-pointer"
+                    >
+                      <div className="flex-1 min-w-0 mr-3">
+                        <p className="font-medium text-sm truncate">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {student.Reg_no}
+                          </code>
+                          {student.profiles?.[0]?.guardian_phone && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3 flex-shrink-0" />
+                              {student.profiles[0].guardian_phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); setSelectedStudentId(student.id); }}
+                        className="h-7 text-xs px-2 flex-shrink-0"
+                      >
+                        View
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop: full table */}
+                <div className="hidden sm:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="py-3 px-4 text-xs">Student</TableHead>
+                        <TableHead className="py-3 px-4 text-xs">Reg No</TableHead>
+                        <TableHead className="py-3 px-4 text-xs">Guardian</TableHead>
+                        <TableHead className="py-3 px-4 text-xs">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {classStudents.map((student) => (
+                        <TableRow key={student.id} className="hover:bg-muted/50">
+                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                            <div className="font-medium text-sm">{student.first_name} {student.last_name}</div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                            <code className="text-xs bg-muted px-2 py-1 rounded">{student.Reg_no}</code>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
+                            <div className="flex items-center gap-1 text-sm">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span>{student.profiles?.[0]?.guardian_phone ?? 'No contact'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4">
+                            <Button variant="outline" size="sm" onClick={() => setSelectedStudentId(student.id)} className="h-8 px-3 text-sm">
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {classStudents.length === 0 && (
+                  <div className="text-center py-6 px-4">
+                    <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-xs sm:text-sm text-muted-foreground">No students enrolled in this class yet.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+
+      {/* Empty state */}
+      {students.length === 0 && !loading && (
+        <Card>
+          <CardContent className="text-center py-10 sm:py-12 px-4">
+            <Users className="h-10 w-10 sm:h-14 sm:w-14 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              There are no students enrolled in your classes yet.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

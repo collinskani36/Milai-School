@@ -47,6 +47,9 @@ interface StudentFee {
   term: string;
   academic_year: string;
   outstanding_balance: number;
+  total_billed: number;
+  total_paid: number;
+  credit_carried: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -58,23 +61,19 @@ const HEADERS = {
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 serve(async (req) => {
-  const requestId = crypto.randomUUID(); // trace ID for every request in logs
+  const requestId = crypto.randomUUID();
 
   try {
-    // ── 1. Only accept POST ──────────────────────────────────────────────────
     if (req.method !== "POST") {
       return respond(405, { error: "Method not allowed" });
     }
 
-    // ── 2. Authenticate the request ─────────────────────────────────────────
     const authError = verifyWebhookSecret(req);
     if (authError) {
-      // Log locally but never tell the caller WHY auth failed
       console.warn(`[${requestId}] Auth failed: ${authError}`);
       return respond(401, { error: "Unauthorized" });
     }
 
-    // ── 3. Parse and validate body ──────────────────────────────────────────
     let raw: Record<string, unknown>;
     try {
       raw = await req.json();
@@ -96,7 +95,6 @@ serve(async (req) => {
       reference: payload.reference,
     });
 
-    // ── 4. Load env ──────────────────────────────────────────────────────────
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SERVICE_ROLE_KEY");
     if (!supabaseUrl || !supabaseKey) {
@@ -106,8 +104,6 @@ serve(async (req) => {
 
     const db = makeDbClient(supabaseUrl, supabaseKey);
 
-    // ── 5. Idempotency — check reference across BOTH tables ─────────────────
-    //    This prevents duplicate rows if the bank retries the webhook.
     if (payload.reference) {
       const [dupPayment, dupUnmatched] = await Promise.all([
         db.get(`p_payments?transaction_reference=eq.${enc(payload.reference)}&select=id`),
@@ -116,7 +112,6 @@ serve(async (req) => {
 
       if (dupPayment.length > 0 || dupUnmatched.length > 0) {
         console.info(`[${requestId}] Duplicate reference rejected: ${payload.reference}`);
-        // Return 200 so the bank doesn't keep retrying — we already have it
         return respond(200, {
           status: "duplicate",
           message: "Payment with this reference already recorded",
@@ -124,14 +119,10 @@ serve(async (req) => {
       }
     }
 
-    // ── 6. Look up student by Reg_no ─────────────────────────────────────────
     let student: Student | null = await db
       .get(`students?Reg_no=eq.${enc(payload.admission_number)}&select=id,first_name,last_name,Reg_no`)
       .then((rows) => rows[0] ?? null);
 
-    // ── 7. If no exact match, try fuzzy name match from narration ────────────
-    //    Useful when a parent miskeys the reg number but writes the name correctly.
-    //    We flag these as "probable_match" so admin confirms before it posts.
     let matchType: "exact" | "fuzzy" | "unmatched" = "exact";
 
     if (!student && payload.narration) {
@@ -143,7 +134,6 @@ serve(async (req) => {
       }
     }
 
-    // ── 8. No student found at all → save to unmatched ──────────────────────
     if (!student) {
       console.info(`[${requestId}] No student match — saving to unmatched_bank_payments`);
       await saveUnmatched(db, requestId, payload);
@@ -153,9 +143,6 @@ serve(async (req) => {
       });
     }
 
-    // ── 9. Fuzzy match → also save to unmatched for admin confirmation ───────
-    //    We never auto-post a fuzzy match directly to p_payments.
-    //    The admin reviews it in the dashboard and allocates manually.
     if (matchType === "fuzzy") {
       console.info(`[${requestId}] Fuzzy match — routing to unmatched queue for admin confirmation`);
       await saveUnmatched(db, requestId, payload, {
@@ -168,60 +155,138 @@ serve(async (req) => {
       });
     }
 
-    // ── 10. Exact match — determine term/year ────────────────────────────────
-    const { term: currentTerm, year: currentYear } = await resolveTerm(
+    // ── 10. Resolve the term from payload hint ────────────────────────────────
+    const { term: resolvedTerm, year: resolvedYear } = await resolveTerm(
       db,
       student.id,
       payload.term,
       payload.academic_year,
     );
 
-    console.info(`[${requestId}] Using term: ${currentTerm} / ${currentYear}`);
-
-    // ── 11. Find the student_fees record ─────────────────────────────────────
-    const studentFees: StudentFee[] = await db.get(
-      `student_fees?student_id=eq.${student.id}&term=eq.${enc(currentTerm)}&academic_year=eq.${enc(currentYear)}`,
+    // ── 11. Load ALL fee records for this student in the resolved academic year ─
+    //    Sorted Term 1 → Term 3.
+    const allFeeRecordsForYear: StudentFee[] = await db.get(
+      `student_fees?student_id=eq.${student.id}&academic_year=eq.${enc(resolvedYear)}&order=term.asc`,
     );
 
-    const studentFee = studentFees[0] ?? null;
-
-    if (!studentFee) {
-      console.info(`[${requestId}] No student_fees record for ${currentTerm}/${currentYear} — saving to unmatched`);
+    if (allFeeRecordsForYear.length === 0) {
+      console.info(`[${requestId}] No student_fees records for ${resolvedYear} — saving to unmatched`);
       await saveUnmatched(db, requestId, payload, {
-        note: `Student found (${student.Reg_no}) but no fee record for ${currentTerm} / ${currentYear}.`,
+        note: `Student found (${student.Reg_no}) but no fee records for ${resolvedYear}.`,
       });
       return respond(200, {
         status: "unmatched",
-        message: `Student found but no fee record for ${currentTerm} / ${currentYear}`,
+        message: `Student found but no fee records for ${resolvedYear}`,
       });
     }
 
-    // ── 12. Insert into p_payments ───────────────────────────────────────────
+    // ── 12. Waterfall allocation starting from the first term (Term 1) ─────────
+    //    Distribute the incoming payment across term records in order:
+    //      Term 1 gets paid first, then Term 2, then Term 3.
+    //    Any surplus after all terms are cleared becomes credit on the
+    //    LAST record (no further terms exist to absorb it).
+    //
+    //    Example:
+    //      Term 1 outstanding = 50,000  |  Term 2 outstanding = 40,000
+    //      Payment = 60,000
+    //      → Term 1 receives 50,000 → fully cleared
+    //      → Term 2 receives 10,000 → balance drops to 30,000
+    //      → No credit left over
+
+    const allocationTargets = allFeeRecordsForYear; // already sorted Term 1 → Term 3
+
+    const allocations: Array<{ record: StudentFee; allocated: number }> = [];
+    let remaining = payload.amount;
+
+    for (const record of allocationTargets) {
+      if (remaining <= 0) break;
+      const owed = Math.max(0, record.outstanding_balance ?? 0);
+      const allocate = owed > 0 ? Math.min(remaining, owed) : 0;
+      if (allocate > 0 || record === allocationTargets[allocationTargets.length - 1]) {
+        // Always include the last target so surplus credit lands somewhere
+        allocations.push({ record, allocated: allocate });
+        remaining -= allocate;
+      }
+    }
+
+    // If there is still remaining (all terms fully paid) put surplus on last record
+    if (remaining > 0 && allocations.length > 0) {
+      allocations[allocations.length - 1].allocated += remaining;
+      remaining = 0;
+    }
+
+    console.info(`[${requestId}] Waterfall allocation:`, allocations.map(
+      (a) => `${a.record.term} ← KES ${a.allocated}`,
+    ));
+
+    // ── 13. Insert one p_payments row (linked to first / primary target) ──────
+    //    We record the full payment amount once against the earliest term
+    //    being paid. The balance updates below reflect the split.
+    const primaryTarget = allocations[0].record;
+    const isCrossTermPayment = allocations.length > 1;
+
     const paymentRow = {
       student_id:            student.id,
-      fee_id:                studentFee.id,
+      fee_id:                primaryTarget.id,
       amount_paid:           payload.amount,
       payment_method:        "kcb_bank",
       transaction_reference: payload.reference ?? null,
       status:                "completed",
-      notes:                 payload.narration
-                               ? `KCB Bank: ${payload.narration}`
-                               : "KCB Bank Fee Deposit",
+      notes:                 buildNotes(payload, isCrossTermPayment, resolvedTerm, allocations),
       payment_date:          new Date().toISOString(),
-      term:                  currentTerm,
-      academic_year:         currentYear,
+      term:                  primaryTarget.term,
+      academic_year:         primaryTarget.academic_year,
       reference_number:      buildRefNumber(payload),
     };
 
+    console.info(`[${requestId}] Inserting payment row:`, JSON.stringify(paymentRow));
     const inserted = await db.post("p_payments", paymentRow);
+    console.info(`[${requestId}] Payment insert OK, id=${inserted?.id}`);
 
-    // ── 13. Fetch updated balance for response ───────────────────────────────
-    const updatedFees: StudentFee[] = await db.get(`student_fees?id=eq.${studentFee.id}`);
+    // ── 14. Update each term's student_fees record with its allocation ─────────
+    //    We directly set total_paid and recalculate outstanding_balance so
+    //    the numbers are correct regardless of whether Supabase triggers fire.
+    for (const { record, allocated } of allocations) {
+      if (allocated <= 0) continue;
+
+      const newTotalPaid       = (record.total_paid ?? 0) + allocated;
+      const newOutstanding     = Math.max(0,
+        (record.total_billed ?? 0) - newTotalPaid - (record.credit_carried ?? 0),
+      );
+      // Credit only arises on the last term if payment exceeds total billed
+      const newCredit = record === allocations[allocations.length - 1].record
+        ? Math.max(0, newTotalPaid - (record.total_billed ?? 0))
+        : 0;
+      const newStatus = deriveStatus(newOutstanding, record.total_billed ?? 0, newTotalPaid);
+
+      const patchPayload = {
+        total_paid:          newTotalPaid,
+        outstanding_balance: newOutstanding,
+        credit_carried:      newCredit,
+        status:              newStatus,
+        last_payment_date:   new Date().toISOString().split("T")[0],
+        updated_at:          new Date().toISOString(),
+      };
+
+      console.info(`[${requestId}] PATCHing student_fees id=${record.id} (${record.term}):`, JSON.stringify(patchPayload));
+      await db.patch(`student_fees?id=eq.${record.id}`, patchPayload);
+      console.info(`[${requestId}] PATCH OK for ${record.term}`);
+
+      console.info(
+        `[${requestId}] Updated ${record.term}: paid +${allocated}, ` +
+        `outstanding ${record.outstanding_balance} → ${newOutstanding}` +
+        (newCredit > 0 ? `, credit ${newCredit}` : ""),
+      );
+    }
+
+    // ── 15. Fetch final balance of primary target for response ────────────────
+    const updatedFees: StudentFee[] = await db.get(`student_fees?id=eq.${primaryTarget.id}`);
     const updatedFee = updatedFees[0];
 
     console.info(`[${requestId}] Payment recorded successfully`, {
       student: student.Reg_no,
       payment_id: inserted?.id,
+      terms_updated: allocations.length,
     });
 
     return respond(200, {
@@ -229,42 +294,35 @@ serve(async (req) => {
       message: "Payment recorded successfully",
       student: `${student.first_name} ${student.last_name}`,
       admission_number: student.Reg_no,
-      term: currentTerm,
-      academic_year: currentYear,
+      term: primaryTarget.term,
+      academic_year: primaryTarget.academic_year,
       updated_balance: updatedFee?.outstanding_balance ?? 0,
+      ...(isCrossTermPayment && {
+        cross_term_payment: true,
+        allocation: allocations.map((a) => ({
+          term: a.record.term,
+          allocated: a.allocated,
+        })),
+      }),
     });
 
   } catch (err) {
-    // Never expose internal error details to the caller
-    console.error(`[${requestId}] Unhandled error:`, err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[${requestId}] Unhandled error: ${message}`, err);
     return respond(500, {
       error: "Internal server error",
-      request_id: requestId, // safe to return — useful for tracing in logs
+      detail: message,   // ← remove this line once root cause is found
+      request_id: requestId,
     });
   }
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-/**
- * Verifies the shared webhook secret sent by the bank.
- *
- * In DEVELOPMENT:
- *   If WEBHOOK_SECRET env var is not set, the check is skipped entirely.
- *   This lets you test locally without configuring secrets.
- *
- * In PRODUCTION:
- *   WEBHOOK_SECRET must be set. Any request without the correct header is rejected.
- *
- * Header name: x-webhook-secret
- *   Adjust this to match whatever header your bank uses.
- *   Common alternatives: x-api-key, Authorization (as "Bearer <secret>")
- */
 function verifyWebhookSecret(req: Request): string | null {
   const secret = Deno.env.get("WEBHOOK_SECRET");
 
   if (!secret) {
-    // Dev mode — warn but allow through
     console.warn("WEBHOOK_SECRET not set — running in development mode, auth skipped");
     return null;
   }
@@ -275,19 +333,13 @@ function verifyWebhookSecret(req: Request): string | null {
     return "Missing x-webhook-secret header";
   }
 
-  // Constant-time comparison to prevent timing attacks
   if (!safeEqual(provided, secret)) {
     return "Invalid webhook secret";
   }
 
-  return null; // null = auth passed
+  return null;
 }
 
-/**
- * Constant-time string comparison.
- * Prevents attackers from guessing the secret one character at a time
- * by measuring response timing.
- */
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   const aBytes = new TextEncoder().encode(a);
@@ -299,37 +351,6 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/**
- * HMAC-SHA256 verification — use this instead of safeEqual if your bank
- * signs the request body rather than sending a plain secret.
- *
- * Usage: replace the safeEqual() call in verifyWebhookSecret() with:
- *   const signature = req.headers.get("x-signature") ?? "";
- *   const body = await req.text(); // must read body here, before req.json()
- *   if (!await verifyHmac(body, signature, secret)) return "Invalid signature";
- *
-async function verifyHmac(body: string, signature: string, secret: string): Promise<boolean> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"]
-  );
-  const sigBytes = hexToBytes(signature);
-  const bodyBytes = new TextEncoder().encode(body);
-  return crypto.subtle.verify("HMAC", key, sigBytes, bodyBytes);
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-}
-*/
-
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 function validatePayload(raw: Record<string, unknown>): {
@@ -339,18 +360,15 @@ function validatePayload(raw: Record<string, unknown>): {
 } {
   const errors: string[] = [];
 
-  // amount
   const amount = Number(raw.amount);
   if (!raw.amount || isNaN(amount) || amount <= 0) {
     errors.push("amount must be a positive number");
   }
 
-  // admission_number
   if (!raw.admission_number || typeof raw.admission_number !== "string" || !raw.admission_number.trim()) {
     errors.push("admission_number is required");
   }
 
-  // reference — optional but if present must be a non-empty string
   if (raw.reference !== undefined && raw.reference !== null) {
     if (typeof raw.reference !== "string" || !raw.reference.trim()) {
       errors.push("reference must be a non-empty string if provided");
@@ -409,28 +427,28 @@ function makeDbClient(url: string, key: string) {
       const data = await res.json();
       return data[0];
     },
+
+    async patch(path: string, updates: Record<string, unknown>): Promise<void> {
+      const res = await fetch(`${url}/rest/v1/${path}`, {
+        method: "PATCH",
+        headers: { ...baseHeaders, "Prefer": "return=minimal" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`DB PATCH failed [${path}]: ${text}`);
+      }
+    },
   };
 }
 
 // ─── Fuzzy name matching ──────────────────────────────────────────────────────
 
-/**
- * Tries to find a student by matching words from the narration against
- * first_name + last_name combinations in the database.
- *
- * Strategy:
- *   - Extract capitalised words from the narration (likely a name)
- *   - Fetch students whose names contain any of those words
- *   - Score each candidate by how many name words appear in the narration
- *   - Return the highest scorer only if score >= 2 (at least 2 name words matched)
- *     to avoid false positives on common single-word names
- */
 async function fuzzyMatchByName(
   db: ReturnType<typeof makeDbClient>,
   narration: string,
 ): Promise<Student | null> {
   try {
-    // Extract words 3+ chars long, ignore numbers and common noise words
     const noiseWords = new Set(["fee", "fees", "kcb", "bank", "payment", "school", "term", "the", "for", "and"]);
     const words = narration
       .split(/[\s\-\/,]+/)
@@ -439,8 +457,6 @@ async function fuzzyMatchByName(
 
     if (words.length === 0) return null;
 
-    // Query students whose first or last name matches any extracted word
-    // Using ilike for case-insensitive matching
     const orFilters = words
       .map((w) => `first_name.ilike.*${enc(w)}*,last_name.ilike.*${enc(w)}*`)
       .join(",");
@@ -451,7 +467,6 @@ async function fuzzyMatchByName(
 
     if (candidates.length === 0) return null;
 
-    // Score each candidate
     let bestMatch: Student | null = null;
     let bestScore = 0;
 
@@ -466,10 +481,8 @@ async function fuzzyMatchByName(
       }
     }
 
-    // Require at least 2 matching name words to reduce false positives
     return bestScore >= 2 ? bestMatch : null;
   } catch (err) {
-    // Fuzzy match is best-effort — don't let it crash the whole request
     console.warn("Fuzzy match error (non-fatal):", err);
     return null;
   }
@@ -487,7 +500,6 @@ async function resolveTerm(
     return { term: termHint, year: yearHint };
   }
 
-  // 1. Prefer the term with an outstanding balance
   const withBalance = await db.get(
     `student_fees?student_id=eq.${studentId}&outstanding_balance=gt.0&order=academic_year.desc,term.desc&limit=1`,
   );
@@ -495,7 +507,6 @@ async function resolveTerm(
     return { term: withBalance[0].term, year: withBalance[0].academic_year };
   }
 
-  // 2. Fall back to most recent term regardless of balance
   const recent = await db.get(
     `student_fees?student_id=eq.${studentId}&order=academic_year.desc,term.desc&limit=1`,
   );
@@ -503,7 +514,6 @@ async function resolveTerm(
     return { term: recent[0].term, year: recent[0].academic_year };
   }
 
-  // 3. Derive from calendar month
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -528,13 +538,43 @@ async function saveUnmatched(
     bank_account:     payload.bank_account     ?? null,
     narration:        narration || null,
     recorded_at:      new Date().toISOString(),
-    // No 'status' or 'student_id' — columns don't exist in this table
   });
 
   console.info(`[${requestId}] Saved to unmatched_bank_payments`);
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Misc helpers ─────────────────────────────────────────────────────────────
+
+/** Extract numeric term from "Term 1", "Term 2", etc. */
+function termNumber(termStr: string | undefined | null): number {
+  if (!termStr) return 0;
+  const match = termStr.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
+/** Derive fee status from balance figures */
+function deriveStatus(outstanding: number, billed: number, paid: number): string {
+  if (outstanding <= 0 && paid > billed) return "overpaid";
+  if (outstanding <= 0) return "paid";
+  if (paid > 0) return "partial";
+  return "pending";
+}
+
+function buildNotes(
+  payload: PaymentPayload,
+  isCrossTermPayment: boolean,
+  originalTerm: string,
+  allocations: Array<{ record: StudentFee; allocated: number }>,
+): string {
+  const base = payload.narration ? `KCB Bank: ${payload.narration}` : "KCB Bank Fee Deposit";
+  if (isCrossTermPayment) {
+    const breakdown = allocations
+      .map((a) => `${a.record.term}: KES ${a.allocated.toLocaleString()}`)
+      .join(", ");
+    return `${base} [Cross-term allocation — ${breakdown}]`;
+  }
+  return base;
+}
 
 function respond(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), { status, headers: HEADERS });

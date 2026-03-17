@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { supabase } from "@/lib/supabaseClient";
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
@@ -23,79 +22,43 @@ export default function PaymentEntryForm({
     reference_number: '',
     payment_date: format(new Date(), 'yyyy-MM-dd'),
     notes: '',
-    apply_credit: false
   });
+
+  // Guard against double submissions
+  const isSubmittingRef = useRef(false);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    
-    const { amount, payment_date, payment_method, reference_number, notes, apply_credit } = formData;
-    const paymentAmount = parseFloat(amount) || 0;
+    e.stopPropagation();
+
+    // Prevent double submission
+    if (isSubmittingRef.current) return;
+
+    const paymentAmount = parseFloat(formData.amount) || 0;
 
     if (paymentAmount <= 0) {
       alert("❌ Please enter a valid payment amount");
       return;
     }
 
-    // Get the current term fee record
-    const currentTermFee = studentFee.current_term_fee || studentFee;
-    
-    console.log("Submitting payment for student:", {
-      student_id: studentFee.student_id,
-      fee_id: currentTermFee.id,
-      amount_paid: paymentAmount,
-      payment_method,
-      reference_number,
-      payment_date,
-      notes,
-      academic_year: currentTermFee.academic_year || studentFee.academic_year,
-      term: currentTermFee.term || studentFee.term,
-      apply_credit: apply_credit && availableCredit > 0
+    isSubmittingRef.current = true;
+
+    // Do NOT insert into Supabase here.
+    // Just pass the raw form data up — the parent's paymentMutation owns the single DB insert.
+    onSave({
+      amount: formData.amount,
+      payment_method: formData.payment_method,
+      reference_number: formData.reference_number,
+      payment_date: formData.payment_date,
+      notes: formData.notes,
     });
-
-    try {
-      // Insert payment - database triggers will handle the rest
-      const { data, error } = await supabase
-        .from('p_payments')
-        .insert([{
-          student_id: studentFee.student_id,
-          fee_id: currentTermFee.id,
-          amount_paid: paymentAmount,
-          payment_method: payment_method || 'Bank Transfer',
-          reference_number: reference_number || null,
-          payment_date: payment_date || new Date().toISOString(),
-          notes: notes || null,
-          academic_year: currentTermFee.academic_year || studentFee.academic_year,
-          term: currentTermFee.term || studentFee.term,
-          status: 'completed'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      console.log("✅ Payment inserted successfully. Database triggers will update student_fees.");
-
-      // Call onSave to refresh data and close dialog
-      onSave({
-        ...data,
-        amount_paid: paymentAmount,
-        payment_method,
-        reference_number
-      });
-
-    } catch (err) {
-      console.error("❌ Payment submission error:", err);
-      alert(`❌ Failed to record payment: ${err.message || 'Unknown error'}`);
-    }
   };
 
-  // Calculate maximum payable amount (outstanding balance + available credit)
+  // Calculate maximum payable amount
   const maxPayable = (studentFee.outstanding_balance || 0) + (availableCredit || 0);
   
   // Get the current term fee for display
@@ -136,14 +99,12 @@ export default function PaymentEntryForm({
                   KES {currentTermFee.total_billed?.toLocaleString() || 0}
                 </p>
               </div>
-
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Paid</p>
                 <p className="text-lg font-bold text-emerald-600 mt-1">
                   KES {currentTermFee.total_paid?.toLocaleString() || 0}
                 </p>
               </div>
-
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Balance</p>
                 <p className={`text-lg font-bold mt-1 ${currentTermFee.outstanding_balance > 0 ? "text-red-600" : "text-emerald-600"}`}>
@@ -153,7 +114,7 @@ export default function PaymentEntryForm({
             </div>
           </div>
 
-          {/* Aggregated Summary (if showing aggregated view) */}
+          {/* Credit Available */}
           {studentFee.total_credit_carried > 0 && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100">
               <div className="flex items-center justify-between">
@@ -294,10 +255,9 @@ export default function PaymentEntryForm({
             </Button>
           </div>
 
-          {/* Database Trigger Notice */}
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
-              Note: Payment processing and credit calculations are handled automatically by the database system.
+              Payment processing and credit calculations are handled automatically by the database system.
               {availableCredit > 0 && " Any available credit will be applied first."}
             </p>
           </div>

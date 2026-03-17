@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
-import { Calendar, RefreshCcw, Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, RefreshCcw, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Clock } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -18,19 +18,102 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/Components/ui/select";
-import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { Badge } from "@/Components/ui/badge";
+import { format, startOfWeek, endOfWeek, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface AcademicTerm {
+  id: string;
+  academic_year: string;
+  term: number;
+  term_name: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  status: "upcoming" | "active" | "closed";
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDate(d: string) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-KE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function weeksBetween(start: string, end: string) {
+  if (!start || !end) return 0;
+  return Math.round(
+    (new Date(end).getTime() - new Date(start).getTime()) /
+      (1000 * 60 * 60 * 24 * 7)
+  );
+}
+
+function getWeekStatus(
+  weekDateStr: string,
+  activeTerm: AcademicTerm | null
+): { status: "inside" | "outside" | "no-term"; message: string } {
+  if (!activeTerm) {
+    return {
+      status: "no-term",
+      message: "No active term found. Please configure an academic term in Settings.",
+    };
+  }
+
+  const weekStart = startOfWeek(new Date(weekDateStr), { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(new Date(weekDateStr), { weekStartsOn: 1 });
+  const termStart = parseISO(activeTerm.start_date);
+  const termEnd = parseISO(activeTerm.end_date);
+
+  const weekStartInTerm =
+    !isBefore(weekStart, termStart) && !isAfter(weekStart, termEnd);
+  const weekEndInTerm =
+    !isBefore(weekEnd, termStart) && !isAfter(weekEnd, termEnd);
+
+  if (weekStartInTerm && weekEndInTerm) {
+    return { status: "inside", message: "" };
+  }
+
+  return {
+    status: "outside",
+    message: `Selected week is outside Term ${activeTerm.term} (${fmtDate(
+      activeTerm.start_date
+    )} – ${fmtDate(activeTerm.end_date)}). Attendance can still be saved.`,
+  };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function AttendanceSection() {
   const [selectedClassId, setSelectedClassId] = useState("");
-  const [attendanceDate, setAttendanceDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [studentAttendance, setStudentAttendance] = useState({});
+  const [attendanceDate, setAttendanceDate] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
+  const [studentAttendance, setStudentAttendance] = useState<
+    Record<string, Record<string, boolean>>
+  >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingWeek, setIsLoadingWeek] = useState(false);
   const [showFilledWeeks, setShowFilledWeeks] = useState(false);
-  const [filledWeeks, setFilledWeeks] = useState([]);
+  const [filledWeeks, setFilledWeeks] = useState<any[]>([]);
   const [isLoadingFilledWeeks, setIsLoadingFilledWeeks] = useState(false);
 
-  // ✅ Fetch classes
+  // ── Fetch active academic term ────────────────────────────────────────────
+  const { data: activeTerm = null } = useQuery<AcademicTerm | null>({
+    queryKey: ["active-term"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("academic_calendar")
+        .select("*")
+        .eq("is_current", true)
+        .single();
+      if (error) return null;
+      return data as AcademicTerm;
+    },
+  });
+
+  // ── Fetch classes ─────────────────────────────────────────────────────────
   const { data: classes = [] } = useQuery({
     queryKey: ["classes"],
     queryFn: async () => {
@@ -40,7 +123,7 @@ export default function AttendanceSection() {
     },
   });
 
-  // ✅ Fetch students
+  // ── Fetch students ────────────────────────────────────────────────────────
   const { data: students = [] } = useQuery({
     queryKey: ["students"],
     queryFn: async () => {
@@ -50,7 +133,7 @@ export default function AttendanceSection() {
     },
   });
 
-  // ✅ Fetch enrollments
+  // ── Fetch enrollments ─────────────────────────────────────────────────────
   const { data: enrollments = [] } = useQuery({
     queryKey: ["enrollments"],
     queryFn: async () => {
@@ -60,19 +143,19 @@ export default function AttendanceSection() {
     },
   });
 
-  // ✅ Compute students in selected class
+  // ── Compute students in selected class ────────────────────────────────────
   const classStudents = useMemo(() => {
     if (!selectedClassId) return [];
     const enrolledIds = enrollments
-      .filter((e) => e.class_id === selectedClassId)
-      .map((e) => e.student_id);
-    return students.filter((s) => enrolledIds.includes(s.id));
+      .filter((e: any) => e.class_id === selectedClassId)
+      .map((e: any) => e.student_id);
+    return students.filter((s: any) => enrolledIds.includes(s.id));
   }, [selectedClassId, students, enrollments]);
 
-  // ✅ Initialize attendance with all days = true
+  // ── Initialize attendance defaults ────────────────────────────────────────
   useEffect(() => {
     if (classStudents.length > 0) {
-      const defaults = classStudents.reduce((acc, s) => {
+      const defaults = classStudents.reduce((acc: any, s: any) => {
         acc[s.id] = {
           monday: true,
           tuesday: true,
@@ -86,8 +169,14 @@ export default function AttendanceSection() {
     }
   }, [classStudents]);
 
-  // ✅ Handle checkbox toggle
-  const handleCheckboxChange = (studentId, day) => {
+  // ── Week status relative to active term ───────────────────────────────────
+  const weekStatus = useMemo(
+    () => getWeekStatus(attendanceDate, activeTerm),
+    [attendanceDate, activeTerm]
+  );
+
+  // ── Handle checkbox toggle ────────────────────────────────────────────────
+  const handleCheckboxChange = (studentId: string, day: string) => {
     setStudentAttendance((prev) => ({
       ...prev,
       [studentId]: {
@@ -97,13 +186,19 @@ export default function AttendanceSection() {
     }));
   };
 
-  // ✅ Load existing attendance for selected week
+  // ── Load existing attendance for selected week ────────────────────────────
   const handleLoadWeek = async () => {
     if (!selectedClassId) return;
     setIsLoadingWeek(true);
 
-    const weekStart = format(startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }), "yyyy-MM-dd");
-    const weekEnd = format(endOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const weekStart = format(
+      startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }),
+      "yyyy-MM-dd"
+    );
+    const weekEnd = format(
+      endOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }),
+      "yyyy-MM-dd"
+    );
 
     const { data, error } = await supabase
       .from("attendance")
@@ -116,7 +211,7 @@ export default function AttendanceSection() {
       console.error("Error loading attendance:", error);
       alert("Failed to load week attendance.");
     } else if (data.length > 0) {
-      const existing = data.reduce((acc, record) => {
+      const existing = data.reduce((acc: any, record: any) => {
         acc[record.student_id] = {
           monday: record.monday ?? true,
           tuesday: record.tuesday ?? true,
@@ -135,7 +230,7 @@ export default function AttendanceSection() {
     setIsLoadingWeek(false);
   };
 
-  // ✅ Fetch filled weeks for the selected class
+  // ── Fetch filled weeks for the selected class ─────────────────────────────
   const handleViewFilledWeeks = async () => {
     if (!selectedClassId) {
       alert("Please select a class first.");
@@ -156,15 +251,13 @@ export default function AttendanceSection() {
         console.error("Error fetching filled weeks:", error);
         alert("Failed to load filled weeks.");
       } else {
-        // Get unique weeks
-        const uniqueWeeks = data.reduce((acc, record) => {
+        const uniqueWeeks = data.reduce((acc: any[], record: any) => {
           const weekKey = `${record.week_start}-${record.week_end}`;
-          if (!acc.find(w => `${w.week_start}-${w.week_end}` === weekKey)) {
+          if (!acc.find((w) => `${w.week_start}-${w.week_end}` === weekKey)) {
             acc.push(record);
           }
           return acc;
         }, []);
-        
         setFilledWeeks(uniqueWeeks);
       }
     }
@@ -172,67 +265,112 @@ export default function AttendanceSection() {
     setIsLoadingFilledWeeks(false);
   };
 
-  // ✅ Load a specific week when clicked from the filled weeks list
-  const handleLoadSpecificWeek = (weekStart) => {
+  // ── Load a specific week from the filled weeks list ───────────────────────
+  const handleLoadSpecificWeek = (weekStart: string) => {
     setAttendanceDate(weekStart);
-    // Wait a moment for state to update, then load the week
     setTimeout(() => {
       handleLoadWeek();
     }, 100);
   };
 
-  // ✅ Save attendance (insert or update existing)
+  // ── Save attendance ───────────────────────────────────────────────────────
   const handleSubmitAttendance = async () => {
-  if (!selectedClassId || classStudents.length === 0) return;
+    if (!selectedClassId || classStudents.length === 0) return;
 
-  setIsSubmitting(true);
+    setIsSubmitting(true);
 
-  try {
-    const weekStart = startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(new Date(attendanceDate), { weekStartsOn: 1 });
+    try {
+      const weekStart = startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(new Date(attendanceDate), { weekStartsOn: 1 });
 
-    const records = classStudents.map((student) => ({
-      id: crypto.randomUUID(), // add this if `id` is NOT auto-generated
-      student_id: student.id,
-      class_id: selectedClassId,
-      week_start: format(weekStart, "yyyy-MM-dd"),
-      week_end: format(weekEnd, "yyyy-MM-dd"),
-      monday: studentAttendance[student.id]?.monday ?? false,
-      tuesday: studentAttendance[student.id]?.tuesday ?? false,
-      wednesday: studentAttendance[student.id]?.wednesday ?? false,
-      thursday: studentAttendance[student.id]?.thursday ?? false,
-      friday: studentAttendance[student.id]?.friday ?? false,
-      status: studentAttendance[student.id]?.status ?? "present",
-      created_at: new Date().toISOString(),
-    }));
+      const records = classStudents.map((student: any) => ({
+        id: crypto.randomUUID(),
+        student_id: student.id,
+        class_id: selectedClassId,
+        week_start: format(weekStart, "yyyy-MM-dd"),
+        week_end: format(weekEnd, "yyyy-MM-dd"),
+        monday: studentAttendance[student.id]?.monday ?? false,
+        tuesday: studentAttendance[student.id]?.tuesday ?? false,
+        wednesday: studentAttendance[student.id]?.wednesday ?? false,
+        thursday: studentAttendance[student.id]?.thursday ?? false,
+        friday: studentAttendance[student.id]?.friday ?? false,
+        status: studentAttendance[student.id]?.status ?? "present",
+        created_at: new Date().toISOString(),
+      }));
 
-    console.log("Saving attendance records:", records);
+      console.log("Saving attendance records:", records);
 
-    const { error } = await supabase
-      .from("attendance")
-      .upsert(records, { onConflict: "student_id,week_start,week_end,class_id" });
+      const { error } = await supabase
+        .from("attendance")
+        .upsert(records, {
+          onConflict: "student_id,week_start,week_end,class_id",
+        });
 
-    if (error) {
-      console.error("Error saving attendance:", error);
-      alert("Failed to save attendance. " + error.message);
-    } else {
-      alert("Attendance saved successfully!");
-      // Refresh filled weeks list if it's open
-      if (showFilledWeeks) {
-        handleViewFilledWeeks();
+      if (error) {
+        console.error("Error saving attendance:", error);
+        alert("Failed to save attendance. " + error.message);
+      } else {
+        alert("Attendance saved successfully!");
+        if (showFilledWeeks) {
+          handleViewFilledWeeks();
+        }
       }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      alert("An unexpected error occurred while saving attendance.");
+    } finally {
+      setIsSubmitting(false);
     }
-  } catch (err) {
-    console.error("Unexpected error:", err);
-    alert("An unexpected error occurred while saving attendance.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+
+      {/* ── Academic Term Context Banner ──────────────────────────────────── */}
+      {activeTerm ? (
+        <Card className="border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500" />
+              </span>
+              <BookOpen className="h-4 w-4 text-teal-600" />
+              <div>
+                <p className="text-xs font-semibold text-teal-600 uppercase tracking-wide">
+                  Active Academic Term
+                </p>
+                <p className="font-bold text-gray-900">
+                  Term {activeTerm.term} — {activeTerm.academic_year}
+                </p>
+              </div>
+              <div className="h-4 w-px bg-teal-200" />
+              <div className="flex items-center gap-1 text-sm text-gray-600">
+                <Clock className="h-3.5 w-3.5 text-teal-500" />
+                {fmtDate(activeTerm.start_date)} → {fmtDate(activeTerm.end_date)}
+              </div>
+              <Badge className="ml-auto bg-teal-100 text-teal-800 border-teal-200">
+                {weeksBetween(activeTerm.start_date, activeTerm.end_date)} weeks
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-800 text-sm">No Active Term</p>
+              <p className="text-xs text-amber-700">
+                No academic term is currently active. Go to <strong>Settings → Academic Calendar</strong> to configure and activate a term.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Main Attendance Card ──────────────────────────────────────────── */}
       <Card className="border-none shadow-sm">
         <CardHeader>
           <CardTitle className="text-2xl font-bold flex items-center gap-2">
@@ -246,7 +384,7 @@ export default function AttendanceSection() {
 
         <CardContent>
           {/* Class & Week Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="space-y-2">
               <Label>Select Class</Label>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -254,7 +392,7 @@ export default function AttendanceSection() {
                   <SelectValue placeholder="Choose a class..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {classes.map((cls) => (
+                  {classes.map((cls: any) => (
                     <SelectItem key={cls.id} value={cls.id}>
                       {cls.name}
                     </SelectItem>
@@ -264,10 +402,19 @@ export default function AttendanceSection() {
             </div>
 
             <div className="space-y-2">
-              <Label>Week Start</Label>
+              <Label>
+                Week Start
+                {activeTerm && (
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    (Term {activeTerm.term}: {fmtDate(activeTerm.start_date)} – {fmtDate(activeTerm.end_date)})
+                  </span>
+                )}
+              </Label>
               <Input
                 type="date"
                 value={attendanceDate}
+                min={activeTerm?.start_date}
+                max={activeTerm?.end_date}
                 onChange={(e) => setAttendanceDate(e.target.value)}
               />
             </div>
@@ -282,7 +429,7 @@ export default function AttendanceSection() {
                 <RefreshCcw className="w-4 h-4" />
                 {isLoadingWeek ? "Loading..." : "Load Week"}
               </Button>
-              
+
               <Button
                 variant="outline"
                 className="flex items-center gap-2"
@@ -291,18 +438,42 @@ export default function AttendanceSection() {
               >
                 <Eye className="w-4 h-4" />
                 {isLoadingFilledWeeks ? "Loading..." : "View Filled Weeks"}
-                {showFilledWeeks ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showFilledWeeks ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </Button>
             </div>
           </div>
 
-          {/* Filled Weeks Section */}
+          {/* ── Week Outside Term Warning ───────────────────────────────── */}
+          {weekStatus.status !== "inside" && weekStatus.message && (
+            <div
+              className={`flex items-start gap-3 px-4 py-3 rounded-lg mb-4 text-sm border ${
+                weekStatus.status === "no-term"
+                  ? "bg-amber-50 border-amber-200 text-amber-800"
+                  : "bg-orange-50 border-orange-200 text-orange-800"
+              }`}
+            >
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <p>{weekStatus.message}</p>
+            </div>
+          )}
+
+          {/* ── Filled Weeks Section ────────────────────────────────────── */}
           {showFilledWeeks && (
             <Card className="mb-6 border-l-4 border-l-teal-500">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Eye className="w-5 h-5 text-teal-600" />
-                  Filled Weeks for {classes.find(c => c.id === selectedClassId)?.name}
+                  Filled Weeks for{" "}
+                  {classes.find((c: any) => c.id === selectedClassId)?.name}
+                  {activeTerm && (
+                    <Badge variant="outline" className="ml-2 text-xs font-normal">
+                      Term {activeTerm.term} · {activeTerm.academic_year}
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -312,37 +483,55 @@ export default function AttendanceSection() {
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {filledWeeks.map((week, index) => (
-                      <div
-                        key={`${week.week_start}-${week.week_end}`}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => handleLoadSpecificWeek(week.week_start)}
-                      >
-                        <div>
-                          <p className="font-medium">
-                            Week {filledWeeks.length - index}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {format(parseISO(week.week_start), "MMM dd, yyyy")} - {format(parseISO(week.week_end), "MMM dd, yyyy")}
-                          </p>
+                    {filledWeeks.map((week: any, index: number) => {
+                      // Tag whether this filled week is within the active term
+                      const ws = getWeekStatus(week.week_start, activeTerm);
+                      return (
+                        <div
+                          key={`${week.week_start}-${week.week_end}`}
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => handleLoadSpecificWeek(week.week_start)}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">
+                                Week {filledWeeks.length - index}
+                              </p>
+                              {ws.status === "outside" && (
+                                <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-200">
+                                  Outside term
+                                </Badge>
+                              )}
+                              {ws.status === "inside" && (
+                                <Badge className="text-[10px] px-1.5 py-0 bg-teal-100 text-teal-700 border-teal-200">
+                                  In term
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600">
+                              {format(parseISO(week.week_start), "MMM dd, yyyy")} -{" "}
+                              {format(parseISO(week.week_end), "MMM dd, yyyy")}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">
+                              Created:{" "}
+                              {format(parseISO(week.created_at), "MMM dd, yyyy")}
+                            </p>
+                            <Button variant="ghost" size="sm" className="mt-1">
+                              Load
+                            </Button>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">
-                            Created: {format(parseISO(week.created_at), "MMM dd, yyyy")}
-                          </p>
-                          <Button variant="ghost" size="sm" className="mt-1">
-                            Load
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
 
-          {/* Students List */}
+          {/* ── Students Attendance Table ───────────────────────────────── */}
           {selectedClassId && (
             <>
               {classStudents.length === 0 ? (
@@ -356,22 +545,34 @@ export default function AttendanceSection() {
                       <tr>
                         <th className="p-2">Student</th>
                         {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => (
-                          <th key={day} className="p-2 text-center">{day}</th>
+                          <th key={day} className="p-2 text-center">
+                            {day}
+                          </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {classStudents.map((student) => (
+                      {classStudents.map((student: any) => (
                         <tr key={student.id} className="border-t">
                           <td className="p-2 font-medium">
                             {student.first_name} {student.last_name}
                           </td>
-                          {["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => (
+                          {[
+                            "monday",
+                            "tuesday",
+                            "wednesday",
+                            "thursday",
+                            "friday",
+                          ].map((day) => (
                             <td key={day} className="text-center p-2">
                               <input
                                 type="checkbox"
-                                checked={studentAttendance[student.id]?.[day] ?? true}
-                                onChange={() => handleCheckboxChange(student.id, day)}
+                                checked={
+                                  studentAttendance[student.id]?.[day] ?? true
+                                }
+                                onChange={() =>
+                                  handleCheckboxChange(student.id, day)
+                                }
                               />
                             </td>
                           ))}
@@ -384,7 +585,7 @@ export default function AttendanceSection() {
             </>
           )}
 
-          {/* Save Button */}
+          {/* ── Save Button ─────────────────────────────────────────────── */}
           {selectedClassId && classStudents.length > 0 && (
             <div className="pt-6 text-right">
               <Button

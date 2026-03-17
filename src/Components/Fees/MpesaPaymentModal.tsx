@@ -20,6 +20,7 @@ interface MpesaPaymentModalProps {
   selectedTerm: string;
   selectedYear: string;
   studentFeeId?: string | null;
+  currentTerm?: { term: string; academic_year: string } | null; // NEW: active term from parent
 }
 
 type Step = "form" | "processing" | "success" | "error";
@@ -36,6 +37,7 @@ export default function MpesaPaymentModal({
   selectedTerm,
   selectedYear,
   studentFeeId,
+  currentTerm, // NEW (unused, added for future sync)
 }: MpesaPaymentModalProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState(

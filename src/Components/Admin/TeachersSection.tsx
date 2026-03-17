@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
@@ -8,12 +8,13 @@ import {
   Plus, Search, Pencil, Trash2, Shield, BookOpen, Users, X,
   Phone, Mail, User, Hash, Building2, Briefcase,
   UserCog, UtensilsCrossed, ShieldCheck, Wrench, Sparkles,
-  ChevronRight, GraduationCap, Star, ArrowLeft,
+  ChevronRight, GraduationCap, Star, ArrowLeft, Calendar,
+  Users2, CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/Components/ui/dialog';
 import { Label } from '@/Components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
@@ -57,6 +58,13 @@ interface StaffMember {
   created_at?: string;
 }
 
+interface AcademicTerm {
+  id: string;
+  academic_year: string;
+  term: number;
+  is_current: boolean;
+}
+
 type StaffDepartment =
   | 'kitchen' | 'cleaning' | 'security' | 'maintenance'
   | 'administration' | 'transport' | 'healthcare' | 'other';
@@ -85,7 +93,17 @@ interface StaffFormData {
 interface AssignmentForm {
   class_id: string;
   subject_ids: string[];
+  academic_year: string;
 }
+
+// ─── Delete target types ───────────────────────────────────────────────────────
+// One state object covers all four delete scenarios in the file.
+
+type DeleteTarget =
+  | { type: 'teacher';    id: string; authId?: string; name: string }
+  | { type: 'staff';      id: string; name: string }
+  | { type: 'department'; id: string; name: string }
+  | { type: 'assignment'; id: string; name: string };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -126,30 +144,95 @@ const sortByRoleHierarchy = (a: Teacher, b: Teacher) => {
 const getDeptConfig = (dept: string) =>
   STAFF_DEPARTMENTS.find(d => d.value === dept) ?? STAFF_DEPARTMENTS[STAFF_DEPARTMENTS.length - 1];
 
-// ─── SQL Migrations (run in Supabase SQL editor) ──────────────────────────────
-/**
- * -- 1. Teacher departments table
- * CREATE TABLE IF NOT EXISTS departments (
- *   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- *   name        text NOT NULL UNIQUE,
- *   description text,
- *   created_at  timestamptz DEFAULT now()
- * );
- * ALTER TABLE teachers ADD COLUMN IF NOT EXISTS department_id   uuid REFERENCES departments(id) ON DELETE SET NULL;
- * ALTER TABLE teachers ADD COLUMN IF NOT EXISTS department_role text DEFAULT 'Teacher';
- *
- * -- 2. Staff table
- * CREATE TABLE IF NOT EXISTS staff (
- *   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- *   first_name text NOT NULL,
- *   last_name  text NOT NULL,
- *   role       text NOT NULL,
- *   phone      text,
- *   department text NOT NULL DEFAULT 'other',
- *   notes      text,
- *   created_at timestamptz DEFAULT now()
- * );
- */
+// ─── AssignmentsDetail — lifted out of parent to avoid re-creation on render ──
+
+function AssignmentsDetail({
+  teacher,
+  activeAcademicYear,
+  onDeleteAssignment,
+}: {
+  teacher: Teacher;
+  activeAcademicYear: string;
+  onDeleteAssignment: (assignmentId: string, subjectName: string, className: string) => void;
+}) {
+  const assignments = teacher.assignments || {};
+  const years = Object.keys(assignments).sort((a, b) => b.localeCompare(a));
+  if (years.length === 0)
+    return <p className="text-sm text-gray-400 italic">No class assignments yet.</p>;
+
+  return (
+    <div className="space-y-4">
+      {years.map(year => {
+        const isCurrentYear = year === activeAcademicYear;
+        const classIds = Object.keys(assignments[year]);
+        return (
+          <div key={year}>
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{year}</span>
+              {isCurrentYear && (
+                <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Current</Badge>
+              )}
+            </div>
+            <div className="space-y-2 pl-5">
+              {classIds.map(classId => {
+                const classInfo = assignments[year][classId]?.class;
+                const subs      = assignments[year][classId]?.subjects || [];
+                if (!classInfo) return null;
+                return (
+                  <div key={classId} className={`border rounded-lg p-3 ${isCurrentYear ? 'bg-gray-50' : 'bg-gray-50/50 opacity-75'}`}>
+                    <div className="font-medium text-sm flex items-center gap-2 mb-2 text-gray-700">
+                      <Users className="w-4 h-4" /> {classInfo.name} ({classInfo.grade_level})
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {subs.map((sub: any) => (
+                        <div key={sub.assignment_id || sub.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded border text-xs">
+                          <BookOpen className="w-3 h-3 text-maroon-500 flex-shrink-0" />
+                          <span className="font-medium">{sub.code}</span>
+                          <span className="text-gray-400">– {sub.name}</span>
+                          <button
+                            className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
+                            onClick={() => onDeleteAssignment(sub.assignment_id, sub.name, classInfo.name)}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Helper components ────────────────────────────────────────────────────────
+
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 text-sm">
+      <div className="text-gray-400 flex-shrink-0 mt-0.5">{icon}</div>
+      <div>
+        <div className="text-xs text-gray-400 mb-0.5">{label}</div>
+        <div className="text-gray-800">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ label = 'No teachers found' }: { label?: string }) {
+  return (
+    <div className="text-center py-10 text-gray-400">
+      <Search className="w-12 h-12 mx-auto mb-2 text-gray-200" />
+      <p>{label}</p>
+      <p className="text-sm mt-1">Try a different search term</p>
+    </div>
+  );
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -160,7 +243,10 @@ export default function TeachersAndStaffSection() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
-  // ── Teacher state ──
+  // ── Delete confirmation state (replaces all window.confirm calls) ──────────
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
+  // ── Teacher state ──────────────────────────────────────────────────────────
   const [showTeacherModal, setShowTeacherModal]       = useState(false);
   const [editingTeacher, setEditingTeacher]           = useState<Teacher | null>(null);
   const [viewingTeacher, setViewingTeacher]           = useState<Teacher | null>(null);
@@ -174,28 +260,61 @@ export default function TeachersAndStaffSection() {
     phone: '', is_admin: false, password: '', department_id: '', department_role: 'Teacher',
   });
 
-  const [assignmentForm, setAssignmentForm] = useState<AssignmentForm>({ class_id: '', subject_ids: [] });
+  const [assignmentForm, setAssignmentForm] = useState<AssignmentForm>({
+    class_id: '', subject_ids: [], academic_year: '',
+  });
 
-  // ── Staff state ──
-  const [showStaffModal, setShowStaffModal]         = useState(false);
-  const [editingStaff, setEditingStaff]             = useState<StaffMember | null>(null);
-  const [selectedStaffDept, setSelectedStaffDept]   = useState<StaffDepartment | null>(null);
-  const [staffForm, setStaffForm]                   = useState<StaffFormData>({
+  // ── Bulk add state ─────────────────────────────────────────────────────────
+  const EMPTY_BULK_ROW = () => ({
+    teacher_code: '', first_name: '', last_name: '',
+    email: '', phone: '', password: '',
+    is_admin: false, department_id: '', department_role: 'Teacher',
+  });
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkRows, setBulkRows]           = useState<ReturnType<typeof EMPTY_BULK_ROW>[]>(
+    () => Array.from({ length: 5 }, EMPTY_BULK_ROW)
+  );
+  const [bulkResults, setBulkResults] = useState<{ index: number; name: string; status: 'success' | 'error'; message?: string }[]>([]);
+  const [bulkSaving, setBulkSaving]   = useState(false);
+  const [bulkDone, setBulkDone]       = useState(false);
+
+  // ── Staff state ────────────────────────────────────────────────────────────
+  const [showStaffModal, setShowStaffModal]       = useState(false);
+  const [editingStaff, setEditingStaff]           = useState<StaffMember | null>(null);
+  const [selectedStaffDept, setSelectedStaffDept] = useState<StaffDepartment | null>(null);
+  const [staffForm, setStaffForm]                 = useState<StaffFormData>({
     first_name: '', last_name: '', role: '', phone: '', department: '', notes: '',
   });
 
-  // ── Department state ──
-  const [showDeptModal, setShowDeptModal]         = useState(false);
-  const [editingDept, setEditingDept]             = useState<Department | null>(null);
-  const [deptForm, setDeptForm]                   = useState({ name: '', description: '' });
+  // ── Department state ───────────────────────────────────────────────────────
+  const [showDeptModal, setShowDeptModal]             = useState(false);
+  const [editingDept, setEditingDept]                 = useState<Department | null>(null);
+  const [deptForm, setDeptForm]                       = useState({ name: '', description: '' });
   const [showAssignDeptModal, setShowAssignDeptModal] = useState(false);
-  const [assignDeptTarget, setAssignDeptTarget]   = useState<Department | null>(null);
-  const [assignDeptForm, setAssignDeptForm]       = useState({ teacher_id: '', department_role: 'Teacher' });
+  const [assignDeptTarget, setAssignDeptTarget]       = useState<Department | null>(null);
+  const [assignDeptForm, setAssignDeptForm]           = useState({ teacher_id: '', department_role: 'Teacher' });
 
-  // ─── Queries ─────────────────────────────────────────────────────────────
+  // ─── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: academicTerms = [] } = useQuery<AcademicTerm[]>({
+    queryKey: ['academic-terms-all'],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('academic_calendar')
+        .select('id, academic_year, term, is_current')
+        .order('academic_year', { ascending: false });
+      if (error) throw error;
+      return data as AcademicTerm[];
+    },
+  });
+
+  const academicYears: string[] = Array.from(new Set(academicTerms.map(t => t.academic_year)));
+  const activeAcademicYear = academicTerms.find(t => t.is_current)?.academic_year ?? '';
 
   const { data: departments = [], isLoading: loadingDepts } = useQuery({
     queryKey: ['departments'],
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.from('departments').select('*').order('name');
       if (error) throw error;
@@ -205,6 +324,7 @@ export default function TeachersAndStaffSection() {
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes'],
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.from('classes').select('id, name, grade_level').order('grade_level');
       if (error) throw error;
@@ -212,17 +332,23 @@ export default function TeachersAndStaffSection() {
     },
   });
 
-  const { data: subjects = [] } = useQuery({
-    queryKey: ['subjects'],
+  const { data: classSubjects = [], isLoading: loadingClassSubjects } = useQuery({
+    queryKey: ['class-subjects', assignmentForm.class_id],
+    enabled: !!assignmentForm.class_id,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('subjects').select('id, code, name').order('code');
+      const { data, error } = await supabase
+        .from('classes_subjects')
+        .select('subject_id, subjects(id, code, name)')
+        .eq('class_id', assignmentForm.class_id);
       if (error) throw error;
-      return data || [];
+      return (data || []).map((row: any) => row.subjects).filter(Boolean) as { id: string; code: string; name: string }[];
     },
   });
 
   const { data: teachers, isLoading: loadingTeachers } = useQuery({
     queryKey: ['teachers'],
+    staleTime: 2 * 60 * 1000,
     queryFn: async () => {
       const { data: teachersData, error: teachersError } = await supabase
         .from('teachers')
@@ -230,22 +356,33 @@ export default function TeachersAndStaffSection() {
         .order('created_at', { ascending: false });
       if (teachersError) throw teachersError;
 
+      // ── FIXED: query the view instead of the base table with joins ──
       const { data: assignmentsData, error: assignmentsError } = await supabase
-        .from('teacher_classes')
-        .select(`id, teacher_id, class_id, subject_id,
-          classes ( id, name, grade_level ), subjects ( id, code, name )`);
+        .from('teacher_class_subjects')
+        .select('*');
       if (assignmentsError) throw assignmentsError;
 
       const assignmentsByTeacher: Record<string, any> = {};
       assignmentsData?.forEach(a => {
         if (!assignmentsByTeacher[a.teacher_id]) assignmentsByTeacher[a.teacher_id] = {};
-        if (!assignmentsByTeacher[a.teacher_id][a.class_id]) {
-          assignmentsByTeacher[a.teacher_id][a.class_id] = { class: a.classes, subjects: [] };
+        const yearKey = a.academic_year || activeAcademicYear || 'Current Year';
+        if (!assignmentsByTeacher[a.teacher_id][yearKey]) {
+          assignmentsByTeacher[a.teacher_id][yearKey] = {};
         }
-        assignmentsByTeacher[a.teacher_id][a.class_id].subjects.push({
-          id: a.subject_id, assignment_id: a.id, ...a.subjects,
+        if (!assignmentsByTeacher[a.teacher_id][yearKey][a.class_id]) {
+          assignmentsByTeacher[a.teacher_id][yearKey][a.class_id] = {
+            class: { id: a.class_id, name: a.class_name, grade_level: a.grade_level },
+            subjects: [],
+          };
+        }
+        assignmentsByTeacher[a.teacher_id][yearKey][a.class_id].subjects.push({
+          id: a.subject_id,
+          assignment_id: a.teacher_class_id,
+          code: a.subject_code,
+          name: a.subject_name,
         });
       });
+      // ── END FIX ──
 
       return teachersData?.map(t => ({
         ...t,
@@ -257,6 +394,7 @@ export default function TeachersAndStaffSection() {
 
   const { data: staffList, isLoading: loadingStaff } = useQuery({
     queryKey: ['staff'],
+    staleTime: 2 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.from('staff').select('*').order('created_at', { ascending: false });
       if (error) throw error;
@@ -293,6 +431,7 @@ export default function TeachersAndStaffSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      setDeleteTarget(null);
       toast({ title: 'Department deleted' });
     },
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
@@ -323,6 +462,7 @@ export default function TeachersAndStaffSection() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      setDeleteTarget(null);
       toast({ title: 'Teacher removed from department' });
     },
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
@@ -387,25 +527,33 @@ export default function TeachersAndStaffSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       setViewingTeacher(null);
+      setDeleteTarget(null);
       toast({ title: 'Teacher deleted' });
     },
     onError: (err: Error) => toast({ title: 'Delete failed', description: err.message, variant: 'destructive' }),
   });
 
   const addAssignmentsMutation = useMutation({
-    mutationFn: async ({ teacherId, classId, subjectIds }: { teacherId: string; classId: string; subjectIds: string[] }) => {
-      if (!teacherId || !classId || !subjectIds.length) throw new Error('Teacher, class, and at least one subject required');
+    mutationFn: async ({ teacherId, classId, subjectIds, academicYear }: {
+      teacherId: string; classId: string; subjectIds: string[]; academicYear: string;
+    }) => {
+      if (!teacherId || !classId || !subjectIds.length || !academicYear) {
+        throw new Error('Teacher, class, academic year, and at least one subject are required');
+      }
       const { error } = await supabase.from('teacher_classes')
-        .insert(subjectIds.map(sid => ({ teacher_id: teacherId, class_id: classId, subject_id: sid })));
+        .insert(subjectIds.map(sid => ({
+          teacher_id: teacherId, class_id: classId,
+          subject_id: sid, academic_year: academicYear,
+        })));
       if (error) {
-        if (error.code === '23505') throw new Error('Already assigned to one of these subjects in this class');
+        if (error.code === '23505') throw new Error('Already assigned to one of these subjects in this class for this year');
         throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       setShowAssignmentModal(false);
-      setAssignmentForm({ class_id: '', subject_ids: [] });
+      setAssignmentForm({ class_id: '', subject_ids: [], academic_year: '' });
       setSelectedTeacher(null);
       toast({ title: 'Assignments added' });
     },
@@ -417,7 +565,11 @@ export default function TeachersAndStaffSection() {
       const { error } = await supabase.from('teacher_classes').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['teachers'] }); toast({ title: 'Assignment removed' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      setDeleteTarget(null);
+      toast({ title: 'Assignment removed' });
+    },
     onError: (err: Error) => toast({ title: 'Remove failed', description: err.message, variant: 'destructive' }),
   });
 
@@ -451,7 +603,11 @@ export default function TeachersAndStaffSection() {
       const { error } = await supabase.from('staff').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['staff'] }); toast({ title: 'Staff member removed' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      setDeleteTarget(null);
+      toast({ title: 'Staff member removed' });
+    },
     onError: (err: Error) => toast({ title: 'Delete failed', description: err.message, variant: 'destructive' }),
   });
 
@@ -463,9 +619,8 @@ export default function TeachersAndStaffSection() {
   };
   const resetStaffForm = () => setStaffForm({ first_name: '', last_name: '', role: '', phone: '', department: '', notes: '' });
 
-  const isSaving   = (createTeacherMutation as any)?.isPending || (updateTeacherMutation as any)?.isPending
-                  || (createTeacherMutation as any)?.isLoading  || (updateTeacherMutation as any)?.isLoading;
-  const isDeleting = (deleteTeacherMutation as any)?.isPending  || (deleteTeacherMutation as any)?.isLoading;
+  const isSaving   = createTeacherMutation.isPending || updateTeacherMutation.isPending;
+  const isDeleting = deleteTeacherMutation.isPending;
 
   const openEditTeacher = (teacher: Teacher) => {
     setEditingTeacher(teacher);
@@ -483,44 +638,45 @@ export default function TeachersAndStaffSection() {
     setShowTeacherModal(true);
   };
 
-  const renderAssignmentsInDetail = (teacher: Teacher) => {
-    const assignments = teacher.assignments || {};
-    const classIds    = Object.keys(assignments);
-    if (classIds.length === 0) return <p className="text-sm text-gray-400 italic">No class assignments yet.</p>;
-    return (
-      <div className="space-y-3">
-        {classIds.map(classId => {
-          const classInfo = assignments[classId]?.class;
-          const subs      = assignments[classId]?.subjects || [];
-          if (!classInfo) return null;
-          return (
-            <div key={classId} className="border rounded-lg p-3 bg-gray-50">
-              <div className="font-medium text-sm flex items-center gap-2 mb-2 text-gray-700">
-                <Users className="w-4 h-4" /> {classInfo.name} ({classInfo.grade_level})
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {subs.map((sub: any) => (
-                  <div key={sub.assignment_id || sub.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded border text-xs">
-                    <BookOpen className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                    <span className="font-medium">{sub.code}</span>
-                    <span className="text-gray-400">– {sub.name}</span>
-                    <button
-                      className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
-                      onClick={() => {
-                        if (window.confirm(`Remove ${teacher.first_name} from ${sub.name} in ${classInfo.name}?`))
-                          removeAssignmentMutation.mutate(sub.assignment_id);
-                      }}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
+  // Stable callback passed to AssignmentsDetail — opens delete dialog for assignment removal
+  const handleDeleteAssignment = useCallback((assignmentId: string, subjectName: string, className: string) => {
+    setDeleteTarget({ type: 'assignment', id: assignmentId, name: `${subjectName} in ${className}` });
+  }, []);
+
+  // ── Delete dialog confirm handler — routes to correct mutation by type ─────
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    switch (deleteTarget.type) {
+      case 'teacher':
+        deleteTeacherMutation.mutate({ teacherId: deleteTarget.id, authId: deleteTarget.authId });
+        break;
+      case 'staff':
+        deleteStaffMutation.mutate(deleteTarget.id);
+        break;
+      case 'department':
+        deleteDeptMutation.mutate(deleteTarget.id);
+        break;
+      case 'assignment':
+        removeAssignmentMutation.mutate(deleteTarget.id);
+        break;
+    }
+  };
+
+  const isDeletePending =
+    deleteTeacherMutation.isPending  ||
+    deleteStaffMutation.isPending    ||
+    deleteDeptMutation.isPending     ||
+    removeAssignmentMutation.isPending;
+
+  // Delete dialog subtitle per type
+  const deleteDialogDescription = () => {
+    if (!deleteTarget) return '';
+    switch (deleteTarget.type) {
+      case 'teacher':    return 'This will permanently delete the teacher account and cannot be undone.';
+      case 'staff':      return 'This will permanently remove this staff member and cannot be undone.';
+      case 'department': return 'Teachers assigned to this department will be unassigned. This cannot be undone.';
+      case 'assignment': return 'This will remove the subject assignment from this teacher.';
+    }
   };
 
   const filteredTeachers = teachers?.filter(t =>
@@ -531,7 +687,6 @@ export default function TeachersAndStaffSection() {
     `${s.first_name} ${s.last_name} ${s.role} ${s.department}`.toLowerCase().includes(staffSearch.toLowerCase())
   ) || [];
 
-  // Keep viewing teacher in sync after refetch
   const liveViewingTeacher = viewingTeacher
     ? (teachers?.find(t => t.id === viewingTeacher.id) ?? viewingTeacher)
     : null;
@@ -550,7 +705,7 @@ export default function TeachersAndStaffSection() {
       <Card className="border-none shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <Shield className="w-6 h-6 text-purple-600" />
+            <Shield className="w-6 h-6 text-[#800000]" />
             Teachers &amp; Staff
           </CardTitle>
         </CardHeader>
@@ -570,8 +725,16 @@ export default function TeachersAndStaffSection() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input placeholder="Search teachers..." value={teacherSearch} onChange={e => setTeacherSearch(e.target.value)} className="pl-9 h-10" />
                 </div>
-                <Button onClick={() => { setEditingTeacher(null); resetTeacherForm(); setShowTeacherModal(true); }} className="bg-purple-600 hover:bg-purple-700 h-10" size="sm">
+                <Button onClick={() => { setEditingTeacher(null); resetTeacherForm(); setShowTeacherModal(true); }} className="bg-[#800000] hover:bg-[#6b0000] h-10" size="sm">
                   <Plus className="w-4 h-4 mr-2" /> Add Teacher
+                </Button>
+                <Button
+                  onClick={() => { setBulkRows(Array.from({ length: 5 }, EMPTY_BULK_ROW)); setBulkResults([]); setBulkDone(false); setShowBulkModal(true); }}
+                  variant="outline"
+                  className="h-10 border-[#800000] text-[#800000] hover:bg-red-50"
+                  size="sm"
+                >
+                  <Users2 className="w-4 h-4 mr-2" /> Bulk Add
                 </Button>
               </div>
 
@@ -579,7 +742,6 @@ export default function TeachersAndStaffSection() {
                 <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12" />)}</div>
               ) : (
                 <>
-                  {/* Desktop table — lean: code, name, email, phone only */}
                   <div className="hidden sm:block overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -593,10 +755,10 @@ export default function TeachersAndStaffSection() {
                       </TableHeader>
                       <TableBody>
                         {filteredTeachers.map(teacher => (
-                          <TableRow key={teacher.id} className="cursor-pointer hover:bg-purple-50 transition-colors" onClick={() => setViewingTeacher(teacher)}>
+                          <TableRow key={teacher.id} className="cursor-pointer hover:bg-red-50 transition-colors" onClick={() => setViewingTeacher(teacher)}>
                             <TableCell className="font-mono text-sm font-medium text-gray-600">{teacher.teacher_code}</TableCell>
                             <TableCell>
-                              <span className="font-medium text-purple-700 hover:underline">
+                              <span className="font-medium text-[#800000] hover:underline">
                                 {teacher.first_name} {teacher.last_name}
                               </span>
                             </TableCell>
@@ -610,12 +772,11 @@ export default function TeachersAndStaffSection() {
                     {filteredTeachers.length === 0 && <EmptyState />}
                   </div>
 
-                  {/* Mobile rows */}
                   <div className="sm:hidden space-y-2">
                     {filteredTeachers.map(teacher => (
-                      <div key={teacher.id} className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-purple-50 transition-colors" onClick={() => setViewingTeacher(teacher)}>
+                      <div key={teacher.id} className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-red-50 transition-colors" onClick={() => setViewingTeacher(teacher)}>
                         <div>
-                          <div className="font-medium text-purple-700">{teacher.first_name} {teacher.last_name}</div>
+                          <div className="font-medium text-[#800000]">{teacher.first_name} {teacher.last_name}</div>
                           <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                             <Hash className="w-3 h-3" />{teacher.teacher_code}
                             {teacher.email && <><Mail className="w-3 h-3 ml-1" /><span className="truncate max-w-[140px]">{teacher.email}</span></>}
@@ -632,7 +793,6 @@ export default function TeachersAndStaffSection() {
 
             {/* ══════════════ STAFF TAB ══════════════ */}
             <TabsContent value="staff">
-              {/* ── Department overview (default view) ── */}
               {!selectedStaffDept ? (
                 <>
                   <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -640,7 +800,7 @@ export default function TeachersAndStaffSection() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input placeholder="Search all staff..." value={staffSearch} onChange={e => setStaffSearch(e.target.value)} className="pl-9 h-10" />
                     </div>
-                    <Button onClick={() => { setEditingStaff(null); resetStaffForm(); setShowStaffModal(true); }} className="bg-purple-600 hover:bg-purple-700 h-10" size="sm">
+                    <Button onClick={() => { setEditingStaff(null); resetStaffForm(); setShowStaffModal(true); }} className="bg-[#800000] hover:bg-[#6b0000] h-10" size="sm">
                       <Plus className="w-4 h-4 mr-2" /> Add Staff
                     </Button>
                   </div>
@@ -650,7 +810,6 @@ export default function TeachersAndStaffSection() {
                       {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28" />)}
                     </div>
                   ) : staffSearch ? (
-                    /* Search results — flat list when searching */
                     <>
                       <div className="hidden sm:block overflow-x-auto">
                         <Table>
@@ -679,7 +838,7 @@ export default function TeachersAndStaffSection() {
                                   <TableCell>
                                     <div className="flex gap-1">
                                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingStaff(member); setStaffForm({ first_name: member.first_name, last_name: member.last_name, role: member.role, phone: member.phone||'', department: member.department, notes: member.notes||'' }); setShowStaffModal(true); }}><Pencil className="w-4 h-4" /></Button>
-                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove ${member.first_name} ${member.last_name}?`)) deleteStaffMutation.mutate(member.id); }}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget({ type: 'staff', id: member.id, name: `${member.first_name} ${member.last_name}` })}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                                     </div>
                                   </TableCell>
                                 </TableRow>
@@ -701,7 +860,7 @@ export default function TeachersAndStaffSection() {
                               </div>
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingStaff(member); setStaffForm({ first_name: member.first_name, last_name: member.last_name, role: member.role, phone: member.phone||'', department: member.department, notes: member.notes||'' }); setShowStaffModal(true); }}><Pencil className="w-4 h-4" /></Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove ${member.first_name}?`)) deleteStaffMutation.mutate(member.id); }}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget({ type: 'staff', id: member.id, name: `${member.first_name} ${member.last_name}` })}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                               </div>
                             </div>
                           );
@@ -710,7 +869,6 @@ export default function TeachersAndStaffSection() {
                       </div>
                     </>
                   ) : (
-                    /* Department cards grid */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {STAFF_DEPARTMENTS.map(deptConfig => {
                         const members = staffList?.filter(s => s.department === deptConfig.value) || [];
@@ -718,14 +876,14 @@ export default function TeachersAndStaffSection() {
                         return (
                           <div
                             key={deptConfig.value}
-                            className="border rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-purple-300 transition-all group"
+                            className="border rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-[#800000] transition-all group"
                             onClick={() => setSelectedStaffDept(deptConfig.value)}
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${deptConfig.color}`}>
                                 {deptConfig.icon}
                               </div>
-                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors mt-1" />
+                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#800000] transition-colors mt-1" />
                             </div>
                             <div className="font-semibold text-gray-800">{deptConfig.label}</div>
                             <div className="text-sm text-gray-500 mt-0.5">{members.length} staff member{members.length !== 1 ? 's' : ''}</div>
@@ -752,13 +910,11 @@ export default function TeachersAndStaffSection() {
                   )}
                 </>
               ) : (
-                /* ── Drilled-in department view ── */
                 (() => {
                   const deptConfig  = getDeptConfig(selectedStaffDept);
                   const deptMembers = staffList?.filter(s => s.department === selectedStaffDept) || [];
                   return (
                     <div>
-                      {/* Back + header */}
                       <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-3">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedStaffDept(null)}>
@@ -772,13 +928,12 @@ export default function TeachersAndStaffSection() {
                             <p className="text-xs text-gray-500">{deptMembers.length} staff member{deptMembers.length !== 1 ? 's' : ''}</p>
                           </div>
                         </div>
-                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700 h-9"
+                        <Button size="sm" className="bg-[#800000] hover:bg-[#6b0000] h-9"
                           onClick={() => { setEditingStaff(null); resetStaffForm(); setStaffForm(p => ({ ...p, department: selectedStaffDept })); setShowStaffModal(true); }}>
                           <Plus className="w-4 h-4 mr-1.5" /> Add to {deptConfig.label}
                         </Button>
                       </div>
 
-                      {/* Desktop table */}
                       <div className="hidden sm:block">
                         <Table>
                           <TableHeader>
@@ -807,7 +962,7 @@ export default function TeachersAndStaffSection() {
                                 <TableCell>
                                   <div className="flex gap-1">
                                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingStaff(member); setStaffForm({ first_name: member.first_name, last_name: member.last_name, role: member.role, phone: member.phone||'', department: member.department, notes: member.notes||'' }); setShowStaffModal(true); }}><Pencil className="w-4 h-4" /></Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove ${member.first_name} ${member.last_name}?`)) deleteStaffMutation.mutate(member.id); }}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget({ type: 'staff', id: member.id, name: `${member.first_name} ${member.last_name}` })}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -817,7 +972,6 @@ export default function TeachersAndStaffSection() {
                         {deptMembers.length === 0 && <EmptyState label={`No staff in ${deptConfig.label} yet`} />}
                       </div>
 
-                      {/* Mobile cards */}
                       <div className="sm:hidden space-y-3">
                         {deptMembers.map(member => (
                           <Card key={member.id} className="p-4 shadow-xs">
@@ -833,7 +987,7 @@ export default function TeachersAndStaffSection() {
                               </div>
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingStaff(member); setStaffForm({ first_name: member.first_name, last_name: member.last_name, role: member.role, phone: member.phone||'', department: member.department, notes: member.notes||'' }); setShowStaffModal(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => { if (window.confirm(`Remove ${member.first_name}?`)) deleteStaffMutation.mutate(member.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => setDeleteTarget({ type: 'staff', id: member.id, name: `${member.first_name} ${member.last_name}` })}><Trash2 className="w-3.5 h-3.5" /></Button>
                               </div>
                             </div>
                             {member.phone && <div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Phone className="w-3 h-3" />{member.phone}</div>}
@@ -852,7 +1006,7 @@ export default function TeachersAndStaffSection() {
             <TabsContent value="departments">
               <div className="flex justify-between items-center mb-4">
                 <p className="text-sm text-gray-500">Organise teachers into departments and assign roles</p>
-                <Button onClick={() => { setEditingDept(null); setDeptForm({ name: '', description: '' }); setShowDeptModal(true); }} className="bg-purple-600 hover:bg-purple-700 h-10" size="sm">
+                <Button onClick={() => { setEditingDept(null); setDeptForm({ name: '', description: '' }); setShowDeptModal(true); }} className="bg-[#800000] hover:bg-[#6b0000] h-10" size="sm">
                   <Plus className="w-4 h-4 mr-2" /> Add Department
                 </Button>
               </div>
@@ -872,11 +1026,10 @@ export default function TeachersAndStaffSection() {
                     return (
                       <Card key={dept.id} className="shadow-xs">
                         <div className="p-4">
-                          {/* Header */}
                           <div className="flex items-start justify-between mb-3">
                             <div>
                               <div className="font-semibold text-base flex items-center gap-2">
-                                <Building2 className="w-4 h-4 text-purple-500" />
+                                <Building2 className="w-4 h-4 text-[#800000]" />
                                 {dept.name}
                               </div>
                               {dept.description && <p className="text-sm text-gray-500 mt-0.5">{dept.description}</p>}
@@ -888,13 +1041,12 @@ export default function TeachersAndStaffSection() {
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7"
-                                onClick={() => { if (window.confirm(`Delete "${dept.name}"? Teachers will be unassigned.`)) deleteDeptMutation.mutate(dept.id); }}>
+                                onClick={() => setDeleteTarget({ type: 'department', id: dept.id, name: dept.name })}>
                                 <Trash2 className="w-3.5 h-3.5 text-red-500" />
                               </Button>
                             </div>
                           </div>
 
-                          {/* Teachers list */}
                           {deptTeachers.length === 0 ? (
                             <p className="text-sm text-gray-400 italic mb-3">No teachers assigned yet.</p>
                           ) : (
@@ -902,7 +1054,7 @@ export default function TeachersAndStaffSection() {
                               {deptTeachers.map(t => (
                                 <div key={t.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-bold flex-shrink-0">
+                                    <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-[#800000] text-xs font-bold flex-shrink-0">
                                       {t.first_name[0]}{t.last_name[0]}
                                     </div>
                                     <div>
@@ -920,10 +1072,7 @@ export default function TeachersAndStaffSection() {
                                     <button
                                       className="text-gray-400 hover:text-red-500 transition-colors p-1"
                                       title="Remove from department"
-                                      onClick={() => {
-                                        if (window.confirm(`Remove ${t.first_name} ${t.last_name} from ${dept.name}?`))
-                                          removeTeacherFromDeptMutation.mutate(t.id);
-                                      }}
+                                      onClick={() => setDeleteTarget({ type: 'assignment', id: t.id, name: `${t.first_name} ${t.last_name} from ${dept.name}` })}
                                     >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
@@ -948,13 +1097,12 @@ export default function TeachersAndStaffSection() {
         </CardContent>
       </Card>
 
-      {/* ════════ TEACHER DETAIL DIALOG (click on name) ════════ */}
+      {/* ════════ TEACHER DETAIL DIALOG ════════ */}
       <Dialog open={!!viewingTeacher} onOpenChange={open => { if (!open) setViewingTeacher(null); }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-0">
           {liveViewingTeacher && (
             <>
-              {/* Purple header band */}
-              <div className="bg-purple-600 px-6 py-5 text-white rounded-t-lg">
+              <div className="bg-[#800000] px-6 py-5 text-white rounded-t-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
@@ -962,7 +1110,7 @@ export default function TeachersAndStaffSection() {
                     </div>
                     <div>
                       <h2 className="text-xl font-bold">{liveViewingTeacher.first_name} {liveViewingTeacher.last_name}</h2>
-                      <div className="flex items-center gap-2 text-purple-200 text-sm mt-0.5">
+                      <div className="flex items-center gap-2 text-red-200 text-sm mt-0.5">
                         <Hash className="w-3 h-3" />{liveViewingTeacher.teacher_code}
                         {liveViewingTeacher.is_admin && (
                           <Badge className="bg-white/20 text-white text-xs border-0 ml-1">Admin</Badge>
@@ -970,7 +1118,6 @@ export default function TeachersAndStaffSection() {
                       </div>
                     </div>
                   </div>
-                  {/* Edit button lives HERE — not in the list */}
                   <Button
                     variant="secondary"
                     size="sm"
@@ -983,7 +1130,6 @@ export default function TeachersAndStaffSection() {
               </div>
 
               <div className="p-6 space-y-6">
-                {/* Contact */}
                 <div>
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Contact</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -994,12 +1140,11 @@ export default function TeachersAndStaffSection() {
 
                 <Separator />
 
-                {/* Department */}
                 <div>
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Department</h3>
                   {liveViewingTeacher.department ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="bg-purple-100 text-purple-700 text-sm px-3 py-1 flex items-center gap-1.5">
+                      <Badge className="bg-red-100 text-[#800000] text-sm px-3 py-1 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5" />
                         {liveViewingTeacher.department.name}
                       </Badge>
@@ -1017,27 +1162,39 @@ export default function TeachersAndStaffSection() {
 
                 <Separator />
 
-                {/* Class & subject assignments */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Class &amp; Subject Assignments</h3>
                     <Button variant="outline" size="sm" className="h-7 text-xs"
-                      onClick={() => { setSelectedTeacher(liveViewingTeacher); setAssignmentForm({ class_id: '', subject_ids: [] }); setShowAssignmentModal(true); }}>
+                      onClick={() => {
+                        setSelectedTeacher(liveViewingTeacher);
+                        setAssignmentForm({ class_id: '', subject_ids: [], academic_year: activeAcademicYear });
+                        setShowAssignmentModal(true);
+                      }}>
                       <Plus className="w-3 h-3 mr-1" /> Add
                     </Button>
                   </div>
-                  {renderAssignmentsInDetail(liveViewingTeacher)}
+                  <AssignmentsDetail
+                    teacher={liveViewingTeacher}
+                    activeAcademicYear={activeAcademicYear}
+                    onDeleteAssignment={handleDeleteAssignment}
+                  />
                 </div>
 
                 <Separator />
 
-                {/* Delete */}
                 <div className="flex justify-end">
-                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 h-8" disabled={isDeleting}
-                    onClick={() => {
-                      if (window.confirm(`Delete ${liveViewingTeacher.first_name} ${liveViewingTeacher.last_name}? This cannot be undone.`))
-                        deleteTeacherMutation.mutate({ teacherId: liveViewingTeacher.id, authId: liveViewingTeacher.auth_id });
-                    }}>
+                  <Button
+                    variant="outline" size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50 h-8"
+                    disabled={isDeleting}
+                    onClick={() => setDeleteTarget({
+                      type: 'teacher',
+                      id: liveViewingTeacher.id,
+                      authId: liveViewingTeacher.auth_id,
+                      name: `${liveViewingTeacher.first_name} ${liveViewingTeacher.last_name}`,
+                    })}
+                  >
                     <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete Teacher
                   </Button>
                 </div>
@@ -1081,18 +1238,19 @@ export default function TeachersAndStaffSection() {
                 <Label>Phone</Label>
                 <Input value={teacherForm.phone} onChange={e => setTeacherForm(p => ({ ...p, phone: e.target.value }))} className="h-10" />
               </div>
-
               <div className="space-y-2">
                 <Label>Department</Label>
-                <Select value={teacherForm.department_id} onValueChange={v => setTeacherForm(p => ({ ...p, department_id: v }))}>
+                <Select
+                  value={teacherForm.department_id || 'none'}
+                  onValueChange={v => setTeacherForm(p => ({ ...p, department_id: v === 'none' ? '' : v }))}
+                >
                   <SelectTrigger className="h-10"><SelectValue placeholder="No department" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Department</SelectItem>
+                    <SelectItem value="none">No Department</SelectItem>
                     {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               {teacherForm.department_id && (
                 <div className="space-y-2">
                   <Label>Departmental Role</Label>
@@ -1104,7 +1262,6 @@ export default function TeachersAndStaffSection() {
                   </Select>
                 </div>
               )}
-
               {!editingTeacher && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Password (optional)</Label>
@@ -1112,7 +1269,6 @@ export default function TeachersAndStaffSection() {
                   <p className="text-xs text-gray-500">If left blank, a temporary password will be auto-generated.</p>
                 </div>
               )}
-
               <div className="flex items-center space-x-2 pt-1">
                 <Checkbox id="is_admin" checked={teacherForm.is_admin} onCheckedChange={c => setTeacherForm(p => ({ ...p, is_admin: !!c }))} />
                 <Label htmlFor="is_admin" className="cursor-pointer">Grant Admin Access</Label>
@@ -1121,7 +1277,7 @@ export default function TeachersAndStaffSection() {
             <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
               {formError && <div className="text-sm text-red-600 mr-auto">{formError}</div>}
               <Button type="button" variant="outline" onClick={() => setShowTeacherModal(false)} className="h-10">Cancel</Button>
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700 h-10" disabled={isSaving}>
+              <Button type="submit" className="bg-[#800000] hover:bg-[#6b0000] h-10" disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingTeacher ? 'Update Teacher' : 'Create Teacher'}
               </Button>
             </DialogFooter>
@@ -1130,7 +1286,7 @@ export default function TeachersAndStaffSection() {
       </Dialog>
 
       {/* ════════ ASSIGNMENT MODAL ════════ */}
-      <Dialog open={showAssignmentModal} onOpenChange={open => { setShowAssignmentModal(open); if (!open) { setSelectedTeacher(null); setAssignmentForm({ class_id: '', subject_ids: [] }); } }}>
+      <Dialog open={showAssignmentModal} onOpenChange={open => { setShowAssignmentModal(open); if (!open) { setSelectedTeacher(null); setAssignmentForm({ class_id: '', subject_ids: [], academic_year: '' }); } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Assignment — {selectedTeacher?.first_name} {selectedTeacher?.last_name}</DialogTitle>
@@ -1138,46 +1294,85 @@ export default function TeachersAndStaffSection() {
           <form onSubmit={e => {
             e.preventDefault();
             if (!selectedTeacher) return;
+            if (!assignmentForm.academic_year) {
+              toast({ title: 'Missing academic year', description: 'Please select an academic year', variant: 'destructive' }); return;
+            }
             if (!assignmentForm.class_id || !assignmentForm.subject_ids.length) {
               toast({ title: 'Missing info', description: 'Select a class and at least one subject', variant: 'destructive' }); return;
             }
-            addAssignmentsMutation.mutate({ teacherId: selectedTeacher.id, classId: assignmentForm.class_id, subjectIds: assignmentForm.subject_ids });
+            addAssignmentsMutation.mutate({
+              teacherId: selectedTeacher.id,
+              classId: assignmentForm.class_id,
+              subjectIds: assignmentForm.subject_ids,
+              academicYear: assignmentForm.academic_year,
+            });
           }}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400" /> Academic Year *
+                </Label>
+                <Select value={assignmentForm.academic_year} onValueChange={v => setAssignmentForm(p => ({ ...p, academic_year: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select academic year" /></SelectTrigger>
+                  <SelectContent>
+                    {academicYears.map(y => (
+                      <SelectItem key={y} value={y}>
+                        {y}{y === activeAcademicYear && <span className="ml-2 text-xs text-green-600 font-medium">· Current</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!activeAcademicYear && (
+                  <p className="text-xs text-amber-600">⚠ No active term set — please activate a term in Academic Calendar first.</p>
+                )}
+              </div>
+              <div className="space-y-2">
                 <Label>Class *</Label>
-                <Select value={assignmentForm.class_id} onValueChange={v => setAssignmentForm(p => ({ ...p, class_id: v }))}>
+                <Select
+                  value={assignmentForm.class_id}
+                  onValueChange={v => setAssignmentForm(p => ({ ...p, class_id: v, subject_ids: [] }))}
+                >
                   <SelectTrigger className="h-10"><SelectValue placeholder="Select a class" /></SelectTrigger>
                   <SelectContent>
-                    {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.grade_level})</SelectItem>)}
+                    {classes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} ({c.grade_level})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Subjects *</Label>
-                <div className="border rounded-lg p-3 max-h-60 overflow-y-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {subjects.map(sub => (
-                      <div key={sub.id} className="flex items-center space-x-2">
-                        <Checkbox id={`sub-${sub.id}`} checked={assignmentForm.subject_ids.includes(sub.id)}
-                          onCheckedChange={() => setAssignmentForm(p => ({
-                            ...p,
-                            subject_ids: p.subject_ids.includes(sub.id)
-                              ? p.subject_ids.filter(id => id !== sub.id)
-                              : [...p.subject_ids, sub.id],
-                          }))} />
-                        <Label htmlFor={`sub-${sub.id}`} className="text-sm cursor-pointer">{sub.code} – {sub.name}</Label>
-                      </div>
-                    ))}
+                {!assignmentForm.class_id ? (
+                  <div className="border rounded-lg p-4 text-sm text-gray-400 italic text-center">Select a class first to see its subjects</div>
+                ) : loadingClassSubjects ? (
+                  <div className="border rounded-lg p-4 text-sm text-gray-400 text-center"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading subjects…</div>
+                ) : classSubjects.length === 0 ? (
+                  <div className="border rounded-lg p-4 text-sm text-amber-600 text-center">No subjects assigned to this class yet. Add them via the Subjects / Classes setup.</div>
+                ) : (
+                  <div className="border rounded-lg p-3 max-h-60 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {classSubjects.map(sub => (
+                        <div key={sub.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`sub-${sub.id}`}
+                            checked={assignmentForm.subject_ids.includes(sub.id)}
+                            onCheckedChange={() => setAssignmentForm(p => ({
+                              ...p,
+                              subject_ids: p.subject_ids.includes(sub.id)
+                                ? p.subject_ids.filter(id => id !== sub.id)
+                                : [...p.subject_ids, sub.id],
+                            }))}
+                          />
+                          <Label htmlFor={`sub-${sub.id}`} className="text-sm cursor-pointer">{sub.code} – {sub.name}</Label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <p className="text-xs text-gray-500">Selected: {assignmentForm.subject_ids.length} subjects</p>
+                )}
+                <p className="text-xs text-gray-500">Selected: {assignmentForm.subject_ids.length} subject{assignmentForm.subject_ids.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
             <DialogFooter className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setShowAssignmentModal(false)} className="h-10">Cancel</Button>
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700 h-10"
-                disabled={(addAssignmentsMutation as any)?.isPending || (addAssignmentsMutation as any)?.isLoading}>
+              <Button type="submit" className="bg-[#800000] hover:bg-[#6b0000] h-10" disabled={addAssignmentsMutation.isPending}>
                 Add Assignments
               </Button>
             </DialogFooter>
@@ -1228,8 +1423,7 @@ export default function TeachersAndStaffSection() {
             </div>
             <DialogFooter className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setShowAssignDeptModal(false)} className="h-10">Cancel</Button>
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700 h-10"
-                disabled={(assignTeacherToDeptMutation as any)?.isPending || (assignTeacherToDeptMutation as any)?.isLoading}>
+              <Button type="submit" className="bg-[#800000] hover:bg-[#6b0000] h-10" disabled={assignTeacherToDeptMutation.isPending}>
                 Assign Teacher
               </Button>
             </DialogFooter>
@@ -1287,8 +1481,7 @@ export default function TeachersAndStaffSection() {
             </div>
             <DialogFooter className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setShowStaffModal(false)} className="h-10">Cancel</Button>
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700 h-10"
-                disabled={(saveStaffMutation as any)?.isPending || (saveStaffMutation as any)?.isLoading}>
+              <Button type="submit" className="bg-[#800000] hover:bg-[#6b0000] h-10" disabled={saveStaffMutation.isPending}>
                 {editingStaff ? 'Update' : 'Add Staff Member'}
               </Button>
             </DialogFooter>
@@ -1319,8 +1512,7 @@ export default function TeachersAndStaffSection() {
             </div>
             <DialogFooter className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setShowDeptModal(false)} className="h-10">Cancel</Button>
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700 h-10"
-                disabled={(saveDeptMutation as any)?.isPending || (saveDeptMutation as any)?.isLoading}>
+              <Button type="submit" className="bg-[#800000] hover:bg-[#6b0000] h-10" disabled={saveDeptMutation.isPending}>
                 {editingDept ? 'Update' : 'Create Department'}
               </Button>
             </DialogFooter>
@@ -1328,30 +1520,221 @@ export default function TeachersAndStaffSection() {
         </DialogContent>
       </Dialog>
 
-    </div>
-  );
-}
+      {/* ════════ BULK ADD TEACHERS MODAL ════════ */}
+      <Dialog open={showBulkModal} onOpenChange={open => { if (!open) { setShowBulkModal(false); setBulkDone(false); setBulkResults([]); } }}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto max-w-[98vw] sm:max-w-6xl p-0">
+          <div className="bg-[#800000] px-6 py-4 text-white rounded-t-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users2 className="w-5 h-5" />
+                <div>
+                  <h2 className="font-bold text-lg">Bulk Add Teachers</h2>
+                  <p className="text-red-200 text-xs mt-0.5">Fill in rows — only rows with Code + First + Last Name will be saved</p>
+                </div>
+              </div>
+              {!bulkDone && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-white/20 hover:bg-white/30 text-white border-0 h-8 text-xs"
+                  onClick={() => setBulkRows(r => [...r, ...Array.from({ length: 5 }, EMPTY_BULK_ROW)])}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add 5 More Rows
+                </Button>
+              )}
+            </div>
+          </div>
 
-// ─── Helper components ────────────────────────────────────────────────────────
+          <div className="p-4 sm:p-6 space-y-4">
+            {bulkDone ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <span className="font-semibold text-gray-800">
+                    Bulk save complete — {bulkResults.filter(r => r.status === 'success').length} created,{' '}
+                    {bulkResults.filter(r => r.status === 'error').length} failed
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {bulkResults.map((r, i) => (
+                    <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${r.status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                      {r.status === 'success'
+                        ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                        : <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                      <span className="font-medium">{r.name}</span>
+                      {r.status === 'error'   && <span className="text-xs text-red-600 ml-auto truncate max-w-xs">{r.message}</span>}
+                      {r.status === 'success' && <span className="text-xs text-green-600 ml-auto">Created ✓</span>}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button variant="outline" onClick={() => { setBulkRows(Array.from({ length: 5 }, EMPTY_BULK_ROW)); setBulkResults([]); setBulkDone(false); }}>
+                    Add More Teachers
+                  </Button>
+                  <Button className="bg-[#800000] hover:bg-[#6b0000]" onClick={() => setShowBulkModal(false)}>Done</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[110px]">Code *</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[120px]">First Name *</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[120px]">Last Name *</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[180px]">Email</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[120px]">Phone</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[130px]">Password</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[150px]">Department</th>
+                        <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 min-w-[160px]">Role</th>
+                        <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Admin</th>
+                        <th className="px-2 py-2.5 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {bulkRows.map((row, i) => {
+                        const isReady = row.teacher_code.trim() && row.first_name.trim() && row.last_name.trim();
+                        return (
+                          <tr key={i} className={`${isReady ? 'bg-white' : 'bg-gray-50/40'} hover:bg-red-50/20 transition-colors`}>
+                            <td className="px-2 py-1.5 text-xs text-gray-400 font-mono">{i + 1}</td>
+                            <td className="px-1 py-1"><Input value={row.teacher_code} onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, teacher_code: e.target.value } : r))} placeholder="T001" className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1"><Input value={row.first_name}   onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, first_name: e.target.value } : r))}   placeholder="Jane"            className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1"><Input value={row.last_name}    onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, last_name: e.target.value } : r))}    placeholder="Doe"             className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1"><Input type="email" value={row.email} onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, email: e.target.value } : r))} placeholder="jane@school.ke" className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1"><Input value={row.phone}        onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, phone: e.target.value } : r))}        placeholder="07xx xxx xxx"   className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1"><Input type="password" value={row.password} onChange={e => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, password: e.target.value } : r))} placeholder="Auto-gen" className="h-8 text-xs px-2" /></td>
+                            <td className="px-1 py-1">
+                              <Select value={row.department_id || 'none'} onValueChange={v => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, department_id: v === 'none' ? '' : v } : r))}>
+                                <SelectTrigger className="h-8 text-xs px-2"><SelectValue placeholder="None" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No Department</SelectItem>
+                                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="px-1 py-1">
+                              <Select value={row.department_role} onValueChange={v => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, department_role: v } : r))}>
+                                <SelectTrigger className="h-8 text-xs px-2"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {DEPARTMENT_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="px-2 py-1 text-center">
+                              <Checkbox checked={row.is_admin} onCheckedChange={c => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, is_admin: !!c } : r))} />
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              <button className="text-gray-300 hover:text-red-400 transition-colors" onClick={() => setBulkRows(rows => rows.filter((_, idx) => idx !== i))} title="Remove row">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-3 text-sm">
-      <div className="text-gray-400 flex-shrink-0 mt-0.5">{icon}</div>
-      <div>
-        <div className="text-xs text-gray-400 mb-0.5">{label}</div>
-        <div className="text-gray-800">{value}</div>
-      </div>
-    </div>
-  );
-}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t">
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <span>
+                      <span className="font-semibold text-[#800000]">
+                        {bulkRows.filter(r => r.teacher_code.trim() && r.first_name.trim() && r.last_name.trim()).length}
+                      </span>{' '}
+                      of {bulkRows.length} rows ready
+                    </span>
+                    <button className="text-[#800000] hover:text-[#6b0000] underline"
+                      onClick={() => setBulkRows(r => [...r, ...Array.from({ length: 10 }, EMPTY_BULK_ROW)])}>
+                      + Add 10 more rows
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setShowBulkModal(false)} disabled={bulkSaving}>Cancel</Button>
+                    <Button
+                      className="bg-[#800000] hover:bg-[#6b0000] min-w-[150px]"
+                      disabled={bulkSaving || bulkRows.filter(r => r.teacher_code.trim() && r.first_name.trim() && r.last_name.trim()).length === 0}
+                      onClick={async () => {
+                        const validRows = bulkRows
+                          .map((r, i) => ({ ...r, _index: i }))
+                          .filter(r => r.teacher_code.trim() && r.first_name.trim() && r.last_name.trim());
+                        if (!validRows.length) {
+                          toast({ title: 'No valid rows', description: 'Fill in Code, First Name and Last Name for at least one row', variant: 'destructive' });
+                          return;
+                        }
+                        setBulkSaving(true);
+                        const results: typeof bulkResults = [];
+                        for (const row of validRows) {
+                          const payload = {
+                            email: row.email, password: row.password,
+                            teacher_code: row.teacher_code,
+                            first_name: row.first_name, last_name: row.last_name,
+                            phone: row.phone, is_admin: row.is_admin,
+                            department_id: row.department_id || null,
+                            department_role: row.department_id ? (row.department_role || 'Teacher') : null,
+                          };
+                          try {
+                            const res = await supabase.functions.invoke('create-teacher', { body: payload });
+                            if (res.error) throw new Error(res.error.message);
+                            let result = typeof res.data === 'string' ? JSON.parse(res.data)
+                                       : res.data instanceof ArrayBuffer ? JSON.parse(new TextDecoder().decode(res.data))
+                                       : res.data;
+                            if (!result?.ok) throw new Error(result?.error || 'Create failed');
+                            results.push({ index: row._index, name: `${row.first_name} ${row.last_name}`, status: 'success' });
+                          } catch (err: any) {
+                            results.push({ index: row._index, name: `${row.first_name} ${row.last_name}`, status: 'error', message: err.message });
+                          }
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['teachers'] });
+                        setBulkResults(results);
+                        setBulkSaving(false);
+                        setBulkDone(true);
+                      }}
+                    >
+                      {bulkSaving
+                        ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+                        : <>Save {bulkRows.filter(r => r.teacher_code.trim() && r.first_name.trim() && r.last_name.trim()).length} Teachers</>}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-function EmptyState({ label = 'No teachers found' }: { label?: string }) {
-  return (
-    <div className="text-center py-10 text-gray-400">
-      <Search className="w-12 h-12 mx-auto mb-2 text-gray-200" />
-      <p>{label}</p>
-      <p className="text-sm mt-1">Try a different search term</p>
+      {/* ════════ DELETE CONFIRMATION DIALOG ════════ */}
+      <Dialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-md max-w-[95vw] p-4 sm:p-6">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" /> Confirm Delete
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>?
+              <span className="block mt-1 text-red-600 font-medium">
+                {deleteDialogDescription()}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t mt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isDeletePending}
+              onClick={handleConfirmDelete}
+            >
+              {isDeletePending
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting…</>
+                : <><Trash2 className="w-4 h-4 mr-2" /> Yes, Delete</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

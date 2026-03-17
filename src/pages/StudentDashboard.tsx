@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Com
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Navbar } from "@/Components/Navbar";
-import { User, BookOpen, Bell, Calendar, BarChart3, FileText, TrendingUp, Target, Settings, Award, CreditCard, ShieldCheck, ShieldAlert, Mail, Phone, Download, Printer, ChevronLeft, Home } from "lucide-react";
+import { User, BookOpen, Bell, Calendar, BarChart3, FileText, TrendingUp, Target, Settings, Award, CreditCard, ShieldCheck, ShieldAlert, Mail, Phone, Download, Printer, ChevronLeft, Home, Megaphone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle, DialogFooter } from "@/Components/ui/dialog";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,18 @@ import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
 
 // Import utility functions from assessments
 import { calculateKJSEAGrade } from "@/utils/assessmentUtils";
+
+// ── NEW: Academic Calendar type ───────────────────────────────────────────────
+export interface AcademicCalendarTerm {
+  id: string;
+  academic_year: string;
+  term: number;
+  term_name: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  status: "upcoming" | "active" | "closed";
+}
 
 interface AttendanceData {
   totalDays: number;
@@ -45,6 +57,17 @@ interface PerformanceData {
   recentPerformance: any[];
 }
 
+interface AnnouncementPreview {
+  id: string;
+  title: string;
+  content: string;
+  class_id?: string;
+  created_at: string;
+  priority?: string;
+  expires_at?: string | null;
+  is_for_all_classes?: boolean;
+}
+
 export default function StudentDashboard({ handleLogout }) {
   // State for main dashboard only
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -60,6 +83,12 @@ export default function StudentDashboard({ handleLogout }) {
   const [authUser, setAuthUser] = useState<any>(null);
   const navigate = useNavigate();
 
+  // ── NEW: Academic calendar state ──────────────────────────────────────────
+  const [academicCalendar, setAcademicCalendar] = useState<AcademicCalendarTerm[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  // Derived active term — the single term with is_current = true
+  const [activeTerm, setActiveTerm] = useState<AcademicCalendarTerm | null>(null);
+
   // State for academic performance data (fetched from assessments)
   const [performanceData, setPerformanceData] = useState<PerformanceData>({
     totalExams: 0,
@@ -68,6 +97,10 @@ export default function StudentDashboard({ handleLogout }) {
     recentPerformance: []
   });
   const [performanceLoading, setPerformanceLoading] = useState(false);
+
+  // State for announcement previews
+  const [announcementPreviews, setAnnouncementPreviews] = useState<AnnouncementPreview[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
 
   // Tab state for mobile navigation (5 tabs)
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
@@ -124,6 +157,32 @@ export default function StudentDashboard({ handleLogout }) {
     return calculateKJSEAGrade(averagePercentage / 100);
   };
 
+  // ── NEW: Fetch academic calendar from admin table ─────────────────────────
+  const fetchAcademicCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("academic_calendar")
+        .select("id, academic_year, term, term_name, start_date, end_date, is_current, status")
+        .order("academic_year", { ascending: false })
+        .order("term", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching academic calendar:", error);
+        return;
+      }
+      const terms = data || [];
+      setAcademicCalendar(terms);
+      // Derive and store the active term so attendance can use it
+      const current = terms.find((t) => t.is_current) ?? null;
+      setActiveTerm(current);
+    } catch (err) {
+      console.error("Unexpected error fetching academic calendar:", err);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
   // Fetch student performance data (similar to assessments.tsx)
   const fetchPerformanceData = async () => {
   if (!studentId || !classId) return;
@@ -145,7 +204,6 @@ export default function StudentDashboard({ handleLogout }) {
 
     if (rankingsData && rankingsData.length > 0) {
       // Step 2: Cross-reference assessments table to filter summative only
-      // (mirrors what usePerformanceHistory does in assessments.tsx)
       const assessmentIds = rankingsData.map((r) => r.assessment_id);
       const { data: assessmentsData, error: catError } = await supabase
         .from("assessments")
@@ -162,12 +220,12 @@ export default function StudentDashboard({ handleLogout }) {
         return acc;
       }, {} as Record<string, string>);
 
-      // Filter to summative only — same logic as assessments.tsx
+      // Filter to summative only
       const summativeRankings = rankingsData.filter(
         (r) => categoryMap[r.assessment_id] === "summative"
       );
 
-      const recentExams = summativeRankings.slice(0, 10); // Last 10 summative exams
+      const recentExams = summativeRankings.slice(0, 10);
       const totalExams = recentExams.length;
       
       if (totalExams === 0) {
@@ -180,14 +238,10 @@ export default function StudentDashboard({ handleLogout }) {
         return;
       }
 
-      // Calculate average percentage
       const totalPercentage = recentExams.reduce((sum, exam) => sum + exam.percentage, 0);
       const averageScore = Math.round(totalPercentage / totalExams);
-      
-      // Calculate current level based on average
       const currentLevel = calculateGradeFromAverage(averageScore);
       
-      // Get recent performance for insights
       const recentPerformance = recentExams.map(exam => ({
         title: exam.exam_title,
         percentage: exam.percentage,
@@ -216,6 +270,37 @@ export default function StudentDashboard({ handleLogout }) {
   }
 };
 
+  // Fetch announcement previews — mirrors fetchAnnouncements in assignment_announcement.tsx exactly
+  const fetchAnnouncementPreviews = async () => {
+    if (!classId) return;
+
+    setAnnouncementsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, content, class_id, created_at, priority, expires_at, is_for_all_classes")
+        .or(`class_id.eq.${classId},is_for_all_classes.eq.true`)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching announcement previews:", error);
+        return;
+      }
+
+      // Filter out expired announcements (same logic as assignment_announcement.tsx)
+      const now = new Date();
+      const active = (data || []).filter(
+        (a) => !a.expires_at || new Date(a.expires_at) >= now
+      );
+
+      setAnnouncementPreviews(active.slice(0, 3));
+    } catch (err) {
+      console.error("Error fetching announcement previews:", err);
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  };
+
   // Fetch authenticated user once and store it
   useEffect(() => {
     const fetchAuthUser = async () => {
@@ -232,16 +317,20 @@ export default function StudentDashboard({ handleLogout }) {
     fetchAuthUser();
   }, []);
 
+  // ── NEW: Fetch academic calendar on mount ─────────────────────────────────
+  useEffect(() => {
+    fetchAcademicCalendar();
+  }, []);
+
   // Fetch all student data in one optimized query to prevent multiple round trips
   useEffect(() => {
     const fetchStudentData = async () => {
-      if (!authUser) return; // Wait for auth user to be available
+      if (!authUser) return;
       
       setLoading(true);
       try {
         if (!authUser) throw new Error("User not signed in");
         
-        // Single query to get student data with enrollment and class info in one go
         const { data: studentData, error: studentError } = await supabase
           .from("students")
           .select(`
@@ -265,7 +354,6 @@ export default function StudentDashboard({ handleLogout }) {
         setStudent(studentData);
         setStudentId(studentData.id);
         
-        // Get profile from the joined data
         const profileData = firstRel(studentData.profiles);
         if (profileData) {
           setProfile(profileData);
@@ -273,7 +361,6 @@ export default function StudentDashboard({ handleLogout }) {
           throw new Error("No student profile found");
         }
         
-        // Get enrollment and class info from the joined data
         const enrollmentData = firstRel(studentData.enrollments);
         const classId = enrollmentData?.class_id || null;
         const className = firstRel(enrollmentData?.classes as any)?.name || "Unknown";
@@ -289,21 +376,32 @@ export default function StudentDashboard({ handleLogout }) {
     };
 
     fetchStudentData();
-  }, [authUser]); // Only run when authUser changes
+  }, [authUser]);
 
-  // Fetch attendance data only when studentId is available
+  // ── UPDATED: Fetch attendance scoped to the active academic term ───────────
+  // Mirrors the admin AttendanceSection which only counts weeks within the term.
+  // Falls back to all-time attendance when no active term is configured.
   useEffect(() => {
     const fetchAttendance = async () => {
-      if (!studentId) return; // Wait for studentId to be available
-      
+      if (!studentId) return;
+
       setAttendanceLoading(true);
       setAttendanceError(null);
       try {
-        const { data: attendanceRecords, error: attendanceError } = await supabase
+        let query = supabase
           .from("attendance")
           .select("monday, tuesday, wednesday, thursday, friday, week_start, week_end")
           .eq("student_id", studentId)
           .order("week_start", { ascending: true });
+
+        // If an active term exists, restrict records to that term's date range
+        if (activeTerm) {
+          query = query
+            .gte("week_start", activeTerm.start_date)
+            .lte("week_end", activeTerm.end_date);
+        }
+
+        const { data: attendanceRecords, error: attendanceError } = await query;
 
         if (attendanceError) {
           console.error("Error fetching attendance:", attendanceError.message);
@@ -327,7 +425,7 @@ export default function StudentDashboard({ handleLogout }) {
           setAttendanceData({
             totalDays: totalSchoolDays,
             presentDays: totalDaysPresent,
-            attendanceRate: totalSchoolDays > 0 ? (totalDaysPresent / totalSchoolDays) * 100 : 0,
+            attendanceRate: totalSchoolDays > 0 ? Math.round((totalDaysPresent / totalSchoolDays) * 100) : 0,
             records: attendanceRecords
           });
         } else {
@@ -341,9 +439,13 @@ export default function StudentDashboard({ handleLogout }) {
         setAttendanceLoading(false);
       }
     };
-    
-    fetchAttendance();
-  }, [studentId]); // Only run when studentId changes
+
+    // Re-run whenever studentId changes OR whenever the active term resolves/changes.
+    // calendarLoading guard ensures we don't fetch before the term is known.
+    if (!calendarLoading) {
+      fetchAttendance();
+    }
+  }, [studentId, activeTerm, calendarLoading]);
 
   // Fetch performance data when studentId and classId are available
   useEffect(() => {
@@ -351,6 +453,13 @@ export default function StudentDashboard({ handleLogout }) {
       fetchPerformanceData();
     }
   }, [studentId, classId]);
+
+  // Fetch announcement previews when classId is available
+  useEffect(() => {
+    if (classId) {
+      fetchAnnouncementPreviews();
+    }
+  }, [classId]);
 
   // Handle fees management - reuses existing profile and student data
   const handleFeesManagement = () => {
@@ -379,7 +488,7 @@ export default function StudentDashboard({ handleLogout }) {
 
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile!.email, // Use existing profile data
+        email: profile!.email,
         password: currentPassword,
       });
 
@@ -432,6 +541,18 @@ export default function StudentDashboard({ handleLogout }) {
   }
   if (error) return <p className="text-red-500">Error: {error}</p>;
   if (!profile) return <p>No student profile found.</p>;
+
+  // Format announcement date
+  const formatAnnouncementDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  };
 
   // Overview Content Component
   const OverviewContent = () => (
@@ -510,20 +631,33 @@ export default function StudentDashboard({ handleLogout }) {
             </div>
           </div>
           
+          {/* ── ATTENDANCE BOX IN WELCOME CARD ── now shows both % and X/Y days */}
           <div className="flex flex-col items-center sm:items-end gap-4 mt-4 sm:mt-0 sm:ml-6 flex-shrink-0 w-full sm:w-auto">
             <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-[100px] sm:min-w-28 border border-maroon/10 shadow-lg w-full sm:w-auto">
               <div className="text-2xl sm:text-3xl font-extrabold text-maroon">
-                {attendanceData?.attendanceRate.toFixed(1) || "0"}%
+                {attendanceData?.attendanceRate || 0}%
               </div>
-              <div className="text-xs sm:text-sm text-gray-600 mt-1">Attendance Rate</div>
+              <div className="text-xs sm:text-sm text-gray-600 mt-1">
+                Attendance Rate
+                {activeTerm && (
+                  <span className="block text-[10px] text-gray-400 mt-0.5">
+                    Term {activeTerm.term} · {activeTerm.academic_year}
+                  </span>
+                )}
+              </div>
+              {attendanceData && (
+                <div className="text-xs font-semibold text-maroon mt-1">
+                  {attendanceData.presentDays}/{attendanceData.totalDays} days
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* DASHBOARD SUMMARY CARDS - 3 CARDS ONLY */}
+      {/* DASHBOARD SUMMARY CARDS - 3 CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {/* Academic Progress Card - Data fetched from performance data */}
+        {/* Academic Progress Card */}
         <Card className="bg-maroon-50 border-l-4 border-l-maroon">
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
@@ -606,42 +740,61 @@ export default function StudentDashboard({ handleLogout }) {
           </CardContent>
         </Card>
 
-        {/* Attendance Card */}
-        <Card className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1">
+        {/* ── ANNOUNCEMENTS CARD — entire card is tappable ── */}
+        <Card
+          onClick={() => {
+            if (window.innerWidth < 640) {
+              handleTabSwitch("assignments");
+            } else {
+              setIsAssignmentsAnnouncementsOpen(true);
+            }
+          }}
+          className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]"
+        >
           <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+              <Megaphone className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
             </div>
             <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Attendance</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">Class participation</CardDescription>
+              <CardTitle className="text-base sm:text-lg text-gray-900">Announcements</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-gray-600">Latest updates</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            {attendanceLoading ? (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-maroon mx-auto"></div>
+            {announcementsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse flex flex-col gap-1 p-2 rounded-lg bg-gray-50">
+                    <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
               </div>
-            ) : attendanceError ? (
-              <div className="text-center py-4 text-red-500 text-xs sm:text-sm">{attendanceError}</div>
-            ) : !attendanceData ? (
+            ) : announcementPreviews.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-gray-600 text-xs sm:text-sm">No attendance records yet</p>
+                <Megaphone className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500 text-xs sm:text-sm">No announcements yet</p>
               </div>
             ) : (
-              <div className="text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
-                  {attendanceData.attendanceRate.toFixed(1)}%
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                  {attendanceData.presentDays}/{attendanceData.totalDays} days present
-                </p>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="h-2 rounded-full bg-green-500" 
-                    style={{ width: `${Math.min(100, attendanceData.attendanceRate)}%` }}
-                  ></div>
-                </div>
+              <div className="space-y-2">
+                {announcementPreviews.map((announcement) => (
+                  <div
+                    key={announcement.id}
+                    className="w-full text-left p-2 rounded-lg bg-blue-50"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate leading-tight">
+                        {announcement.title}
+                      </p>
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 mt-0.5">
+                        {formatAnnouncementDate(announcement.created_at)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 line-clamp-1 leading-snug">
+                      {announcement.content}
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -718,7 +871,7 @@ export default function StudentDashboard({ handleLogout }) {
 
       try {
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: profile!.email, // Use existing profile data
+          email: profile!.email,
           password: mobileCurrentPassword,
         });
 
@@ -919,7 +1072,6 @@ export default function StudentDashboard({ handleLogout }) {
               </p>
             </div>
 
-            {/* Assessments Content - LOADED IMMEDIATELY like teacher dashboard */}
             {showAssessments && (
               <Assessments
                 studentId={studentId}
@@ -928,6 +1080,7 @@ export default function StudentDashboard({ handleLogout }) {
                 profile={profile}
                 isOpen={true}
                 onClose={() => handleTabSwitch("overview")}
+                academicCalendar={academicCalendar}
               />
             )}
           </div>
@@ -955,7 +1108,6 @@ export default function StudentDashboard({ handleLogout }) {
               </p>
             </div>
 
-            {/* Assignments Content - LOADED IMMEDIATELY like teacher dashboard */}
             {showAssignments && (
               <AssignmentAnnouncement
                 classId={classId}
@@ -987,7 +1139,6 @@ export default function StudentDashboard({ handleLogout }) {
               </p>
             </div>
 
-            {/* Fees Content - LOADED IMMEDIATELY like teacher dashboard */}
             {showFees && profile && student && (
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <StudentFeesDialog 
@@ -1020,14 +1171,12 @@ export default function StudentDashboard({ handleLogout }) {
               Back to Overview
             </Button>
 
-            {/* Settings Content - LOADED IMMEDIATELY like teacher dashboard */}
             {showSettings && <SettingsContent />}
           </div>
         ) : null}
       </div>
 
       {/* MODALS FOR WEB VIEW (not lazy loaded) */}
-      {/* Assessments Modal - For web view only */}
       {isAssessmentsOpen && (
         <Assessments
           studentId={studentId}
@@ -1036,10 +1185,10 @@ export default function StudentDashboard({ handleLogout }) {
           profile={profile}
           isOpen={isAssessmentsOpen}
           onClose={() => setIsAssessmentsOpen(false)}
+          academicCalendar={academicCalendar}
         />
       )}
 
-      {/* Assignments & Announcements Modal - For web view only */}
       {isAssignmentsAnnouncementsOpen && (
         <AssignmentAnnouncement
           classId={classId}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Settings, Edit, Save, Eye, EyeOff, User, Mail, Phone } from 'lucide-react';
+import { Menu, Settings, Edit, Save, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
@@ -17,8 +17,12 @@ import AssignmentsSection from '../Components/Admin/AssignmentsSection';
 import AttendanceSection from '../Components/Admin/AttendanceSection';
 import AnnouncementsSection from '../Components/Admin/AnnouncementsSection';
 import AdminFees from '../Components/Admin/Adminfees';
+import AcademicCalendar from '../Components/Admin/AcademicCalendar';
+import TimetableSection from '../Components/Admin/TimetableSection'; // ← NEW
 
-// Types for Admin Profile
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 interface AdminProfile {
   id: string;
   auth_id: string;
@@ -31,7 +35,6 @@ interface AdminProfile {
   is_admin: boolean;
 }
 
-// Settings Modal Component
 interface SettingsModalProps {
   profile: AdminProfile;
   isOpen: boolean;
@@ -39,27 +42,35 @@ interface SettingsModalProps {
   onProfileUpdate: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose, onProfileUpdate }) => {
-  const [activeTab, setActiveTab] = useState<"profile" | "password">("profile");
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings Modal
+// ─────────────────────────────────────────────────────────────────────────────
+const SettingsModal: React.FC<SettingsModalProps> = ({
+  profile,
+  isOpen,
+  onClose,
+  onProfileUpdate,
+}) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
-  const [phone, setPhone] = useState(profile.phone || "");
-  const [email, setEmail] = useState(profile.email || "");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState(profile.phone || '');
+  const [email, setEmail] = useState(profile.email || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const resetForm = () => {
-    setPhone(profile.phone || "");
-    setEmail(profile.email || "");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+    setPhone(profile.phone || '');
+    setEmail(profile.email || '');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
     setIsEditingPhone(false);
     setIsEditingEmail(false);
     setMessage(null);
@@ -72,25 +83,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
 
   const updatePhone = async () => {
     if (!phone.trim()) {
-      setMessage({ type: "error", text: "Phone number cannot be empty" });
+      setMessage({ type: 'error', text: 'Phone number cannot be empty' });
       return;
     }
-
     setLoading(true);
     try {
       const { error } = await supabase
         .from('teachers')
         .update({ phone: phone.trim() })
         .eq('id', profile.id);
-
       if (error) throw error;
-
-      setMessage({ type: "success", text: "Phone number updated successfully" });
+      setMessage({ type: 'success', text: 'Phone number updated successfully' });
       setIsEditingPhone(false);
       onProfileUpdate();
     } catch (error) {
-      console.error("Error updating phone:", error);
-      setMessage({ type: "error", text: "Failed to update phone number" });
+      console.error('Error updating phone:', error);
+      setMessage({ type: 'error', text: 'Failed to update phone number' });
     } finally {
       setLoading(false);
     }
@@ -98,33 +106,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
 
   const updateEmail = async () => {
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
-      setMessage({ type: "error", text: "Please enter a valid email address" });
+      setMessage({ type: 'error', text: 'Please enter a valid email address' });
       return;
     }
-
     setLoading(true);
     try {
-      // Update email in teachers table
       const { error: teacherError } = await supabase
         .from('teachers')
         .update({ email: email.trim() })
         .eq('id', profile.id);
-
       if (teacherError) throw teacherError;
 
-      // Update email in auth
-      const { error: authError } = await supabase.auth.updateUser({
-        email: email.trim()
-      });
-
+      const { error: authError } = await supabase.auth.updateUser({ email: email.trim() });
       if (authError) throw authError;
 
-      setMessage({ type: "success", text: "Email updated successfully. Please check your email for verification." });
+      setMessage({
+        type: 'success',
+        text: 'Email updated successfully. Please check your email for verification.',
+      });
       setIsEditingEmail(false);
       onProfileUpdate();
     } catch (error) {
-      console.error("Error updating email:", error);
-      setMessage({ type: "error", text: "Failed to update email" });
+      console.error('Error updating email:', error);
+      setMessage({ type: 'error', text: 'Failed to update email' });
     } finally {
       setLoading(false);
     }
@@ -132,35 +136,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
 
   const updatePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setMessage({ type: "error", text: "Please fill in all password fields" });
+      setMessage({ type: 'error', text: 'Please fill in all password fields' });
       return;
     }
-
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "New passwords do not match" });
+      setMessage({ type: 'error', text: 'New passwords do not match' });
       return;
     }
-
     if (newPassword.length < 6) {
-      setMessage({ type: "error", text: "Password must be at least 6 characters long" });
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters long' });
       return;
     }
-
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-
-      setMessage({ type: "success", text: "Password updated successfully" });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      setMessage({ type: 'success', text: 'Password updated successfully' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     } catch (error) {
-      console.error("Error updating password:", error);
-      setMessage({ type: "error", text: "Failed to update password" });
+      console.error('Error updating password:', error);
+      setMessage({ type: 'error', text: 'Failed to update password' });
     } finally {
       setLoading(false);
     }
@@ -176,25 +173,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
           </DialogDescription>
         </DialogHeader>
 
-        {/* Tabs */}
         <div className="flex space-x-4 border-b">
           <button
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "profile"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+              activeTab === 'profile'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
-            onClick={() => setActiveTab("profile")}
+            onClick={() => setActiveTab('profile')}
           >
             Profile Information
           </button>
           <button
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "password"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+              activeTab === 'password'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
-            onClick={() => setActiveTab("password")}
+            onClick={() => setActiveTab('password')}
           >
             Update Password
           </button>
@@ -203,24 +199,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
         {message && (
           <div
             className={`p-3 rounded-md ${
-              message.type === "success"
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : "bg-red-50 text-red-800 border border-red-200"
+              message.type === 'success'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
             }`}
           >
             {message.text}
           </div>
         )}
 
-        {/* Profile Tab */}
-        {activeTab === "profile" && (
+        {activeTab === 'profile' && (
           <div className="space-y-6 py-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Personal Information</CardTitle>
-                <CardDescription>
-                  Your basic profile information
-                </CardDescription>
+                <CardDescription>Your basic profile information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -243,49 +236,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-muted-foreground">Email Address</label>
                     {!isEditingEmail ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsEditingEmail(true)}
-                        className="h-8"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
+                      <Button variant="outline" size="sm" onClick={() => setIsEditingEmail(true)} className="h-8">
+                        <Edit className="h-3 w-3 mr-1" />Edit
                       </Button>
                     ) : (
                       <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          onClick={updateEmail}
-                          disabled={loading}
-                          className="h-8"
-                        >
-                          <Save className="h-3 w-3 mr-1" />
-                          Save
+                        <Button size="sm" onClick={updateEmail} disabled={loading} className="h-8">
+                          <Save className="h-3 w-3 mr-1" />Save
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setIsEditingEmail(false);
-                            setEmail(profile.email || "");
-                          }}
-                          className="h-8"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => { setIsEditingEmail(false); setEmail(profile.email || ''); }} className="h-8">
                           Cancel
                         </Button>
                       </div>
                     )}
                   </div>
                   {isEditingEmail ? (
-                    <Input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email address"
-                    />
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email address" />
                   ) : (
-                    <Input value={profile.email || "Not set"} disabled />
+                    <Input value={profile.email || 'Not set'} disabled />
                   )}
                 </div>
 
@@ -293,49 +261,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-muted-foreground">Phone Number</label>
                     {!isEditingPhone ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsEditingPhone(true)}
-                        className="h-8"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
+                      <Button variant="outline" size="sm" onClick={() => setIsEditingPhone(true)} className="h-8">
+                        <Edit className="h-3 w-3 mr-1" />Edit
                       </Button>
                     ) : (
                       <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          onClick={updatePhone}
-                          disabled={loading}
-                          className="h-8"
-                        >
-                          <Save className="h-3 w-3 mr-1" />
-                          Save
+                        <Button size="sm" onClick={updatePhone} disabled={loading} className="h-8">
+                          <Save className="h-3 w-3 mr-1" />Save
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setIsEditingPhone(false);
-                            setPhone(profile.phone || "");
-                          }}
-                          className="h-8"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => { setIsEditingPhone(false); setPhone(profile.phone || ''); }} className="h-8">
                           Cancel
                         </Button>
                       </div>
                     )}
                   </div>
                   {isEditingPhone ? (
-                    <Input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Enter your phone number"
-                    />
+                    <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Enter your phone number" />
                   ) : (
-                    <Input value={profile.phone || "Not set"} disabled />
+                    <Input value={profile.phone || 'Not set'} disabled />
                   )}
                 </div>
               </CardContent>
@@ -344,132 +287,66 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Account Information</CardTitle>
-                <CardDescription>
-                  Your account details and membership
-                </CardDescription>
+                <CardDescription>Your account details and membership</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Account Type</span>
-                  <span className="text-sm font-medium">
-                    Administrator
-                  </span>
+                  <span className="text-sm font-medium">Administrator</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Member Since</span>
-                  <span className="text-sm font-medium">
-                    {new Date(profile.created_at).toLocaleDateString()}
-                  </span>
+                  <span className="text-sm font-medium">{new Date(profile.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">User ID</span>
-                  <span className="text-sm font-medium font-mono text-xs">
-                    {profile.id.slice(0, 8)}...
-                  </span>
+                  <span className="text-sm font-medium font-mono text-xs">{profile.id.slice(0, 8)}...</span>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Password Tab */}
-        {activeTab === "password" && (
+        {activeTab === 'password' && (
           <div className="space-y-6 py-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Update Password</CardTitle>
-                <CardDescription>
-                  Change your password to keep your account secure
-                </CardDescription>
+                <CardDescription>Change your password to keep your account secure</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Current Password
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">Current Password</label>
                   <div className="relative">
-                    <Input
-                      type={showCurrentPassword ? "text" : "password"}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your current password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    >
-                      {showCurrentPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                    <Input type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter your current password" />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    New Password
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">New Password</label>
                   <div className="relative">
-                    <Input
-                      type={showNewPassword ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter your new password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                    >
-                      {showNewPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                    <Input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter your new password" />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowNewPassword(!showNewPassword)}>
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Confirm New Password
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">Confirm New Password</label>
                   <div className="relative">
-                    <Input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm your new password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                    <Input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm your new password" />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
 
-                <Button
-                  onClick={updatePassword}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? "Updating Password..." : "Update Password"}
+                <Button onClick={updatePassword} disabled={loading} className="w-full">
+                  {loading ? 'Updating Password...' : 'Update Password'}
                 </Button>
 
                 <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
@@ -489,7 +366,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
   );
 };
 
-// Custom hook to fetch Admin profile
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom hook — fetch Admin profile
+// ─────────────────────────────────────────────────────────────────────────────
 const useAdminProfile = () => {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -499,10 +378,7 @@ const useAdminProfile = () => {
     const fetchProfile = async () => {
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError || !user) {
-          throw new Error(userError?.message || "No user found");
-        }
+        if (userError || !user) throw new Error(userError?.message || 'No user found');
 
         const { data: Admin, error: AdminError } = await supabase
           .from('teachers')
@@ -512,11 +388,10 @@ const useAdminProfile = () => {
           .single();
 
         if (AdminError) throw new Error(AdminError.message);
-        
         setProfile(Admin);
       } catch (err) {
-        console.error("Error fetching Admin profile:", err);
-        setError(err instanceof Error ? err.message : "Failed to load profile");
+        console.error('Error fetching Admin profile:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load profile');
       } finally {
         setLoading(false);
       }
@@ -528,12 +403,15 @@ const useAdminProfile = () => {
   return { profile, loading, error };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminDashboard
+// ─────────────────────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [activeView, setActiveView] = useState('overview');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const navigate = useNavigate();
-  
+
   const { profile, loading: profileLoading, error: profileError } = useAdminProfile();
 
   const handleLogout = async () => {
@@ -545,22 +423,18 @@ export default function AdminDashboard() {
     }
   };
 
-  // Refresh profile data
   const refreshProfile = async () => {
     if (!profile?.id) return;
-    
     try {
       const { data: Admin, error: AdminError } = await supabase
         .from('teachers')
         .select('*')
         .eq('id', profile.id)
         .single();
-
       if (AdminError) throw AdminError;
-      
-      window.location.reload(); // Simple solution to refresh data
+      window.location.reload();
     } catch (err) {
-      console.error("Error refreshing profile:", err);
+      console.error('Error refreshing profile:', err);
     }
   };
 
@@ -574,6 +448,10 @@ export default function AdminDashboard() {
         return <TeachersSection />;
       case 'classes':
         return <ClassesSection />;
+      case 'academic-calendar':
+        return <AcademicCalendar />;
+      case 'timetable':                  // ← NEW
+        return <TimetableSection />;     // ← NEW
       case 'assessments':
         return <AssessmentsSection />;
       case 'assignments':
@@ -582,7 +460,7 @@ export default function AdminDashboard() {
         return <AttendanceSection />;
       case 'announcements':
         return <AnnouncementsSection />;
-      case 'fees': // Added fees case
+      case 'fees':
         return <AdminFees />;
       default:
         return <OverviewSection setActiveView={setActiveView} />;
@@ -592,7 +470,7 @@ export default function AdminDashboard() {
   if (profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary" />
       </div>
     );
   }
@@ -600,7 +478,7 @@ export default function AdminDashboard() {
   if (!profile || profileError) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-500">
-        {profileError || "Admin profile not found"}
+        {profileError || 'Admin profile not found'}
       </div>
     );
   }
@@ -616,61 +494,41 @@ export default function AdminDashboard() {
       />
 
       <div className="flex-1 flex flex-col">
-        {/* Mobile Header */}
+        {/* ── Mobile Header ── */}
         <header className="md:hidden bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-40">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileOpen(true)}
-              >
+              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
                 <Menu className="w-6 h-6" />
               </Button>
               <h1 className="text-xl font-bold">Admin Portal</h1>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-2"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
+            <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />Settings
             </Button>
           </div>
         </header>
 
-        {/* Desktop Header */}
+        {/* ── Desktop Header ── */}
         <header className="hidden md:flex bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-40">
           <div className="flex items-center justify-between w-full">
             <h1 className="text-2xl font-bold text-gray-900">Admin Portal</h1>
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  {profile.first_name} {profile.last_name}
-                </p>
+                <p className="text-sm font-medium text-gray-900">{profile.first_name} {profile.last_name}</p>
                 <p className="text-sm text-gray-500">Administrator</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
+              <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />Settings
               </Button>
             </div>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 p-6 md:p-8">
-          {renderContent()}
-        </main>
+        {/* ── Main Content ── */}
+        <main className="flex-1 p-6 md:p-8">{renderContent()}</main>
 
-        {/* Settings Modal */}
+        {/* ── Settings Modal ── */}
         {profile && (
           <SettingsModal
             profile={profile}
