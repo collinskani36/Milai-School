@@ -48,6 +48,7 @@ interface StudentProfile {
   email: string;
   phone?: string;
   guardian_phone?: string;
+  guardian_email?: string; 
 }
 
 interface PerformanceData {
@@ -72,7 +73,7 @@ export default function StudentDashboard({ handleLogout }) {
   // State for main dashboard only
   const [studentId, setStudentId] = useState<string | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [student, setStudent] = useState<any>(null);
   const [classId, setClassId] = useState<string | null>(null);
@@ -487,17 +488,7 @@ export default function StudentDashboard({ handleLogout }) {
     }
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile!.email,
-        password: currentPassword,
-      });
-
-      if (signInError) {
-        alert("Current password is incorrect. Please try again.");
-        setSettingsLoading(false);
-        return;
-      }
-
+      // Directly update password without verification - user is already authenticated
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
       });
@@ -870,17 +861,7 @@ export default function StudentDashboard({ handleLogout }) {
       }
 
       try {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: profile!.email,
-          password: mobileCurrentPassword,
-        });
-
-        if (signInError) {
-          alert("Current password is incorrect. Please try again.");
-          setMobilePasswordLoading(false);
-          return;
-        }
-
+        // Directly update password without verification - user is already authenticated
         const { error: updateError } = await supabase.auth.updateUser({
           password: mobileNewPassword
         });
@@ -955,32 +936,14 @@ export default function StudentDashboard({ handleLogout }) {
                     <ShieldAlert className="h-4 w-4 text-amber-600" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Account Security</p>
                     <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
-                      To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
+                      You're currently logged in. Enter your new password below to update your account credentials.
                     </p>
                   </div>
                 </div>
 
                 <form onSubmit={handleMobilePasswordUpdate} className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="mobileCurrentPassword" className="text-sm font-bold text-gray-800 flex items-center">
-                      <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-                      Current Password
-                    </label>
-                    <Input
-                      id="mobileCurrentPassword"
-                      type="password"
-                      value={mobileCurrentPassword}
-                      onChange={(e) => setMobileCurrentPassword(e.target.value)}
-                      placeholder="Verify current password"
-                      disabled={mobilePasswordLoading}
-                      className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-11 text-sm"
-                    />
-                  </div>
-
-                  <div className="h-px bg-gray-100 w-full" />
-
                   <div className="space-y-2">
                     <label htmlFor="mobileNewPassword" className="text-sm font-medium text-gray-700 flex items-center">
                       <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
@@ -1021,12 +984,12 @@ export default function StudentDashboard({ handleLogout }) {
                     {mobilePasswordLoading ? (
                       <div className="flex items-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Verifying Security...
+                        Updating Password...
                       </div>
                     ) : (
                       <div className="flex items-center">
                         <ShieldCheck className="h-4 w-4 mr-2" />
-                        Secure My Account
+                        Update Password
                       </div>
                     )}
                   </Button>
@@ -1272,32 +1235,14 @@ export default function StudentDashboard({ handleLogout }) {
                       <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Identity Verification Required</p>
+                      <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Account Security</p>
                       <p className="text-[10px] sm:text-[11px] text-amber-700 leading-relaxed mt-1">
-                        To protect your account from hijacking, you must verify your <b>Current Password</b> before choosing a new one.
+                        You're currently logged in. Enter your new password below to update your account credentials.
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="space-y-1 sm:space-y-2">
-                      <label htmlFor="currentPassword" className="text-xs sm:text-sm font-bold text-gray-800 flex items-center">
-                        <span className="w-2 h-2 bg-maroon rounded-full mr-2"></span>
-                        Current Password
-                      </label>
-                      <Input
-                        id="currentPassword"
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Verify current password"
-                        disabled={passwordLoading}
-                        className="w-full border-2 border-gray-200 focus:border-maroon focus:ring-maroon bg-gray-50/50 h-10 sm:h-11 text-sm"
-                      />
-                    </div>
-
-                    <div className="h-px bg-gray-100 w-full" />
-
+                  <form onSubmit={handlePasswordUpdate} className="space-y-3 sm:space-y-4">
                     <div className="space-y-1 sm:space-y-2">
                       <label htmlFor="newPassword" className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
                         <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
@@ -1338,16 +1283,16 @@ export default function StudentDashboard({ handleLogout }) {
                       {passwordLoading ? (
                         <div className="flex items-center">
                           <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-2"></div>
-                          Verifying Security...
+                          Updating Password...
                         </div>
                       ) : (
                         <div className="flex items-center">
                           <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          Secure My Account
+                          Update Password
                         </div>
                       )}
                     </Button>
-                  </div>
+                  </form>
                 </div>
               </CardContent>
             </Card>

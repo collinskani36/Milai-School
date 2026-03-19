@@ -10,6 +10,35 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    // --- ADMIN AUTH GUARD (added for production security) ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return jsonError("Missing or invalid Authorization header", 401);
+    }
+    const callerToken = authHeader.replace("Bearer ", "");
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify the caller's JWT and get their identity
+    const { data: { user: callerUser }, error: callerError } = await supabase.auth.getUser(callerToken);
+    if (callerError || !callerUser) {
+      return jsonError("Unauthorized: invalid or expired token", 401);
+    }
+
+    // Confirm the caller is an admin in the teachers table
+    const { data: callerTeacher, error: callerTeacherError } = await supabase
+      .from("teachers")
+      .select("is_admin")
+      .eq("auth_id", callerUser.id)
+      .maybeSingle();
+
+    if (callerTeacherError || !callerTeacher || !callerTeacher.is_admin) {
+      return jsonError("Forbidden: caller is not an admin", 403);
+    }
+    // --- END AUTH GUARD ---
+
     const { email, password, teacher_code, first_name, last_name, phone, is_admin } = await req.json();
 
     console.log("Request body:", { email, password, teacher_code, first_name, last_name, phone, is_admin });
@@ -17,10 +46,6 @@ serve(async (req) => {
     if (!teacher_code || !first_name || !last_name) {
       return jsonError("Teacher code, first name, and last name are required");
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // --- Step 1: Check if teacher already exists in teachers table ---
     const { data: existingTeacher, error: checkError } = await supabase

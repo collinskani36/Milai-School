@@ -21,6 +21,32 @@ serve(async (req: Request) => {
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return jsonError("Missing Supabase env vars");
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+    // --- ADMIN AUTH GUARD (added for production security) ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return jsonError("Missing or invalid Authorization header", 401);
+    }
+    const callerToken = authHeader.replace("Bearer ", "");
+
+    // Verify the caller's JWT and get their identity
+    const { data: { user: callerUser }, error: callerError } = await admin.auth.getUser(callerToken);
+    if (callerError || !callerUser) {
+      return jsonError("Unauthorized: invalid or expired token", 401);
+    }
+
+    // Confirm the caller is an admin in the teachers table
+    const { data: callerTeacher, error: callerTeacherError } = await admin
+      .from("teachers")
+      .select("is_admin")
+      .eq("auth_id", callerUser.id)
+      .maybeSingle();
+
+    if (callerTeacherError || !callerTeacher || !callerTeacher.is_admin) {
+      return jsonError("Forbidden: caller is not an admin", 403);
+    }
+    // --- END AUTH GUARD ---
+
     const body = await req.json();
 
     const {

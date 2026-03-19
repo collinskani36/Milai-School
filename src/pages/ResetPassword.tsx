@@ -62,7 +62,7 @@ export default function ResetPassword() {
       await supabase.auth.signOut();
 
       setTimeout(() => {
-        navigate("/login");
+        navigate("/");
       }, 2000);
     } catch (err: any) {
       console.error(err);

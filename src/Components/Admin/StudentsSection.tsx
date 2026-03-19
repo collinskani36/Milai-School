@@ -419,9 +419,11 @@ function ClassStrip({
             <span className={`ml-2 text-xs ${isExpanded ? 'text-white/70' : 'text-gray-400'}`}>{cls.grade_level}</span>
           </div>
         </div>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isExpanded ? 'bg-white/20 text-white' : 'bg-[#800020]/10 text-[#800020]'}`}>
-          {isLoading && isExpanded ? '...' : `${count} student${count !== 1 ? 's' : ''}`}
-        </span>
+        {isExpanded && (
+  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-white/20 text-white">
+    {isLoading ? '...' : `${count} student${count !== 1 ? 's' : ''}`}
+  </span>
+)}
       </button>
 
       {/* ── Expandable student list ── */}

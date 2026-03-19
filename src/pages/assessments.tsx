@@ -118,6 +118,29 @@ interface TermGroup {
 // ── NEW: Term filter key type ─────────────────────────────────────────────────
 type TermFilterKey = "all" | string; // string = `${year}-${term}` e.g. "2025-1"
 
+// ─── Formative result type (from new formative_results table) ────────────────
+
+interface FormativeActivityResult {
+  id: string;
+  formative_activity_id: string;
+  performance_level: string | null;
+  is_absent: boolean;
+  teacher_comment: string | null;
+  recorded_at: string;
+  formative_activities: {
+    id: string;
+    title: string;
+    description: string | null;
+    term: number;
+    year: number;
+    activity_date: string;
+    strand_id: string | null;
+    sub_strand_id: string | null;
+    strands:     { name: string } | null;
+    sub_strands: { name: string } | null;
+  } | null;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const isNative =
@@ -298,47 +321,53 @@ const downloadTermReportPDF = async (
     const subjectBreakdowns: Record<string, SubjectBreakdownItem[]> = {};
     cats.forEach((cat, i) => { subjectBreakdowns[cat.assessment_id] = breakdownResults[i]; });
 
+    // Fetch formative results from the new formative_results + formative_activities tables
     const { data: formativeRaw, error: fErr } = await supabase
-      .from("assessment_results")
+      .from("formative_results")
       .select(`
         id,
-        student_id,
-        score,
         performance_level,
-        teacher_remarks,
         is_absent,
-        assessment_date,
-        assessments!inner (
-          id, title, term, year, class_id, category,
+        teacher_comment,
+        recorded_at,
+        formative_activities!inner (
+          id, title, description, term, year, activity_date,
+          class_id, subject_id,
           strand_id, sub_strand_id,
           strands ( name ),
-          sub_strands ( name )
-        ),
-        subjects ( name )
+          sub_strands ( name ),
+          subjects ( name )
+        )
       `)
       .eq("student_id", studentId)
-      .eq("assessments.class_id", classId)
-      .eq("assessments.category", "formative")
-      .eq("assessments.term", term)
-      .eq("assessments.year", year)
-      .eq("status", "published")
-      .order("assessment_date", { ascending: true });
+      .eq("formative_activities.class_id", classId)
+      .eq("formative_activities.term", term)
+      .eq("formative_activities.year", year)
+      .order("recorded_at", { ascending: true });
 
     if (fErr) throw fErr;
 
     const formativeRecords = (formativeRaw ?? []).map((item: Record<string, unknown>) => {
-      const assess  = Array.isArray(item.assessments) ? (item.assessments as Record<string, unknown>[])[0] : item.assessments as Record<string, unknown>;
-      const strand  = Array.isArray((assess as Record<string, unknown>)?.strands)    ? ((assess as Record<string, unknown[]>).strands as Record<string, string>[])[0]    : (assess as Record<string, unknown>)?.strands as Record<string, string>;
-      const sub     = Array.isArray((assess as Record<string, unknown>)?.sub_strands) ? ((assess as Record<string, unknown[]>).sub_strands as Record<string, string>[])[0] : (assess as Record<string, unknown>)?.sub_strands as Record<string, string>;
-      const subject = Array.isArray(item.subjects) ? (item.subjects as Record<string, string>[])[0] : item.subjects as Record<string, string>;
+      const act     = Array.isArray(item.formative_activities)
+        ? (item.formative_activities as Record<string, unknown>[])[0]
+        : item.formative_activities as Record<string, unknown>;
+      const strand  = Array.isArray((act as Record<string, unknown>)?.strands)
+        ? ((act as Record<string, unknown[]>).strands as Record<string, string>[])[0]
+        : (act as Record<string, unknown>)?.strands as Record<string, string>;
+      const sub     = Array.isArray((act as Record<string, unknown>)?.sub_strands)
+        ? ((act as Record<string, unknown[]>).sub_strands as Record<string, string>[])[0]
+        : (act as Record<string, unknown>)?.sub_strands as Record<string, string>;
+      const subject = Array.isArray((act as Record<string, unknown>)?.subjects)
+        ? ((act as Record<string, unknown[]>).subjects as Record<string, string>[])[0]
+        : (act as Record<string, unknown>)?.subjects as Record<string, string>;
       return {
         id:                item.id as string,
-        assessment_date:   item.assessment_date as string,
-        title:             (assess as Record<string, string>)?.title ?? "Activity",
+        assessment_date:   (act as Record<string, string>)?.activity_date ?? "",
+        title:             (act as Record<string, string>)?.title ?? "Activity",
         strand:            strand?.name  ?? "",
         sub_strand:        sub?.name     ?? "",
         performance_level: (item.performance_level as string) ?? "",
-        teacher_remarks:   (item.teacher_remarks  as string) ?? "",
+        teacher_remarks:   (item.teacher_comment as string) ?? "",
         is_absent:         (item.is_absent as boolean) ?? false,
         subject:           subject?.name ?? "",
       };
@@ -970,20 +999,13 @@ const SubjectAnalysisDialog = React.memo(({
         className="max-w-[85vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-gradient-to-br from-white to-maroon/5 border-maroon/20 p-2 sm:p-4 md:p-6 [&_*]:break-words [&_*]:min-w-0"
       >
         <DialogHeader className="border-b border-maroon/10 pb-4 mb-4">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <DialogTitle className="flex items-center text-base sm:text-xl md:text-2xl font-bold text-maroon">
-                <BarChart3 className="h-4 w-4 sm:h-6 sm:w-6 md:h-7 md:w-7 mr-2 sm:mr-3 flex-shrink-0 text-maroon" />
-                {selectedSubject} Performance Analysis
-              </DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm md:text-base text-gray-600">
-                Detailed performance insights and trend analysis for {selectedSubject}
-              </DialogDescription>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onToggleFullscreen} className="ml-2 h-8 w-8 p-0">
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-          </div>
+          <DialogTitle className="flex items-center text-base sm:text-xl md:text-2xl font-bold text-maroon">
+            <BarChart3 className="h-4 w-4 sm:h-6 sm:w-6 md:h-7 md:w-7 mr-2 sm:mr-3 flex-shrink-0 text-maroon" />
+            {selectedSubject} Performance Analysis
+          </DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm md:text-base text-gray-600">
+            Detailed performance insights and trend analysis for {selectedSubject}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Teacher info — compact bar, always full width, never overflows */}
@@ -1269,8 +1291,11 @@ const SubjectAnalysisDialog = React.memo(({
             )}
           </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 pt-4 mt-4">
-          <Button variant="default" onClick={onClose} className="w-full bg-maroon hover:bg-maroon/90">
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 pt-4 mt-4 flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onToggleFullscreen} className="h-9 w-9 p-0 shrink-0">
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+          <Button variant="default" onClick={onClose} className="flex-1 bg-maroon hover:bg-maroon/90">
             Close Analysis
           </Button>
         </div>
@@ -1648,14 +1673,15 @@ export default function Assessments({
     setAnalysisLoading(true);
     setRevealedContact(null);
 
-    const subjectId = assessments.find(
+    const subjectEntry = assessments.find(
       (a) => (a.subjects as Record<string, string>)?.name === subjectName
     )?.subjects as Record<string, string> | undefined;
 
-    if (!subjectId?.id) { setAnalysisLoading(false); return; }
+    if (!subjectEntry?.id) { setAnalysisLoading(false); return; }
 
     try {
-      const { data: results, error } = await supabase
+      // Fetch summative results (unchanged — from assessment_results)
+      const { data: summativeResults, error: sErr } = await supabase
         .from("assessment_results")
         .select(`
           id, student_id, score, performance_level, teacher_remarks, is_absent, assessment_date,
@@ -1666,13 +1692,14 @@ export default function Assessments({
           subjects!inner ( id, name, code )
         `)
         .eq("student_id", studentId)
-        .eq("subject_id", subjectId.id)
+        .eq("subject_id", subjectEntry.id)
         .eq("status", "published")
+        .eq("assessments.category", "summative")
         .order("assessment_date", { ascending: false });
 
-      if (error) throw error;
+      if (sErr) throw sErr;
 
-      const processed = (results ?? []).map((item: Record<string, unknown>) => ({
+      const processedSummative = (summativeResults ?? []).map((item: Record<string, unknown>) => ({
         ...item,
         assessments: Array.isArray(item.assessments) ? (item.assessments as Record<string, unknown>[])[0] : item.assessments,
         subjects:    Array.isArray(item.subjects)    ? (item.subjects    as Record<string, unknown>[])[0] : item.subjects,
@@ -1680,14 +1707,67 @@ export default function Assessments({
           (item.assessments as Record<string, number>)?.max_marks > 0 && item.score !== null
             ? Math.round(((item.score as number) / (item.assessments as Record<string, number>).max_marks) * 100)
             : null,
+        _type: "summative",
       }));
-      setSubjectAssessments(processed);
+
+      // Fetch formative results from new tables
+      const { data: formativeResults, error: fErr } = await supabase
+        .from("formative_results")
+        .select(`
+          id, performance_level, is_absent, teacher_comment, recorded_at,
+          formative_activities!inner (
+            id, title, description, term, year, activity_date,
+            class_id, subject_id,
+            strand_id, sub_strand_id,
+            strands ( name, code ),
+            sub_strands ( name, code )
+          )
+        `)
+        .eq("student_id", studentId)
+        .eq("formative_activities.subject_id", subjectEntry.id)
+        .order("recorded_at", { ascending: false });
+
+      if (fErr) throw fErr;
+
+      // Normalise formative rows to the same shape the dialog expects
+      const processedFormative = (formativeResults ?? []).map((item: Record<string, unknown>) => {
+        const act = Array.isArray(item.formative_activities)
+          ? (item.formative_activities as Record<string, unknown>[])[0]
+          : item.formative_activities as Record<string, unknown>;
+        return {
+          id:              item.id,
+          student_id:      studentId,
+          score:           0,
+          performance_level: item.performance_level,
+          teacher_remarks: item.teacher_comment,   // map teacher_comment → teacher_remarks for dialog reuse
+          is_absent:       item.is_absent,
+          assessment_date: (act as Record<string, string>)?.activity_date ?? "",
+          // Shape assessments sub-object to match what the dialog already renders
+          assessments: {
+            id:          (act as Record<string, string>)?.id,
+            title:       (act as Record<string, string>)?.title ?? "Activity",
+            term:        (act as Record<string, unknown>)?.term,
+            year:        (act as Record<string, unknown>)?.year,
+            category:    "formative",
+            max_marks:   0,
+            strand_id:   (act as Record<string, unknown>)?.strand_id,
+            sub_strand_id: (act as Record<string, unknown>)?.sub_strand_id,
+            strands:     (act as Record<string, unknown>)?.strands,
+            sub_strands: (act as Record<string, unknown>)?.sub_strands,
+          },
+          subjects: subjectEntry,
+          percentage: null,
+          _type: "formative",
+        };
+      });
+
+      setSubjectAssessments([...processedSummative, ...processedFormative]);
 
       const { data: tcData } = await supabase
         .from("teacher_classes")
         .select("teacher_id")
         .eq("class_id", classId)
-        .eq("subject_id", subjectId.id)
+        .eq("subject_id", subjectEntry.id)
         .single();
 
       if (tcData?.teacher_id) {
@@ -1907,16 +1987,13 @@ export default function Assessments({
       >
         {/* ── Fixed header ── */}
         <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-gray-200 bg-white">
-          <div className="flex justify-between items-start">
-            <div>
-              <DialogTitle className="flex items-center text-lg sm:text-xl text-maroon font-bold">
-                <BookOpen className="h-5 w-5 mr-2" /> Assessments &amp; Performance
-              </DialogTitle>
-              <DialogDescription className="text-xs text-gray-500 mt-0.5">
-                View your assessment results and performance history
-              </DialogDescription>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 px-2 text-xs">Close</Button>
+          <div>
+            <DialogTitle className="flex items-center text-lg sm:text-xl text-maroon font-bold">
+              <BookOpen className="h-5 w-5 mr-2" /> Assessments &amp; Performance
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500 mt-0.5">
+              View your assessment results and performance history
+            </DialogDescription>
           </div>
           {pdfError && (
             <div className="mt-2 flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
@@ -2184,6 +2261,13 @@ export default function Assessments({
             )}
           </div>
         )}
+
+        {/* ── Sticky bottom close ── */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-white">
+          <Button variant="default" onClick={onClose} className="w-full bg-maroon hover:bg-maroon/90">
+            Close
+          </Button>
+        </div>
 
         {/* Subject analysis dialog */}
         <SubjectAnalysisDialog

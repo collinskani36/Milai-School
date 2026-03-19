@@ -6,1101 +6,600 @@ import { Label } from "@/Components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
 import { Badge } from "@/Components/ui/badge";
-import {
-  AlertTriangle, CheckCircle, Save, Loader2, BookOpen,
-  ClipboardList, Plus, ArrowLeft, History, Pencil,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle, Save, Loader2, BookOpen, ClipboardList, Plus, ArrowLeft, History, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TeacherClass {
-  id: string;
-  teacher_id: string;
-  class_id: string;
-  subject_id: string;
-  created_at: string;
-  classes?: { id: string; name: string; grade_level: string; created_at: string }
-    | { id: string; name: string; grade_level: string; created_at: string }[];
-  subjects?: { id: string; name: string; code: string; created_at: string }
-    | { id: string; name: string; code: string; created_at: string }[];
+  id: string; teacher_id: string; class_id: string; subject_id: string;
+  classes?:  | { id: string; name: string; grade_level: string } | { id: string; name: string; grade_level: string }[];
+  subjects?: | { id: string; name: string; code: string }        | { id: string; name: string; code: string }[];
 }
 
-interface Assessment {
-  id: string;
-  title: string;
-  term: number;
-  year: number;
-  class_id: string;
-  category: "formative" | "summative" | "portfolio";
-  max_marks: number;
-  strand_id?: string | null;
-  sub_strand_id?: string | null;
-  strands?: { name: string } | { name: string }[] | null;
-  sub_strands?: { name: string } | { name: string }[] | null;
-  assessment_date?: string | null;
+interface SummativeAssessment {
+  id: string; title: string; term: number; year: number;
+  class_id: string; max_marks: number; assessment_date: string | null;
 }
 
-interface Student {
-  id: string;
-  Reg_no: string;
-  first_name: string;
-  last_name: string;
+interface FormativeActivity {
+  id: string; title: string; description: string | null;
+  term: number; year: number; class_id: string; subject_id: string;
+  strand_id: string | null; sub_strand_id: string | null;
+  activity_date: string; teacher_id: string;
+  strands?:     { id: string; name: string } | null;
+  sub_strands?: { id: string; name: string } | null;
 }
 
-interface ExistingResult {
-  student_id: string;
-  score: number;
-  performance_level: "EE" | "ME" | "AE" | "BE" | null;
-  teacher_remarks: string | null;
-  is_absent: boolean;
-  assessment_date: string | null;
-}
+interface Student { id: string; Reg_no: string; first_name: string; last_name: string; }
+interface StrandRow    { id: string; name: string; code: string; subject_id: string; }
+interface SubStrandRow { id: string; name: string; code: string; strand_id: string; }
 
 interface HistoryItem {
-  assessment: Assessment;
-  subject_id: string;
-  subject_name: string;
-  result_count: number;
-  latest_date: string | null;
+  type: "summative" | "formative";
+  key: string;
+  title: string; term: number; year: number;
+  class_id: string; subject_id: string; subject_name: string;
+  strand_name: string | null; sub_strand_name: string | null;
+  result_count: number; latest_date: string | null;
   status: "draft" | "published";
+  summativeAssessment?: SummativeAssessment;
+  formativeActivity?: FormativeActivity;
 }
 
 type PerformanceLevel = "EE" | "ME" | "AE" | "BE";
 type Mode = "summative" | "formative" | "history";
-type EntryRow = {
-  score: string;
-  performance_level: PerformanceLevel | null;
-  teacher_remarks: string;
-  is_absent: boolean;
-  date: string;
-};
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+interface SummativeEntry { score: string; performance_level: PerformanceLevel | null; teacher_remarks: string; is_absent: boolean; date: string; }
+interface FormativeEntry { performance_level: PerformanceLevel | null; teacher_comment: string; is_absent: boolean; }
+
+// ─── Constants & helpers ──────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
-const CURRENT_TERM = (() => {
-  const m = new Date().getMonth() + 1;
-  if (m <= 4) return 1;
-  if (m <= 8) return 2;
-  return 3;
-})();
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
-  if (!rel) return undefined;
-  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
+const CURRENT_TERM = (() => { const m = new Date().getMonth()+1; return m<=4?1:m<=8?2:3; })();
+const LEVELS: PerformanceLevel[] = ["EE","ME","AE","BE"];
+const today = () => new Date().toISOString().slice(0,10);
+const firstRel = <T,>(r?: T|T[]|null): T|undefined => !r ? undefined : Array.isArray(r) ? r[0] : r as T;
+const perfLevel = (score: number, max: number): PerformanceLevel => {
+  const p = (score/max)*100;
+  return p>=75?"EE":p>=50?"ME":p>=25?"AE":"BE";
 };
 
-const getPerformanceLevel = (score: number, maxMarks: number): PerformanceLevel => {
-  const pct = (score / maxMarks) * 100;
-  if (pct >= 75) return "EE";
-  if (pct >= 50) return "ME";
-  if (pct >= 25) return "AE";
-  return "BE";
+// ─── UI components ────────────────────────────────────────────────────────────
+
+const LEVEL_STYLES: Record<PerformanceLevel,string> = {
+  EE:"bg-green-100 border-green-300 text-green-800",
+  ME:"bg-blue-100 border-blue-300 text-blue-800",
+  AE:"bg-yellow-100 border-yellow-300 text-yellow-800",
+  BE:"bg-red-100 border-red-300 text-red-800",
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-const LEVEL_STYLES: Record<PerformanceLevel, { bg: string; text: string }> = {
-  EE: { bg: "bg-green-100 border-green-300",    text: "text-green-800" },
-  ME: { bg: "bg-blue-100 border-blue-300",      text: "text-blue-800" },
-  AE: { bg: "bg-yellow-100 border-yellow-300",  text: "text-yellow-800" },
-  BE: { bg: "bg-red-100 border-red-300",        text: "text-red-800" },
-};
-
-function PerformanceBadge({ level }: { level: PerformanceLevel }) {
-  const s = LEVEL_STYLES[level];
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold ${s.bg} ${s.text}`}>
-      {level}
-    </span>
-  );
+function PerfBadge({ level }: { level: PerformanceLevel }) {
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold ${LEVEL_STYLES[level]}`}>{level}</span>;
 }
 
-function LevelToggle({ value, onChange, disabled }: {
-  value: PerformanceLevel | null;
-  onChange: (l: PerformanceLevel) => void;
-  disabled: boolean;
-}) {
+function LevelToggle({ value, onChange, disabled }: { value: PerformanceLevel|null; onChange:(l:PerformanceLevel)=>void; disabled:boolean }) {
   return (
     <div className="flex gap-1">
-      {(["EE", "ME", "AE", "BE"] as PerformanceLevel[]).map((level) => {
-        const s = LEVEL_STYLES[level];
-        const selected = value === level;
-        return (
-          <button
-            key={level}
-            type="button"
-            onClick={() => onChange(level)}
-            disabled={disabled}
-            className={`px-2 py-1 rounded border text-xs font-bold transition-all ${
-              selected
-                ? `${s.bg} ${s.text} border-current shadow-sm`
-                : "bg-white border-gray-200 text-gray-400 hover:border-gray-400"
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
-          >
-            {level}
-          </button>
-        );
-      })}
+      {LEVELS.map(l => (
+        <button key={l} type="button" onClick={()=>onChange(l)} disabled={disabled}
+          className={`px-2 py-1 rounded border text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${value===l?`${LEVEL_STYLES[l]} shadow-sm`:"bg-white border-gray-200 text-gray-400 hover:border-gray-400"}`}>
+          {l}
+        </button>
+      ))}
     </div>
   );
 }
 
-function CategoryBadge({ category }: { category: Assessment["category"] }) {
-  const styles = {
-    summative: "bg-purple-100 text-purple-800 border-purple-200",
-    formative:  "bg-teal-100 text-teal-800 border-teal-200",
-    portfolio:  "bg-orange-100 text-orange-800 border-orange-200",
+function StrandSelect({ subjectId, value, onChange, disabled }: { subjectId:string; value:string; onChange:(id:string,name:string)=>void; disabled:boolean }) {
+  const [strands,  setStrands]  = useState<StrandRow[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [showNew,  setShowNew]  = useState(false);
+  const [newName,  setNewName]  = useState("");
+  const [creating, setCreating] = useState(false);
+  const [err,      setErr]      = useState<string|null>(null);
+
+  useEffect(() => {
+    if (!subjectId) { setStrands([]); return; }
+    setLoading(true);
+    supabase.from("strands").select("id,name,code,subject_id").eq("subject_id",subjectId).order("name")
+      .then(({data}) => { setStrands(data??[]); setLoading(false); });
+  }, [subjectId]);
+
+  const create = async () => {
+    if (!newName.trim()) return;
+    setCreating(true); setErr(null);
+    const code = newName.trim().slice(0,20).toUpperCase().replace(/\s+/g,"_");
+    const {data,error} = await supabase.from("strands").insert({subject_id:subjectId,name:newName.trim(),code}).select("id,name,code,subject_id").single();
+    if (error) { setErr(error.message); setCreating(false); return; }
+    setStrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
+    onChange(data.id,data.name);
+    setNewName(""); setShowNew(false); setCreating(false);
   };
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold capitalize ${styles[category]}`}>
-      {category}
-    </span>
+    <div className="space-y-1.5">
+      <Select value={value} onValueChange={v=>{ if(v==="__new__"){setShowNew(true);return;} onChange(v,v==="__none__"?"":(strands.find(s=>s.id===v)?.name??"")); }} disabled={disabled||loading}>
+        <SelectTrigger className="h-9"><SelectValue placeholder={loading?"Loading…":"Select strand (optional)"}/></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">— No strand —</SelectItem>
+          {strands.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          <SelectItem value="__new__" className="text-teal-600 font-medium"><span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new strand…</span></SelectItem>
+        </SelectContent>
+      </Select>
+      {showNew && (
+        <div className="flex gap-2">
+          <Input placeholder="New strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm" onKeyDown={e=>e.key==="Enter"&&create()}/>
+          <Button size="sm" className="h-8 bg-teal-600 hover:bg-teal-700 shrink-0" onClick={create} disabled={creating||!newName.trim()}>
+            {creating?<Loader2 className="h-3 w-3 animate-spin"/>:"Add"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={()=>{setShowNew(false);setNewName("");}}>✕</Button>
+        </div>
+      )}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
   );
 }
 
-// ─── Stable input components defined OUTSIDE the parent ──────────────────────
+function SubStrandSelect({ strandId, value, onChange, disabled }: { strandId:string; value:string; onChange:(id:string,name:string)=>void; disabled:boolean }) {
+  const [subs,     setSubs]     = useState<SubStrandRow[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [showNew,  setShowNew]  = useState(false);
+  const [newName,  setNewName]  = useState("");
+  const [creating, setCreating] = useState(false);
+  const [err,      setErr]      = useState<string|null>(null);
 
-const RemarksInput = memo(({
-  value,
-  studentId,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  studentId: string;
-  disabled: boolean;
-  onChange: (studentId: string, value: string) => void;
-}) => (
-  <Input
-    type="text"
-    placeholder="Optional remark"
-    value={value}
-    onChange={(e) => onChange(studentId, e.target.value)}
-    className="w-full text-sm"
-    disabled={disabled}
-  />
-));
-RemarksInput.displayName = "RemarksInput";
+  useEffect(() => {
+    if (!strandId||strandId==="__none__") { setSubs([]); return; }
+    setLoading(true);
+    supabase.from("sub_strands").select("id,name,code,strand_id").eq("strand_id",strandId).order("name")
+      .then(({data}) => { setSubs(data??[]); setLoading(false); });
+  }, [strandId]);
 
-const ScoreInput = memo(({
-  value,
-  studentId,
-  maxMarks,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  studentId: string;
-  maxMarks: number;
-  disabled: boolean;
-  onChange: (studentId: string, value: string) => void;
-}) => (
-  <Input
-    type="number"
-    step="0.01"
-    min="0"
-    max={maxMarks}
-    value={value}
-    onChange={(e) => onChange(studentId, e.target.value)}
-    className="w-24"
-    disabled={disabled}
-    placeholder="0"
-  />
+  const create = async () => {
+    if (!newName.trim()) return;
+    setCreating(true); setErr(null);
+    const code = newName.trim().slice(0,20).toUpperCase().replace(/\s+/g,"_");
+    const {data,error} = await supabase.from("sub_strands").insert({strand_id:strandId,name:newName.trim(),code}).select("id,name,code,strand_id").single();
+    if (error) { setErr(error.message); setCreating(false); return; }
+    setSubs(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
+    onChange(data.id,data.name);
+    setNewName(""); setShowNew(false); setCreating(false);
+  };
+
+  if (!strandId||strandId==="__none__") return null;
+
+  return (
+    <div className="space-y-1.5">
+      <Select value={value} onValueChange={v=>{ if(v==="__new__"){setShowNew(true);return;} onChange(v,v==="__none__"?"":(subs.find(s=>s.id===v)?.name??"")); }} disabled={disabled||loading}>
+        <SelectTrigger className="h-9"><SelectValue placeholder={loading?"Loading…":"Select sub-strand (optional)"}/></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">— No sub-strand —</SelectItem>
+          {subs.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          <SelectItem value="__new__" className="text-teal-600 font-medium"><span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new sub-strand…</span></SelectItem>
+        </SelectContent>
+      </Select>
+      {showNew && (
+        <div className="flex gap-2">
+          <Input placeholder="New sub-strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm" onKeyDown={e=>e.key==="Enter"&&create()}/>
+          <Button size="sm" className="h-8 bg-teal-600 hover:bg-teal-700 shrink-0" onClick={create} disabled={creating||!newName.trim()}>
+            {creating?<Loader2 className="h-3 w-3 animate-spin"/>:"Add"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={()=>{setShowNew(false);setNewName("");}}>✕</Button>
+        </div>
+      )}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  );
+}
+
+const ScoreInput = memo(({value,studentId,maxMarks,disabled,onChange}:{value:string;studentId:string;maxMarks:number;disabled:boolean;onChange:(id:string,v:string)=>void}) => (
+  <Input type="number" step="0.01" min="0" max={maxMarks} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-24" disabled={disabled} placeholder="0"/>
 ));
 ScoreInput.displayName = "ScoreInput";
 
-const DateInput = memo(({
-  value,
-  studentId,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  studentId: string;
-  disabled: boolean;
-  onChange: (studentId: string, value: string) => void;
-}) => (
-  <Input
-    type="date"
-    value={value}
-    onChange={(e) => onChange(studentId, e.target.value)}
-    className="w-36"
-    disabled={disabled}
-  />
+const TextInput = memo(({value,studentId,placeholder,disabled,onChange}:{value:string;studentId:string;placeholder:string;disabled:boolean;onChange:(id:string,v:string)=>void}) => (
+  <Input type="text" placeholder={placeholder} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-full text-sm" disabled={disabled}/>
 ));
-DateInput.displayName = "DateInput";
+TextInput.displayName = "TextInput";
 
-// ─── MarksTable defined OUTSIDE TeacherMarksEntry ────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
-interface MarksTableProps {
-  mode: Mode;
-  editingHistory: boolean;
-  selectedAssessment: Assessment | null;
-  selectedSubjectId: string;
-  students: Student[];
-  entries: Record<string, EntryRow>;
-  loadingData: boolean;
-  saving: boolean;
-  error: string | null;
-  success: string | null;
-  filledCount: number;
-  strandName: string | undefined;
-  subStrandName: string | undefined;
-  fDate: string;
-  onBack: () => void;
-  onScoreChange: (studentId: string, value: string) => void;
-  onLevelChange: (studentId: string, level: PerformanceLevel) => void;
-  onRemarksChange: (studentId: string, value: string) => void;
-  onDateChange: (studentId: string, value: string) => void;
-  onAbsentToggle: (studentId: string) => void;
-  onSave: () => void;
-}
+export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmentYear, currentTerm }:
+  { teacherId:string; teacherClasses:TeacherClass[]; assessmentYear?:number; currentTerm?:number }) {
 
-const MarksTable = memo(({
-  mode,
-  editingHistory,
-  selectedAssessment,
-  selectedSubjectId,
-  students,
-  entries,
-  loadingData,
-  saving,
-  error,
-  success,
-  filledCount,
-  strandName,
-  subStrandName,
-  fDate,
-  onBack,
-  onScoreChange,
-  onLevelChange,
-  onRemarksChange,
-  onDateChange,
-  onAbsentToggle,
-  onSave,
-}: MarksTableProps) => {
-  if (!selectedAssessment) return null;
-
-  const isFormative = selectedAssessment.category === "formative";
-
-  return (
-    <>
-      {/* Assessment info strip */}
-      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
-        {(mode === "formative" || editingHistory) && (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            {editingHistory ? "Back to history" : "New activity"}
-          </button>
-        )}
-        <CategoryBadge category={selectedAssessment.category} />
-        {!isFormative && (
-          <span className="text-muted-foreground">
-            Max marks: <strong className="text-foreground">{selectedAssessment.max_marks}</strong>
-          </span>
-        )}
-        <span className="font-medium">{selectedAssessment.title}</span>
-        {strandName && (
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <BookOpen className="h-3.5 w-3.5" />
-            <strong className="text-foreground">{strandName}</strong>
-            {subStrandName && <> › <strong className="text-foreground">{subStrandName}</strong></>}
-          </span>
-        )}
-        {isFormative && (
-          <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded px-2 py-0.5">
-            Select EE / ME / AE / BE per student
-          </span>
-        )}
-      </div>
-
-      {/* Alerts */}
-      {error && (
-        <div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm">
-          <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm">
-          <CheckCircle className="h-4 w-4 shrink-0" /> {success}
-        </div>
-      )}
-
-      {/* Table */}
-      {selectedAssessment && selectedSubjectId && (
-        <>
-          {!loadingData && students.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground text-sm">No students enrolled in this class.</div>
-          ) : (
-            <div className="relative">
-              {loadingData && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 flex items-center justify-center z-10 rounded">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              )}
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[90px]">Reg No</TableHead>
-                      <TableHead>Student Name</TableHead>
-                      <TableHead className="w-[70px] text-center">Absent</TableHead>
-                      <TableHead>{isFormative ? "Performance Level" : `Score (out of ${selectedAssessment.max_marks})`}</TableHead>
-                      <TableHead className="w-[180px]">Remarks</TableHead>
-                      {!isFormative && <TableHead className="w-[140px]">Date</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {students.map((student) => {
-                      const entry = entries[student.id] ?? {
-                        score: "", performance_level: null, teacher_remarks: "", is_absent: false,
-                        date: fDate || new Date().toISOString().slice(0, 10),
-                      };
-                      const absent = entry.is_absent;
-                      return (
-                        <TableRow key={student.id} className={absent ? "opacity-50" : ""}>
-                          <TableCell className="font-mono text-xs">{student.Reg_no}</TableCell>
-                          <TableCell className="font-medium">{student.first_name} {student.last_name}</TableCell>
-                          <TableCell className="text-center">
-                            <input
-                              type="checkbox"
-                              checked={absent}
-                              onChange={() => onAbsentToggle(student.id)}
-                              disabled={loadingData}
-                              className="h-4 w-4 accent-orange-600"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {absent ? (
-                              <span className="text-xs italic text-muted-foreground">Absent</span>
-                            ) : isFormative ? (
-                              <LevelToggle
-                                value={entry.performance_level}
-                                onChange={(l) => onLevelChange(student.id, l)}
-                                disabled={loadingData}
-                              />
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <ScoreInput
-                                  value={entry.score}
-                                  studentId={student.id}
-                                  maxMarks={selectedAssessment.max_marks}
-                                  disabled={loadingData}
-                                  onChange={onScoreChange}
-                                />
-                                {entry.performance_level && <PerformanceBadge level={entry.performance_level} />}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <RemarksInput
-                              value={entry.teacher_remarks}
-                              studentId={student.id}
-                              disabled={loadingData}
-                              onChange={onRemarksChange}
-                            />
-                          </TableCell>
-                          {!isFormative && (
-                            <TableCell>
-                              <DateInput
-                                value={entry.date}
-                                studentId={student.id}
-                                disabled={loadingData}
-                                onChange={onDateChange}
-                              />
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-
-          {students.length > 0 && (
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-sm text-muted-foreground">
-                {filledCount} / {students.length} entries ready
-                {isFormative && <span className="ml-2 text-xs text-teal-600">• publishes immediately</span>}
-              </span>
-              <Button
-                onClick={onSave}
-                disabled={saving || loadingData || filledCount === 0}
-                className={isFormative ? "bg-teal-600 hover:bg-teal-700" : "bg-green-600 hover:bg-green-700"}
-              >
-                {saving ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-                ) : isFormative ? (
-                  <><CheckCircle className="mr-2 h-4 w-4" /> Save &amp; Publish</>
-                ) : (
-                  <><Save className="mr-2 h-4 w-4" /> Save Draft</>
-                )}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-});
-MarksTable.displayName = "MarksTable";
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-export default function TeacherMarksEntry({
-  teacherId,
-  teacherClasses,
-  academicYear,
-  assessmentYear,
-  // currentTerm comes from the active academic term set by the admin.
-  // When provided, the assessment dropdown is scoped to this term only,
-  // keeping the list short and relevant. History mode is unaffected and
-  // still shows all terms so teachers can edit past entries freely.
-  currentTerm,
-}: {
-  teacherId: string;
-  teacherClasses: TeacherClass[];
-  academicYear?: string;
-  assessmentYear?: number;
-  currentTerm?: number;
-}) {
-  // ── Mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>("summative");
 
-  // ── Summative state ───────────────────────────────────────────────────────
-  const [assessments, setAssessments]                   = useState<Assessment[]>([]);
-  const [selectedAssessmentId, setSelectedAssessmentId] = useState("");
-  const [selectedAssessment, setSelectedAssessment]     = useState<Assessment | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId]       = useState("");
-  const [loadingAssessments, setLoadingAssessments]     = useState(false);
+  // Summative
+  const [summativeList,         setSummativeList]         = useState<SummativeAssessment[]>([]);
+  const [selectedAssessmentId,  setSelectedAssessmentId]  = useState("");
+  const [selectedAssessment,    setSelectedAssessment]    = useState<SummativeAssessment|null>(null);
+  const [selectedSubjectId,     setSelectedSubjectId]     = useState("");
+  const [loadingAssessments,    setLoadingAssessments]    = useState(false);
 
-  // ── Formative creation state ──────────────────────────────────────────────
-  const [fClassId, setFClassId]     = useState("");
-  const [fSubjectId, setFSubjectId] = useState("");
-  const [fTitle, setFTitle]         = useState("");
-  const [fStrand, setFStrand]       = useState("");
-  const [fSubStrand, setFSubStrand] = useState("");
-  const [fDate, setFDate]           = useState(new Date().toISOString().slice(0, 10));
-  const [fTerm, setFTerm]           = useState(String(currentTerm ?? CURRENT_TERM));
-  const [fYear, setFYear]           = useState(String(assessmentYear ?? CURRENT_YEAR));
-  const [creatingFormative, setCreatingFormative] = useState(false);
-  const [createError, setCreateError]             = useState<string | null>(null);
+  // Formative creation
+  const [fClassId,      setFClassId]      = useState("");
+  const [fSubjectId,    setFSubjectId]    = useState("");
+  const [fTitle,        setFTitle]        = useState("");
+  const [fDesc,         setFDesc]         = useState("");
+  const [fStrandId,     setFStrandId]     = useState("__none__");
+  const [fStrandName,   setFStrandName]   = useState("");
+  const [fSubStrandId,  setFSubStrandId]  = useState("__none__");
+  const [fSubStrandName,setFSubStrandName]= useState("");
+  const [fDate,         setFDate]         = useState(today());
+  const [fTerm,         setFTerm]         = useState(String(currentTerm??CURRENT_TERM));
+  const [fYear,         setFYear]         = useState(String(assessmentYear??CURRENT_YEAR));
+  const [creating,      setCreating]      = useState(false);
+  const [createErr,     setCreateErr]     = useState<string|null>(null);
+  const [activeActivity,setActiveActivity]= useState<FormativeActivity|null>(null);
 
-  // ── History state ─────────────────────────────────────────────────────────
-  const [historyItems, setHistoryItems]     = useState<HistoryItem[]>([]);
+  // History
+  const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyFilter, setHistoryFilter]   = useState<"all" | "formative" | "summative">("all");
-  const [editingHistory, setEditingHistory] = useState(false);
+  const [histFilter,     setHistFilter]     = useState<"all"|"formative"|"summative">("all");
+  const [editingItem,    setEditingItem]    = useState<HistoryItem|null>(null);
 
-  // ── Shared marks entry state ──────────────────────────────────────────────
-  const [students, setStudents]               = useState<Student[]>([]);
-  const [entries, setEntries]                 = useState<Record<string, EntryRow>>({});
-  const [existingResults, setExistingResults] = useState<Record<string, ExistingResult>>({});
-  const [loadingData, setLoadingData]         = useState(false);
-  const [saving, setSaving]                   = useState(false);
-  const [error, setError]                     = useState<string | null>(null);
-  const [success, setSuccess]                 = useState<string | null>(null);
+  // Shared marks
+  const [students,         setStudents]         = useState<Student[]>([]);
+  const [summativeEntries, setSummativeEntries] = useState<Record<string,SummativeEntry>>({});
+  const [formativeEntries, setFormativeEntries] = useState<Record<string,FormativeEntry>>({});
+  const [loadingData,      setLoadingData]      = useState(false);
+  const [saving,           setSaving]           = useState(false);
+  const [error,            setError]            = useState<string|null>(null);
+  const [success,          setSuccess]          = useState<string|null>(null);
 
   const isMounted = useRef(true);
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
+  useEffect(()=>{ isMounted.current=true; return()=>{ isMounted.current=false; }; },[]);
 
-  const classIds = useMemo(
-    () => [...new Set(teacherClasses.map((tc) => tc.class_id))],
-    [teacherClasses]
-  );
+  const classIds = useMemo(()=>[...new Set(teacherClasses.map(tc=>tc.class_id))],[teacherClasses]);
 
-  // ─── Map class_id to class name for display ───────────────────────────────
-  const classNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    teacherClasses.forEach(tc => {
-      const cls = firstRel(tc.classes);
-      if (cls?.name) map.set(tc.class_id, cls.name);
-    });
-    return map;
-  }, [teacherClasses]);
+  const classNameMap = useMemo(()=>{
+    const m=new Map<string,string>();
+    teacherClasses.forEach(tc=>{ const c=firstRel(tc.classes); if(c?.name) m.set(tc.class_id,c.name); });
+    return m;
+  },[teacherClasses]);
 
-  const teacherClassList = useMemo(() => {
-    const seen = new Set<string>();
-    return teacherClasses.filter((tc) => {
-      if (seen.has(tc.class_id)) return false;
-      seen.add(tc.class_id);
-      return true;
-    });
-  }, [teacherClasses]);
+  const uniqueClasses = useMemo(()=>{
+    const seen=new Set<string>();
+    return teacherClasses.filter(tc=>{ if(seen.has(tc.class_id)) return false; seen.add(tc.class_id); return true; });
+  },[teacherClasses]);
 
-  const formativeSubjects = useMemo(
-    () => teacherClasses.filter((tc) => tc.class_id === fClassId),
-    [teacherClasses, fClassId]
-  );
+  const fSubjects = useMemo(()=>teacherClasses.filter(tc=>tc.class_id===fClassId),[teacherClasses,fClassId]);
 
-  const availableSubjects = useMemo(() => {
+  const availableSubjects = useMemo(()=>{
     if (!selectedAssessment) return [];
-    return teacherClasses
-      .filter((tc) => tc.class_id === selectedAssessment.class_id)
-      .filter((tc) => !!firstRel(tc.subjects)?.name);
-  }, [teacherClasses, selectedAssessment]);
+    return teacherClasses.filter(tc=>tc.class_id===selectedAssessment.class_id&&!!firstRel(tc.subjects)?.name);
+  },[teacherClasses,selectedAssessment]);
 
-  // ── Fetch summative assessments — scoped to the current active term ───────
-  // This keeps the dropdown short and relevant. Teachers who genuinely need
-  // to edit a past term's scores can use the History tab instead.
-  useEffect(() => {
+  const subjectNameMap = useMemo(()=>new Map(teacherClasses.map(tc=>[tc.subject_id,firstRel(tc.subjects)?.name??tc.subject_id])),[teacherClasses]);
+
+  // Load summative assessments
+  useEffect(()=>{
     if (!classIds.length) return;
     setLoadingAssessments(true);
-
-    // Resolve which term to filter by: prefer the prop from the active academic
-    // calendar; fall back to the month-derived constant only if not provided.
-    const termToFilter = currentTerm ?? CURRENT_TERM;
-    const yearToFilter = assessmentYear ?? CURRENT_YEAR;
-
-    let query = supabase
-      .from("assessments")
-      .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date, strands(name), sub_strands(name)`)
-      .in("class_id", classIds)
-      .eq("category", "summative")
-      .eq("term", termToFilter)       // ← only current term
-      .eq("year", yearToFilter)       // ← only current academic year
-      .order("title", { ascending: true });
-
-    query.then(({ data, error: err }) => {
-      if (!isMounted.current) return;
-      if (err) { console.error(err); setError("Failed to load assessments"); }
-      else setAssessments(data || []);
-      setLoadingAssessments(false);
-    });
-  }, [classIds, currentTerm, assessmentYear]);
-
-  // ── Fetch history — no term filter, shows everything ─────────────────────
-  const fetchHistory = async () => {
-    if (!classIds.length || !teacherClasses.length) return;
-    setLoadingHistory(true);
-
-    try {
-      const validPairs = new Set(
-        teacherClasses.map((tc) => `${tc.class_id}__${tc.subject_id}`)
-      );
-      const subjectIds = teacherClasses.map((tc) => tc.subject_id);
-
-      const { data: results, error: rErr } = await supabase
-        .from("assessment_results")
-        .select("assessment_id, subject_id, score, is_absent, assessment_date, status")
-        .in("subject_id", subjectIds);
-
-      if (rErr) throw rErr;
-      if (!results?.length) { setHistoryItems([]); setLoadingHistory(false); return; }
-
-      const assessmentIds = [...new Set(results.map((r) => r.assessment_id))];
-      const { data: assessmentData, error: aErr } = await supabase
-        .from("assessments")
-        .select(`id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date, strands(name), sub_strands(name)`)
-        .in("id", assessmentIds)
-        .in("class_id", classIds);
-
-      if (aErr) throw aErr;
-
-      const assessmentMap = new Map((assessmentData || []).map((a) => [a.id, a]));
-
-      const pairs = new Map<
-        string,
-        { assessment_id: string; subject_id: string; count: number; latest: string | null; status: "draft" | "published" }
-      >();
-
-      results.forEach((r) => {
-        const assessment = assessmentMap.get(r.assessment_id);
-        if (!assessment) return;
-
-        const pairKey = `${assessment.class_id}__${r.subject_id}`;
-        if (!validPairs.has(pairKey)) return;
-
-        const key = `${r.assessment_id}__${r.subject_id}`;
-        if (!pairs.has(key)) {
-          pairs.set(key, { assessment_id: r.assessment_id, subject_id: r.subject_id, count: 0, latest: null, status: r.status });
-        }
-        const p = pairs.get(key)!;
-        p.count++;
-        if (r.assessment_date && (!p.latest || r.assessment_date > p.latest)) p.latest = r.assessment_date;
-        if (r.status === "published") p.status = "published";
+    supabase.from("assessments")
+      .select("id,title,term,year,class_id,max_marks,assessment_date")
+      .in("class_id",classIds).eq("category","summative")
+      .eq("term",currentTerm??CURRENT_TERM).eq("year",assessmentYear??CURRENT_YEAR)
+      .order("title")
+      .then(({data,error:err})=>{
+        if (!isMounted.current) return;
+        if (err) setError("Failed to load assessments");
+        else setSummativeList(data??[]);
+        setLoadingAssessments(false);
       });
+  },[classIds,currentTerm,assessmentYear]);
 
-      const subjectNameMap = new Map(
-        teacherClasses.map((tc) => [tc.subject_id, firstRel(tc.subjects)?.name ?? tc.subject_id])
-      );
+  // Load students for a class
+  const loadStudents = useCallback(async (classId:string):Promise<Student[]>=>{
+    const {data,error:err} = await supabase.from("enrollments")
+      .select("student_id, students!inner(id,Reg_no,first_name,last_name)").eq("class_id",classId);
+    if (err||!data) return [];
+    return data.map(e=>firstRel(e.students)).filter((s):s is Student=>!!s);
+  },[]);
 
-      const items: HistoryItem[] = [];
-      pairs.forEach((p) => {
-        const assessment = assessmentMap.get(p.assessment_id);
-        if (!assessment) return;
-        items.push({
-          assessment,
-          subject_id:   p.subject_id,
-          subject_name: subjectNameMap.get(p.subject_id) ?? p.subject_id,
-          result_count: p.count,
-          latest_date:  p.latest,
-          status:       p.status,
-        });
-      });
-
-      items.sort((a, b) => {
-        const da = a.latest_date ?? "";
-        const db = b.latest_date ?? "";
-        return db.localeCompare(da);
-      });
-
-      if (isMounted.current) setHistoryItems(items);
-    } catch (err) {
-      console.error("History fetch error:", err);
-    } finally {
-      if (isMounted.current) setLoadingHistory(false);
-    }
-  };
-
-  useEffect(() => {
-    if (mode === "history") fetchHistory();
-  }, [mode, classIds]);
-
-  // ── Load students + existing results ─────────────────────────────────────
-  const loadStudentsAndResults = async (
-    classId: string,
-    assessmentId: string,
-    subjectId: string,
-    defaultDate?: string,
-  ) => {
-    setLoadingData(true);
-    setError(null);
-
-    const [enrollRes, resultsRes] = await Promise.all([
-      supabase
-        .from("enrollments")
-        .select(`student_id, students!inner(id, Reg_no, first_name, last_name)`)
-        .eq("class_id", classId),
-      supabase
-        .from("assessment_results")
-        .select("student_id, score, performance_level, teacher_remarks, is_absent, assessment_date")
-        .eq("assessment_id", assessmentId)
-        .eq("subject_id", subjectId)
-        .in("status", ["draft", "published"]),
+  // Load summative data
+  const loadSummativeData = useCallback(async (asm:SummativeAssessment, subjectId:string)=>{
+    setLoadingData(true); setError(null);
+    const [studentList, {data:results,error:rErr}] = await Promise.all([
+      loadStudents(asm.class_id),
+      supabase.from("assessment_results")
+        .select("student_id,score,performance_level,teacher_remarks,is_absent,assessment_date")
+        .eq("assessment_id",asm.id).eq("subject_id",subjectId),
     ]);
-
     if (!isMounted.current) return;
-
-    if (enrollRes.error) { setError("Failed to load students."); setLoadingData(false); return; }
-    if (resultsRes.error) { setError("Failed to load existing results."); setLoadingData(false); return; }
-
-    const studentList: Student[] = (enrollRes.data || [])
-      .map((e) => firstRel(e.students))
-      .filter((s): s is Student => !!s);
-
-    const resultsMap: Record<string, ExistingResult> = {};
-    (resultsRes.data || []).forEach((r) => { resultsMap[r.student_id] = r; });
-
-    const fallbackDate = defaultDate || new Date().toISOString().slice(0, 10);
-    const initialEntries: Record<string, EntryRow> = {};
-    studentList.forEach((s) => {
-      const ex = resultsMap[s.id];
-      initialEntries[s.id] = {
-        score:             ex ? String(ex.score) : "",
-        performance_level: ex?.performance_level ?? null,
-        teacher_remarks:   ex?.teacher_remarks ?? "",
-        is_absent:         ex?.is_absent ?? false,
-        date:              ex?.assessment_date ? ex.assessment_date.slice(0, 10) : fallbackDate,
+    if (rErr) { setError("Failed to load results."); setLoadingData(false); return; }
+    const map:Record<string,typeof results[0]>={};
+    (results??[]).forEach(r=>{ map[r.student_id]=r; });
+    const fb = asm.assessment_date||today();
+    const init:Record<string,SummativeEntry>={};
+    studentList.forEach(s=>{
+      const ex=map[s.id];
+      init[s.id]={
+        score:             ex?String(ex.score):"",
+        performance_level: (ex?.performance_level as PerformanceLevel|null)??null,
+        teacher_remarks:   ex?.teacher_remarks??"",
+        is_absent:         ex?.is_absent??false,
+        date:              ex?.assessment_date?String(ex.assessment_date).slice(0,10):fb,
       };
     });
+    setStudents(studentList); setSummativeEntries(init); setLoadingData(false);
+  },[loadStudents]);
 
-    setStudents(studentList);
-    setExistingResults(resultsMap);
-    setEntries(initialEntries);
-    setLoadingData(false);
+  // Load formative data
+  const loadFormativeData = useCallback(async (activity:FormativeActivity)=>{
+    setLoadingData(true); setError(null);
+    const [studentList, {data:results,error:rErr}] = await Promise.all([
+      loadStudents(activity.class_id),
+      supabase.from("formative_results")
+        .select("student_id,performance_level,is_absent,teacher_comment")
+        .eq("formative_activity_id",activity.id),
+    ]);
+    if (!isMounted.current) return;
+    if (rErr) { setError("Failed to load results."); setLoadingData(false); return; }
+    const map:Record<string,typeof results[0]>={};
+    (results??[]).forEach(r=>{ map[r.student_id]=r; });
+    const init:Record<string,FormativeEntry>={};
+    studentList.forEach(s=>{
+      const ex=map[s.id];
+      init[s.id]={ performance_level:(ex?.performance_level as PerformanceLevel|null)??null, teacher_comment:ex?.teacher_comment??"", is_absent:ex?.is_absent??false };
+    });
+    setStudents(studentList); setFormativeEntries(init); setLoadingData(false);
+  },[loadStudents]);
+
+  useEffect(()=>{
+    if (!selectedAssessmentId) { setSelectedAssessment(null); setSelectedSubjectId(""); setStudents([]); setSummativeEntries({}); return; }
+    setSelectedAssessment(summativeList.find(a=>a.id===selectedAssessmentId)??null);
+    setSelectedSubjectId(""); setStudents([]); setSummativeEntries({});
+    setError(null); setSuccess(null);
+  },[selectedAssessmentId,summativeList]);
+
+  useEffect(()=>{
+    if (!selectedAssessment||!selectedSubjectId) return;
+    loadSummativeData(selectedAssessment,selectedSubjectId);
+  },[selectedAssessment,selectedSubjectId,loadSummativeData]);
+
+  // Fetch history
+  const fetchHistory = useCallback(async ()=>{
+    if (!classIds.length) return;
+    setLoadingHistory(true);
+    try {
+      const items:HistoryItem[]=[];
+      const validPairs=new Set(teacherClasses.map(tc=>`${tc.class_id}__${tc.subject_id}`));
+      const subjectIds=teacherClasses.map(tc=>tc.subject_id);
+
+      // Summative history
+      const {data:sResults} = await supabase.from("assessment_results")
+        .select("assessment_id,subject_id,assessment_date,status").in("subject_id",subjectIds);
+      if (sResults?.length) {
+        const asmIds=[...new Set(sResults.map(r=>r.assessment_id))];
+        const {data:asms} = await supabase.from("assessments")
+          .select("id,title,term,year,class_id,max_marks,assessment_date")
+          .in("id",asmIds).in("class_id",classIds).eq("category","summative");
+        const asmMap=new Map((asms??[]).map(a=>[a.id,a]));
+        const pairs=new Map<string,{count:number;latest:string|null;status:"draft"|"published"}>();
+        sResults.forEach(r=>{
+          const a=asmMap.get(r.assessment_id);
+          if (!a||!validPairs.has(`${a.class_id}__${r.subject_id}`)) return;
+          const key=`${r.assessment_id}__${r.subject_id}`;
+          if (!pairs.has(key)) pairs.set(key,{count:0,latest:null,status:r.status});
+          const p=pairs.get(key)!; p.count++;
+          if (r.assessment_date&&(!p.latest||r.assessment_date>p.latest)) p.latest=r.assessment_date;
+          if (r.status==="published") p.status="published";
+        });
+        pairs.forEach((p,key)=>{
+          const [asmId,subjectId]=key.split("__");
+          const a=asmMap.get(asmId); if (!a) return;
+          items.push({ type:"summative", key, title:a.title, term:a.term, year:a.year,
+            class_id:a.class_id, subject_id:subjectId, subject_name:subjectNameMap.get(subjectId)??subjectId,
+            strand_name:null, sub_strand_name:null,
+            result_count:p.count, latest_date:p.latest, status:p.status,
+            summativeAssessment:a });
+        });
+      }
+
+      // Formative history
+      const {data:fActivities} = await supabase.from("formative_activities")
+        .select("id,title,term,year,class_id,subject_id,strand_id,sub_strand_id,activity_date,teacher_id,description,strands(id,name),sub_strands(id,name)")
+        .eq("teacher_id",teacherId).in("class_id",classIds).order("activity_date",{ascending:false});
+      if (fActivities?.length) {
+        const fIds=fActivities.map(fa=>fa.id);
+        const {data:fCounts} = await supabase.from("formative_results")
+          .select("formative_activity_id").in("formative_activity_id",fIds);
+        const countMap=new Map<string,number>();
+        (fCounts??[]).forEach(r=>countMap.set(r.formative_activity_id,(countMap.get(r.formative_activity_id)??0)+1));
+        fActivities.forEach(fa=>{
+          if (!validPairs.has(`${fa.class_id}__${fa.subject_id}`)) return;
+          const strand=firstRel(fa.strands as any); const sub=firstRel(fa.sub_strands as any);
+          items.push({ type:"formative", key:fa.id, title:fa.title, term:fa.term, year:fa.year,
+            class_id:fa.class_id, subject_id:fa.subject_id, subject_name:subjectNameMap.get(fa.subject_id)??fa.subject_id,
+            strand_name:strand?.name??null, sub_strand_name:sub?.name??null,
+            result_count:countMap.get(fa.id)??0, latest_date:fa.activity_date, status:"published",
+            formativeActivity:fa as FormativeActivity });
+        });
+      }
+
+      items.sort((a,b)=>(b.latest_date??"").localeCompare(a.latest_date??""));
+      if (isMounted.current) setHistory(items);
+    } catch(err) { console.error(err); }
+    finally { if (isMounted.current) setLoadingHistory(false); }
+  },[classIds,teacherClasses,teacherId,subjectNameMap]);
+
+  useEffect(()=>{ if (mode==="history") fetchHistory(); },[mode,fetchHistory]);
+
+  const resetAll = () => {
+    setSelectedAssessmentId(""); setSelectedAssessment(null); setSelectedSubjectId("");
+    setFClassId(""); setFSubjectId(""); setFTitle(""); setFDesc("");
+    setFStrandId("__none__"); setFStrandName(""); setFSubStrandId("__none__"); setFSubStrandName("");
+    setFDate(today()); setFTerm(String(currentTerm??CURRENT_TERM)); setFYear(String(assessmentYear??CURRENT_YEAR));
+    setActiveActivity(null); setStudents([]); setSummativeEntries({}); setFormativeEntries({});
+    setError(null); setSuccess(null); setCreateErr(null); setEditingItem(null);
   };
 
-  useEffect(() => {
-    if (!selectedAssessment || !selectedSubjectId) { resetMarksState(); return; }
-    const defaultDate = selectedAssessment.assessment_date || new Date().toISOString().slice(0, 10);
-    loadStudentsAndResults(selectedAssessment.class_id, selectedAssessment.id, selectedSubjectId, defaultDate);
-  }, [selectedAssessment, selectedSubjectId]);
+  const switchMode = (m:Mode) => { setMode(m); resetAll(); };
 
-  useEffect(() => {
-    if (!selectedAssessmentId) { setSelectedAssessment(null); setSelectedSubjectId(""); resetMarksState(); return; }
-    const found = assessments.find((a) => a.id === selectedAssessmentId) || null;
-    setSelectedAssessment(found);
-    setSelectedSubjectId("");
-    resetMarksState();
-    setError(null);
-    setSuccess(null);
-  }, [selectedAssessmentId, assessments]);
-
-  const resetMarksState = () => {
-    setStudents([]);
-    setEntries({});
-    setExistingResults({});
+  // Create formative activity
+  const handleCreateFormative = async () => {
+    if (!fClassId||!fSubjectId||!fTitle.trim()||!fDate) { setCreateErr("Class, subject, title and date are required."); return; }
+    setCreating(true); setCreateErr(null);
+    try {
+      const {data,error:err} = await supabase.from("formative_activities").insert({
+        teacher_id:teacherId, class_id:fClassId, subject_id:fSubjectId,
+        title:fTitle.trim(), description:fDesc.trim()||null,
+        strand_id:fStrandId==="__none__"?null:fStrandId,
+        sub_strand_id:fSubStrandId==="__none__"?null:fSubStrandId,
+        activity_date:fDate, term:parseInt(fTerm), year:parseInt(fYear),
+      }).select("id,title,description,term,year,class_id,subject_id,strand_id,sub_strand_id,activity_date,teacher_id").single();
+      if (err) throw err;
+      const activity:FormativeActivity={...data,
+        strands:     fStrandId!=="__none__"    ?{id:fStrandId,    name:fStrandName}    :null,
+        sub_strands: fSubStrandId!=="__none__"  ?{id:fSubStrandId, name:fSubStrandName}:null,
+      };
+      setActiveActivity(activity);
+      await loadFormativeData(activity);
+      setSuccess(`"${data.title}" created — select performance levels below.`);
+    } catch(err:unknown) {
+      setCreateErr(err instanceof Error?err.message:"Failed to create activity.");
+    } finally { if (isMounted.current) setCreating(false); }
   };
 
-  // ── Switch mode ───────────────────────────────────────────────────────────
-  const switchMode = (m: Mode) => {
-    setMode(m);
-    setSelectedAssessmentId("");
-    setSelectedAssessment(null);
-    setSelectedSubjectId("");
-    setFClassId(""); setFSubjectId(""); setFTitle("");
-    setFStrand(""); setFSubStrand("");
-    setFDate(new Date().toISOString().slice(0, 10));
-    setFTerm(String(currentTerm ?? CURRENT_TERM));
-    setFYear(String(assessmentYear ?? CURRENT_YEAR));
-    resetMarksState();
-    setError(null); setSuccess(null); setCreateError(null);
-    setEditingHistory(false);
-  };
-
-  // ── Open a history item for editing ──────────────────────────────────────
-  const handleEditHistoryItem = async (item: HistoryItem) => {
-    setEditingHistory(true);
-    setSelectedAssessment(item.assessment);
-    setSelectedSubjectId(item.subject_id);
-    setError(null);
-    setSuccess(null);
-    const defaultDate = item.assessment.assessment_date || new Date().toISOString().slice(0, 10);
-    await loadStudentsAndResults(item.assessment.class_id, item.assessment.id, item.subject_id, defaultDate);
+  // Open history item
+  const handleEditItem = async (item:HistoryItem) => {
+    setEditingItem(item); setError(null); setSuccess(null);
+    if (item.type==="summative"&&item.summativeAssessment) {
+      setSelectedAssessment(item.summativeAssessment);
+      setSelectedSubjectId(item.subject_id);
+      await loadSummativeData(item.summativeAssessment,item.subject_id);
+    } else if (item.type==="formative"&&item.formativeActivity) {
+      setActiveActivity(item.formativeActivity);
+      await loadFormativeData(item.formativeActivity);
+    }
   };
 
   const handleBackToHistory = () => {
-    setEditingHistory(false);
-    setSelectedAssessment(null);
-    setSelectedSubjectId("");
-    resetMarksState();
-    setError(null);
-    setSuccess(null);
-    fetchHistory();
+    setEditingItem(null); setSelectedAssessment(null); setSelectedSubjectId("");
+    setActiveActivity(null); setStudents([]); setSummativeEntries({}); setFormativeEntries({});
+    setError(null); setSuccess(null); fetchHistory();
   };
 
-  // ── Create formative ──────────────────────────────────────────────────────
-  const handleCreateFormative = async () => {
-    if (!fClassId || !fSubjectId || !fTitle.trim() || !fDate) {
-      setCreateError("Class, subject, title and date are all required.");
-      return;
-    }
-    setCreatingFormative(true);
-    setCreateError(null);
+  // Entry handlers
+  const handleScoreChange = useCallback((id:string,v:string)=>{
+    setSummativeEntries(prev=>{ const n=parseFloat(v);
+      return {...prev,[id]:{...prev[id],score:v,performance_level:(!isNaN(n)&&selectedAssessment)?perfLevel(n,selectedAssessment.max_marks):null}}; });
+  },[selectedAssessment]);
 
+  const handleSRemarksChange   = useCallback((id:string,v:string)=>setSummativeEntries(prev=>({...prev,[id]:{...prev[id],teacher_remarks:v}})),[]);
+  const handleSDateChange      = useCallback((id:string,v:string)=>setSummativeEntries(prev=>({...prev,[id]:{...prev[id],date:v}})),[]);
+  const handleSAbsentToggle    = useCallback((id:string)=>setSummativeEntries(prev=>({...prev,[id]:{...prev[id],is_absent:!prev[id]?.is_absent,score:"",performance_level:null}})),[]);
+  const handleFLevelChange     = useCallback((id:string,l:PerformanceLevel)=>setFormativeEntries(prev=>({...prev,[id]:{...prev[id],performance_level:l}})),[]);
+  const handleFCommentChange   = useCallback((id:string,v:string)=>setFormativeEntries(prev=>({...prev,[id]:{...prev[id],teacher_comment:v}})),[]);
+  const handleFAbsentToggle    = useCallback((id:string)=>setFormativeEntries(prev=>({...prev,[id]:{...prev[id],is_absent:!prev[id]?.is_absent,performance_level:null}})),[]);
+
+  // Save summative
+  const saveSummative = async () => {
+    if (!selectedAssessment||!selectedSubjectId) return;
+    setSaving(true); setError(null); setSuccess(null);
     try {
-      let strandId: string | null = null;
-      let subStrandId: string | null = null;
-
-      if (fStrand.trim()) {
-        const { data: existingStrand } = await supabase
-          .from("strands").select("id")
-          .eq("subject_id", fSubjectId).ilike("name", fStrand.trim()).maybeSingle();
-
-        if (existingStrand) {
-          strandId = existingStrand.id;
-        } else {
-          const { data: newStrand, error: sErr } = await supabase
-            .from("strands")
-            .insert({ subject_id: fSubjectId, name: fStrand.trim(), code: fStrand.trim().slice(0, 10).toUpperCase().replace(/\s+/g, "_") })
-            .select("id").single();
-          if (sErr) throw sErr;
-          strandId = newStrand.id;
-        }
-
-        if (fSubStrand.trim() && strandId) {
-          const { data: existingSub } = await supabase
-            .from("sub_strands").select("id")
-            .eq("strand_id", strandId).ilike("name", fSubStrand.trim()).maybeSingle();
-
-          if (existingSub) {
-            subStrandId = existingSub.id;
-          } else {
-            const { data: newSub, error: ssErr } = await supabase
-              .from("sub_strands")
-              .insert({ strand_id: strandId, name: fSubStrand.trim(), code: fSubStrand.trim().slice(0, 10).toUpperCase().replace(/\s+/g, "_") })
-              .select("id").single();
-            if (ssErr) throw ssErr;
-            subStrandId = newSub.id;
-          }
-        }
-      }
-
-      const { data: newAssessment, error: aErr } = await supabase
-        .from("assessments")
-        .insert({
-          title: fTitle.trim(), class_id: fClassId, category: "formative",
-          max_marks: 0, term: parseInt(fTerm), year: parseInt(fYear),
-          teacher_id: teacherId, strand_id: strandId, sub_strand_id: subStrandId,
-          assessment_date: fDate,
-        })
-        .select("id, title, term, year, class_id, category, max_marks, strand_id, sub_strand_id, assessment_date")
-        .single();
-
-      if (aErr) throw aErr;
-
-      setSelectedAssessment({
-        ...newAssessment,
-        strands:     strandId    ? [{ name: fStrand.trim() }]    : null,
-        sub_strands: subStrandId ? [{ name: fSubStrand.trim() }] : null,
-      });
-      setSelectedSubjectId(fSubjectId);
-      await loadStudentsAndResults(fClassId, newAssessment.id, fSubjectId, fDate);
-      setSuccess(`"${newAssessment.title}" created. Enter performance levels below.`);
-    } catch (err: any) {
-      console.error(err);
-      setCreateError(err.message || "Failed to create assessment.");
-    } finally {
-      if (isMounted.current) setCreatingFormative(false);
-    }
-  };
-
-  // ── Entry handlers (stable with useCallback) ──────────────────────────────
-
-  const updateEntry = useCallback((studentId: string, patch: Partial<EntryRow>) =>
-    setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } })),
-  []);
-
-  const handleScoreChange = useCallback((studentId: string, value: string) => {
-    setEntries((prev) => {
-      const n = parseFloat(value);
-      return {
-        ...prev,
-        [studentId]: {
-          ...prev[studentId],
-          score: value,
-          performance_level: (!isNaN(n) && selectedAssessment)
-            ? getPerformanceLevel(n, selectedAssessment.max_marks)
-            : null,
-        },
-      };
-    });
-  }, [selectedAssessment]);
-
-  const handleLevelChange = useCallback((studentId: string, level: PerformanceLevel) =>
-    updateEntry(studentId, { performance_level: level }),
-  [updateEntry]);
-
-  const handleRemarksChange = useCallback((studentId: string, value: string) =>
-    updateEntry(studentId, { teacher_remarks: value }),
-  [updateEntry]);
-
-  const handleDateChange = useCallback((studentId: string, value: string) =>
-    updateEntry(studentId, { date: value }),
-  [updateEntry]);
-
-  const handleAbsentToggle = useCallback((studentId: string) => {
-    setEntries((prev) => {
-      const current = prev[studentId]?.is_absent ?? false;
-      return {
-        ...prev,
-        [studentId]: { ...prev[studentId], is_absent: !current, score: "", performance_level: null },
-      };
-    });
-  }, []);
-
-  // ── Save ──────────────────────────────────────────────────────────────────
-
-  const handleSave = async () => {
-    if (!selectedAssessment || !selectedSubjectId) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    const isFormativeMode = selectedAssessment.category === "formative";
-    const saveStatus = isFormativeMode ? "published" : "draft";
-
-    try {
-      const records = students.map((s) => {
-        const entry = entries[s.id];
-        if (!entry?.date) return null;
-        const base = {
-          assessment_id: selectedAssessment.id, student_id: s.id,
-          subject_id: selectedSubjectId, assessment_date: entry.date,
-          teacher_remarks: entry.teacher_remarks || null,
-          status: saveStatus, updated_at: new Date().toISOString(),
-        };
-        if (entry.is_absent) return { ...base, score: 0, performance_level: null, is_absent: true };
-        if (isFormativeMode) {
-          if (!entry.performance_level) return null;
-          return { ...base, score: 0, performance_level: entry.performance_level, is_absent: false };
-        }
-        const score = parseFloat(entry.score);
-        if (isNaN(score) || entry.score === "") return null;
-        return {
-          ...base, score, is_absent: false,
-          performance_level: entry.performance_level || getPerformanceLevel(score, selectedAssessment.max_marks),
-        };
+      const records = students.map(s=>{
+        const e=summativeEntries[s.id]; if (!e) return null;
+        const base={assessment_id:selectedAssessment.id,student_id:s.id,subject_id:selectedSubjectId,
+          assessment_date:e.date,teacher_remarks:e.teacher_remarks||null,status:"draft" as const,updated_at:new Date().toISOString()};
+        if (e.is_absent) return {...base,score:0,performance_level:null,is_absent:true};
+        const score=parseFloat(e.score); if (isNaN(score)||e.score==="") return null;
+        return {...base,score,is_absent:false,performance_level:e.performance_level||perfLevel(score,selectedAssessment.max_marks)};
       }).filter(Boolean);
-
-      if (!records.length) {
-        setError(isFormativeMode
-          ? "Select EE / ME / AE / BE for at least one student."
-          : "Enter a score for at least one student.");
-        setSaving(false);
-        return;
-      }
-
-      const { error: upsertError } = await supabase
-        .from("assessment_results")
-        .upsert(records, { onConflict: "assessment_id, student_id, subject_id", ignoreDuplicates: false });
-
-      if (upsertError) throw upsertError;
-
-      if (isFormativeMode) {
-        setSelectedAssessment(null);
-        setSelectedSubjectId("");
-        resetMarksState();
-        setSuccess(`${records.length} result(s) saved and published successfully!`);
-        setSaving(false);
-        return;
-      }
-
+      if (!records.length) { setError("Enter a score for at least one student."); setSaving(false); return; }
+      const {error:err} = await supabase.from("assessment_results").upsert(records,{onConflict:"assessment_id,student_id,subject_id",ignoreDuplicates:false});
+      if (err) throw err;
       setSuccess(`${records.length} result(s) saved as draft for admin to publish.`);
-
-      const { data: refreshed } = await supabase
-        .from("assessment_results")
-        .select("student_id, score, performance_level, teacher_remarks, is_absent, assessment_date")
-        .eq("assessment_id", selectedAssessment.id)
-        .eq("subject_id", selectedSubjectId)
-        .in("status", ["draft", "published"]);
-
-      if (isMounted.current) {
-        const newMap: Record<string, ExistingResult> = {};
-        refreshed?.forEach((r) => { newMap[r.student_id] = r; });
-        setExistingResults(newMap);
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to save. Please try again.");
-    } finally {
-      if (isMounted.current) setSaving(false);
-    }
+    } catch(err) { console.error(err); setError("Failed to save. Please try again."); }
+    finally { if (isMounted.current) setSaving(false); }
   };
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-
-  const isFormative = selectedAssessment?.category === "formative";
-
-  const filledCount = students.filter((s) => {
-    const e = entries[s.id];
-    if (!e) return false;
-    if (e.is_absent) return true;
-    if (isFormative) return !!e.performance_level;
-    return e.score !== "";
-  }).length;
-
-  const strandName    = firstRel(selectedAssessment?.strands)?.name;
-  const subStrandName = firstRel(selectedAssessment?.sub_strands)?.name;
-
-  const filteredHistory = historyItems.filter((item) => {
-    if (historyFilter === "all") return true;
-    return item.assessment.category === historyFilter;
-  });
-
-  const showMarksTable =
-    mode === "summative" ||
-    (mode === "formative" && !!selectedAssessment) ||
-    (mode === "history" && editingHistory);
-
-  const handleMarksBack = () => {
-    if (editingHistory) {
-      handleBackToHistory();
-    } else {
-      setSelectedAssessment(null);
-      setSelectedSubjectId("");
-      resetMarksState();
-      setSuccess(null);
-    }
+  // Save formative
+  const saveFormative = async () => {
+    if (!activeActivity) return;
+    setSaving(true); setError(null); setSuccess(null);
+    try {
+      const records = students.map(s=>{
+        const e=formativeEntries[s.id]; if (!e) return null;
+        if (e.is_absent) return {formative_activity_id:activeActivity.id,student_id:s.id,performance_level:null,is_absent:true,teacher_comment:e.teacher_comment||null,updated_at:new Date().toISOString()};
+        if (!e.performance_level) return null;
+        return {formative_activity_id:activeActivity.id,student_id:s.id,performance_level:e.performance_level,is_absent:false,teacher_comment:e.teacher_comment||null,updated_at:new Date().toISOString()};
+      }).filter(Boolean);
+      if (!records.length) { setError("Select EE/ME/AE/BE for at least one student."); setSaving(false); return; }
+      const {error:err} = await supabase.from("formative_results").upsert(records,{onConflict:"formative_activity_id,student_id",ignoreDuplicates:false});
+      if (err) throw err;
+      // Reset for new activity
+      setActiveActivity(null); setStudents([]); setFormativeEntries({});
+      setFTitle(""); setFDesc(""); setFStrandId("__none__"); setFStrandName(""); setFSubStrandId("__none__"); setFSubStrandName(""); setFDate(today());
+      setSuccess(`${records.length} result(s) saved and published.`);
+    } catch(err) { console.error(err); setError("Failed to save. Please try again."); }
+    finally { if (isMounted.current) setSaving(false); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Derived
+  const sFilledCount = students.filter(s=>{ const e=summativeEntries[s.id]; return e&&(e.is_absent||e.score!==""); }).length;
+  const fFilledCount = students.filter(s=>{ const e=formativeEntries[s.id]; return e&&(e.is_absent||!!e.performance_level); }).length;
+  const filteredHistory = history.filter(i=>histFilter==="all"||i.type===histFilter);
+  const showSummaryTable  = (mode==="summative"||editingItem?.type==="summative") && !!selectedAssessment && !!selectedSubjectId;
+  const showFormativeTable = (mode==="formative"||editingItem?.type==="formative") && !!activeActivity;
+  const strandName    = firstRel(activeActivity?.strands as any)?.name;
+  const subStrandName = firstRel(activeActivity?.sub_strands as any)?.name;
 
   return (
     <div className="space-y-4">
-
-      {/* ── Mode switcher ── */}
+      {/* Mode switcher */}
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant={mode === "summative" ? "default" : "outline"} size="sm"
-          onClick={() => switchMode("summative")}
-          className={mode === "summative" ? "bg-purple-600 hover:bg-purple-700" : ""}
-        >
-          <ClipboardList className="h-4 w-4 mr-2" /> Enter Exam Marks
-        </Button>
-        <Button
-          variant={mode === "formative" ? "default" : "outline"} size="sm"
-          onClick={() => switchMode("formative")}
-          className={mode === "formative" ? "bg-teal-600 hover:bg-teal-700" : ""}
-        >
-          <Plus className="h-4 w-4 mr-2" /> Record Class Activity
-        </Button>
-        <Button
-          variant={mode === "history" ? "default" : "outline"} size="sm"
-          onClick={() => switchMode("history")}
-          className={mode === "history" ? "bg-orange-600 hover:bg-orange-700" : ""}
-        >
-          <History className="h-4 w-4 mr-2" /> View &amp; Edit History
-        </Button>
+        {([
+          {m:"summative" as Mode, label:"Enter Exam Marks",     Icon:ClipboardList, cls:"bg-purple-600 hover:bg-purple-700"},
+          {m:"formative" as Mode, label:"Record Class Activity",Icon:Plus,          cls:"bg-teal-600 hover:bg-teal-700"},
+          {m:"history"   as Mode, label:"View & Edit History",  Icon:History,       cls:"bg-orange-600 hover:bg-orange-700"},
+        ]).map(({m,label,Icon,cls})=>(
+          <Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>switchMode(m)} className={mode===m?cls:""}>
+            <Icon className="h-4 w-4 mr-2"/>{label}
+          </Button>
+        ))}
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            {mode === "summative" && <><ClipboardList className="h-5 w-5 text-purple-600" /> Enter Exam Marks</>}
-            {mode === "formative" && <><Plus className="h-5 w-5 text-teal-600" /> Record Formative / Class Activity</>}
-            {mode === "history"   && <><History className="h-5 w-5 text-orange-600" /> View &amp; Edit History</>}
+            {mode==="summative"&&<><ClipboardList className="h-5 w-5 text-purple-600"/>Enter Exam Marks</>}
+            {mode==="formative"&&<><Plus className="h-5 w-5 text-teal-600"/>Record Class Activity</>}
+            {mode==="history"  &&<><History className="h-5 w-5 text-orange-600"/>View & Edit History</>}
           </CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-5">
 
-          {/* ════════ SUMMATIVE MODE ════════ */}
-          {mode === "summative" && (
+          {/* ── SUMMATIVE SELECTORS ── */}
+          {mode==="summative"&&!editingItem&&(
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="assessment">
-                  Assessment
-                  {currentTerm && (
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      — Term {currentTerm} only
-                    </span>
-                  )}
-                </Label>
+                <Label>Assessment{currentTerm&&<span className="ml-2 text-xs text-muted-foreground">— Term {currentTerm} only</span>}</Label>
                 <Select value={selectedAssessmentId} onValueChange={setSelectedAssessmentId}>
-                  <SelectTrigger id="assessment"><SelectValue placeholder="Select an assessment" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select an assessment"/></SelectTrigger>
                   <SelectContent>
-                    {loadingAssessments ? (
-                      <div className="flex items-center justify-center p-3"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                    ) : assessments.length === 0 ? (
-                      <div className="p-3 text-sm text-muted-foreground">
-                        No exams found for Term {currentTerm ?? CURRENT_TERM}. Use History to edit past terms.
-                      </div>
-                    ) : (
-                      assessments.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {classNameMap.get(a.class_id) || 'Unknown Class'}: {a.title} — Term {a.term}, {a.year}
-                        </SelectItem>
-                      ))
-                    )}
+                    {loadingAssessments
+                      ? <div className="flex items-center justify-center p-3"><Loader2 className="h-4 w-4 animate-spin"/></div>
+                      : summativeList.length===0
+                        ? <div className="p-3 text-sm text-muted-foreground">No exams for Term {currentTerm??CURRENT_TERM}. Use History to edit past terms.</div>
+                        : summativeList.map(a=>(
+                          <SelectItem key={a.id} value={a.id}>
+                            {classNameMap.get(a.class_id)||"Unknown"}: {a.title} — Term {a.term}, {a.year}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>
-              {selectedAssessment && (
+              {selectedAssessment&&(
                 <div className="space-y-1.5">
-                  <Label htmlFor="subject">Your Subject</Label>
-                  <Select value={selectedSubjectId} onValueChange={(v) => { setSelectedSubjectId(v); setError(null); setSuccess(null); }}>
-                    <SelectTrigger id="subject"><SelectValue placeholder="Select your subject" /></SelectTrigger>
+                  <Label>Your Subject</Label>
+                  <Select value={selectedSubjectId} onValueChange={v=>{setSelectedSubjectId(v);setError(null);setSuccess(null);}}>
+                    <SelectTrigger><SelectValue placeholder="Select your subject"/></SelectTrigger>
                     <SelectContent>
-                      {availableSubjects.length === 0 ? (
-                        <div className="p-3 text-sm text-muted-foreground">No subjects found for this class</div>
-                      ) : availableSubjects.map((tc) => {
-                        const subj = firstRel(tc.subjects);
-                        return <SelectItem key={tc.subject_id} value={tc.subject_id}>{subj?.name ?? tc.subject_id}</SelectItem>;
-                      })}
+                      {availableSubjects.map(tc=>{ const s=firstRel(tc.subjects); return <SelectItem key={tc.subject_id} value={tc.subject_id}>{s?.name??tc.subject_id}</SelectItem>; })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1108,72 +607,69 @@ export default function TeacherMarksEntry({
             </div>
           )}
 
-          {/* ════════ FORMATIVE CREATION FORM ════════ */}
-          {mode === "formative" && !selectedAssessment && (
+          {/* ── FORMATIVE CREATION FORM ── */}
+          {mode==="formative"&&!activeActivity&&(
             <div className="space-y-4">
-              {success && (
-                <div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 shrink-0" /> {success}
-                </div>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Create a new formative assessment. Results publish immediately — no admin approval needed.
-              </p>
+              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              <p className="text-sm text-muted-foreground">Record a new class activity. Results are saved to formative records and publish immediately.</p>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Class *</Label>
-                  <Select value={fClassId} onValueChange={(v) => { setFClassId(v); setFSubjectId(""); }}>
-                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <Select value={fClassId} onValueChange={v=>{setFClassId(v);setFSubjectId("");}}>
+                    <SelectTrigger><SelectValue placeholder="Select class"/></SelectTrigger>
                     <SelectContent>
-                      {teacherClassList.map((tc) => {
-                        const cls = firstRel(tc.classes);
-                        return (
-                          <SelectItem key={tc.class_id} value={tc.class_id}>
-                            {cls?.name ?? tc.class_id} {cls?.grade_level ? `(Grade ${cls.grade_level})` : ""}
-                          </SelectItem>
-                        );
-                      })}
+                      {uniqueClasses.map(tc=>{ const c=firstRel(tc.classes); return <SelectItem key={tc.class_id} value={tc.class_id}>{c?.name??tc.class_id}{c?.grade_level?` (Grade ${c.grade_level})`:""}</SelectItem>; })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Subject *</Label>
                   <Select value={fSubjectId} onValueChange={setFSubjectId} disabled={!fClassId}>
-                    <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select subject"/></SelectTrigger>
                     <SelectContent>
-                      {formativeSubjects.length === 0 ? (
-                        <div className="p-3 text-sm text-muted-foreground">Select a class first</div>
-                      ) : formativeSubjects.map((tc) => {
-                        const subj = firstRel(tc.subjects);
-                        return <SelectItem key={tc.subject_id} value={tc.subject_id}>{subj?.name ?? tc.subject_id}</SelectItem>;
-                      })}
+                      {fSubjects.length===0
+                        ? <div className="p-3 text-sm text-muted-foreground">Select a class first</div>
+                        : fSubjects.map(tc=>{ const s=firstRel(tc.subjects); return <SelectItem key={tc.subject_id} value={tc.subject_id}>{s?.name??tc.subject_id}</SelectItem>; })}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
               <div className="space-y-1.5">
                 <Label>Activity Title *</Label>
-                <Input placeholder="e.g. Week 5 Fractions Activity" value={fTitle} onChange={(e) => setFTitle(e.target.value)} />
+                <Input placeholder="e.g. Week 5 Fractions Activity" value={fTitle} onChange={e=>setFTitle(e.target.value)}/>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1">
-                    <BookOpen className="h-3.5 w-3.5 text-teal-600" />
-                    Strand <span className="text-muted-foreground text-xs ml-1">(optional)</span>
-                  </Label>
-                  <Input placeholder="e.g. Numbers, Measurement, Reading" value={fStrand} onChange={(e) => setFStrand(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Sub-strand <span className="text-muted-foreground text-xs ml-1">(optional)</span></Label>
-                  <Input placeholder="e.g. Fractions, Whole Numbers" value={fSubStrand}
-                    onChange={(e) => setFSubStrand(e.target.value)} disabled={!fStrand.trim()} />
-                </div>
+
+              <div className="space-y-1.5">
+                <Label>Description / Comment <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                <Input placeholder="e.g. Group work on place value exercises" value={fDesc} onChange={e=>setFDesc(e.target.value)}/>
               </div>
+
+              {fSubjectId&&(
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5 text-teal-600"/>Strand <span className="text-xs text-muted-foreground ml-1">(optional)</span></Label>
+                    <StrandSelect subjectId={fSubjectId} value={fStrandId}
+                      onChange={(id,name)=>{setFStrandId(id);setFStrandName(name);setFSubStrandId("__none__");setFSubStrandName("");}}
+                      disabled={creating}/>
+                  </div>
+                  {fStrandId!=="__none__"&&(
+                    <div className="space-y-1.5">
+                      <Label>Sub-strand <span className="text-xs text-muted-foreground ml-1">(optional)</span></Label>
+                      <SubStrandSelect strandId={fStrandId} value={fSubStrandId}
+                        onChange={(id,name)=>{setFSubStrandId(id);setFSubStrandName(name);}}
+                        disabled={creating}/>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Term *</Label>
                   <Select value={fTerm} onValueChange={setFTerm}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Term 1</SelectItem>
                       <SelectItem value="2">Term 2</SelectItem>
@@ -1183,146 +679,182 @@ export default function TeacherMarksEntry({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Year *</Label>
-                  <Input type="number" value={fYear} onChange={(e) => setFYear(e.target.value)} min="2020" max="2100" />
+                  <Input type="number" value={fYear} onChange={e=>setFYear(e.target.value)} min="2020" max="2100"/>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Date *</Label>
-                  <Input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} />
+                  <Input type="date" value={fDate} onChange={e=>setFDate(e.target.value)}/>
                 </div>
               </div>
-              {createError && (
-                <div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm">
-                  <AlertTriangle className="h-4 w-4 shrink-0" /> {createError}
-                </div>
-              )}
-              <Button
-                onClick={handleCreateFormative}
-                disabled={creatingFormative || !fClassId || !fSubjectId || !fTitle.trim() || !fDate}
-                className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto"
-              >
-                {creatingFormative
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</>
-                  : <><Plus className="mr-2 h-4 w-4" /> Create &amp; Enter Marks</>}
+
+              {createErr&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{createErr}</div>}
+
+              <Button onClick={handleCreateFormative} disabled={creating||!fClassId||!fSubjectId||!fTitle.trim()||!fDate} className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+                {creating?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Creating…</>:<><Plus className="mr-2 h-4 w-4"/>Create & Enter Marks</>}
               </Button>
             </div>
           )}
 
-          {/* ════════ HISTORY MODE ════════ */}
-          {mode === "history" && !editingHistory && (
+          {/* ── HISTORY LIST ── */}
+          {mode==="history"&&!editingItem&&(
             <div className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                {(["all", "summative", "formative"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setHistoryFilter(f)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                      historyFilter === f
-                        ? "bg-orange-600 text-white border-orange-600"
-                        : "border-gray-200 text-muted-foreground hover:border-gray-400"
-                    }`}
-                  >
-                    {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+              <div className="flex gap-2 flex-wrap items-center">
+                {(["all","summative","formative"] as const).map(f=>(
+                  <button key={f} onClick={()=>setHistFilter(f)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${histFilter===f?"bg-orange-600 text-white border-orange-600":"border-gray-200 text-muted-foreground hover:border-gray-400"}`}>
+                    {f==="all"?"All":f.charAt(0).toUpperCase()+f.slice(1)}
                   </button>
                 ))}
-                <span className="text-xs text-muted-foreground self-center ml-1">
-                  {filteredHistory.length} record{filteredHistory.length !== 1 ? "s" : ""}
-                </span>
+                <span className="text-xs text-muted-foreground ml-1">{filteredHistory.length} record{filteredHistory.length!==1?"s":""}</span>
               </div>
-
-              {loadingHistory ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredHistory.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">
-                  <History className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  No filled assessments found yet.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredHistory.map((item, idx) => {
-                    const strandN    = firstRel(item.assessment.strands)?.name;
-                    const subStrandN = firstRel(item.assessment.sub_strands)?.name;
-                    const cls = teacherClasses.find((tc) => tc.class_id === item.assessment.class_id);
-                    const className = firstRel(cls?.classes)?.name ?? item.assessment.class_id;
-                    return (
-                      <div
-                        key={idx}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border bg-card gap-3"
-                      >
+              {loadingHistory
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                : filteredHistory.length===0
+                  ? <div className="text-center py-10 text-muted-foreground text-sm"><History className="h-10 w-10 mx-auto mb-2 opacity-30"/>No records found yet.</div>
+                  : <div className="space-y-2">
+                    {filteredHistory.map((item,idx)=>(
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border bg-card gap-3">
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-sm">{item.assessment.title}</span>
-                            <CategoryBadge category={item.assessment.category} />
-                            <Badge
-                              variant="outline"
-                              className={item.status === "published"
-                                ? "bg-green-50 text-green-700 border-green-200 text-xs"
-                                : "bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"}
-                            >
-                              {item.status === "published" ? "Published" : "Draft"}
-                            </Badge>
+                            <span className="font-medium text-sm">{item.title}</span>
+                            <Badge variant="outline" className={item.type==="formative"?"bg-teal-50 text-teal-700 border-teal-200 text-xs":"bg-purple-50 text-purple-700 border-purple-200 text-xs"}>{item.type}</Badge>
+                            <Badge variant="outline" className={item.status==="published"?"bg-green-50 text-green-700 border-green-200 text-xs":"bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"}>{item.status}</Badge>
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                            <span>{className}</span>
-                            <span>•</span>
-                            <span>{item.subject_name}</span>
-                            <span>•</span>
-                            <span>Term {item.assessment.term}, {item.assessment.year}</span>
-                            <span>•</span>
-                            <span>{item.result_count} student{item.result_count !== 1 ? "s" : ""}</span>
-                            {item.latest_date && (
-                              <><span>•</span><span>{new Date(item.latest_date).toLocaleDateString()}</span></>
-                            )}
+                            <span>{classNameMap.get(item.class_id)??item.class_id}</span><span>•</span>
+                            <span>{item.subject_name}</span><span>•</span>
+                            <span>Term {item.term}, {item.year}</span><span>•</span>
+                            <span>{item.result_count} student{item.result_count!==1?"s":""}</span>
+                            {item.latest_date&&<><span>•</span><span>{new Date(item.latest_date).toLocaleDateString()}</span></>}
                           </div>
-                          {strandN && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <BookOpen className="h-3 w-3" />
-                              {strandN}{subStrandN && ` › ${subStrandN}`}
-                            </div>
-                          )}
+                          {item.strand_name&&<div className="text-xs text-muted-foreground flex items-center gap-1"><BookOpen className="h-3 w-3"/>{item.strand_name}{item.sub_strand_name&&` › ${item.sub_strand_name}`}</div>}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditHistoryItem(item)}
-                          className="h-8 shrink-0 gap-1"
-                        >
-                          <Pencil className="h-3 w-3" /> Edit
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={()=>handleEditItem(item)} className="h-8 shrink-0 gap-1"><Pencil className="h-3 w-3"/>Edit</Button>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    ))}
+                  </div>}
             </div>
           )}
 
-          {/* ════════ MARKS TABLE ════════ */}
-          {showMarksTable && (
-            <MarksTable
-              mode={mode}
-              editingHistory={editingHistory}
-              selectedAssessment={selectedAssessment}
-              selectedSubjectId={selectedSubjectId}
-              students={students}
-              entries={entries}
-              loadingData={loadingData}
-              saving={saving}
-              error={error}
-              success={success}
-              filledCount={filledCount}
-              strandName={strandName}
-              subStrandName={subStrandName}
-              fDate={fDate}
-              onBack={handleMarksBack}
-              onScoreChange={handleScoreChange}
-              onLevelChange={handleLevelChange}
-              onRemarksChange={handleRemarksChange}
-              onDateChange={handleDateChange}
-              onAbsentToggle={handleAbsentToggle}
-              onSave={handleSave}
-            />
+          {/* ── SUMMATIVE TABLE ── */}
+          {showSummaryTable&&selectedAssessment&&(
+            <>
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
+                {editingItem&&<button onClick={handleBackToHistory} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3"/>Back to history</button>}
+                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">summative</Badge>
+                <span className="text-muted-foreground">Max: <strong className="text-foreground">{selectedAssessment.max_marks}</strong></span>
+                <span className="font-medium">{selectedAssessment.title}</span>
+                <span className="text-xs text-muted-foreground">Subject: <strong className="text-foreground">{subjectNameMap.get(selectedSubjectId)}</strong></span>
+              </div>
+              {error&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{error}</div>}
+              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              {loadingData
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                : students.length===0
+                  ? <div className="text-center py-10 text-muted-foreground text-sm">No students enrolled.</div>
+                  : <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[90px]">Reg No</TableHead><TableHead>Name</TableHead>
+                            <TableHead className="w-[70px] text-center">Absent</TableHead>
+                            <TableHead>Score (/ {selectedAssessment.max_marks})</TableHead>
+                            <TableHead className="w-[180px]">Remarks</TableHead>
+                            <TableHead className="w-[140px]">Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {students.map(s=>{
+                            const e=summativeEntries[s.id]??{score:"",performance_level:null,teacher_remarks:"",is_absent:false,date:selectedAssessment.assessment_date||today()};
+                            return (
+                              <TableRow key={s.id} className={e.is_absent?"opacity-50":""}>
+                                <TableCell className="font-mono text-xs">{s.Reg_no}</TableCell>
+                                <TableCell className="font-medium">{s.first_name} {s.last_name}</TableCell>
+                                <TableCell className="text-center"><input type="checkbox" checked={e.is_absent} onChange={()=>handleSAbsentToggle(s.id)} className="h-4 w-4 accent-orange-600"/></TableCell>
+                                <TableCell>
+                                  {e.is_absent?<span className="text-xs italic text-muted-foreground">Absent</span>
+                                    :<div className="flex items-center gap-2">
+                                      <ScoreInput value={e.score} studentId={s.id} maxMarks={selectedAssessment.max_marks} disabled={false} onChange={handleScoreChange}/>
+                                      {e.performance_level&&<PerfBadge level={e.performance_level}/>}
+                                    </div>}
+                                </TableCell>
+                                <TableCell><TextInput value={e.teacher_remarks} studentId={s.id} placeholder="Optional remark" disabled={false} onChange={handleSRemarksChange}/></TableCell>
+                                <TableCell><Input type="date" value={e.date} onChange={ev=>handleSDateChange(s.id,ev.target.value)} className="w-36"/></TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-sm text-muted-foreground">{sFilledCount} / {students.length} entries ready</span>
+                      <Button onClick={saveSummative} disabled={saving||sFilledCount===0} className="bg-green-600 hover:bg-green-700">
+                        {saving?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Saving…</>:<><Save className="mr-2 h-4 w-4"/>Save Draft</>}
+                      </Button>
+                    </div>
+                  </>}
+            </>
+          )}
+
+          {/* ── FORMATIVE TABLE ── */}
+          {showFormativeTable&&activeActivity&&(
+            <>
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
+                <button onClick={editingItem?handleBackToHistory:()=>{setActiveActivity(null);setStudents([]);setFormativeEntries({});setSuccess(null);}}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-3 w-3"/>{editingItem?"Back to history":"New activity"}
+                </button>
+                <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">formative</Badge>
+                <span className="font-medium">{activeActivity.title}</span>
+                <span className="text-xs text-muted-foreground">Subject: <strong className="text-foreground">{subjectNameMap.get(activeActivity.subject_id)}</strong></span>
+                {strandName&&<span className="flex items-center gap-1 text-muted-foreground"><BookOpen className="h-3.5 w-3.5"/><strong className="text-foreground">{strandName}</strong>{subStrandName&&<> › <strong className="text-foreground">{subStrandName}</strong></>}</span>}
+                <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded px-2 py-0.5">Publishes immediately</span>
+              </div>
+              {error&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{error}</div>}
+              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              {loadingData
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                : students.length===0
+                  ? <div className="text-center py-10 text-muted-foreground text-sm">No students enrolled.</div>
+                  : <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[90px]">Reg No</TableHead><TableHead>Name</TableHead>
+                            <TableHead className="w-[70px] text-center">Absent</TableHead>
+                            <TableHead>Performance Level</TableHead>
+                            <TableHead className="w-[220px]">Comment</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {students.map(s=>{
+                            const e=formativeEntries[s.id]??{performance_level:null,teacher_comment:"",is_absent:false};
+                            return (
+                              <TableRow key={s.id} className={e.is_absent?"opacity-50":""}>
+                                <TableCell className="font-mono text-xs">{s.Reg_no}</TableCell>
+                                <TableCell className="font-medium">{s.first_name} {s.last_name}</TableCell>
+                                <TableCell className="text-center"><input type="checkbox" checked={e.is_absent} onChange={()=>handleFAbsentToggle(s.id)} className="h-4 w-4 accent-orange-600"/></TableCell>
+                                <TableCell>
+                                  {e.is_absent?<span className="text-xs italic text-muted-foreground">Absent</span>
+                                    :<LevelToggle value={e.performance_level} onChange={l=>handleFLevelChange(s.id,l)} disabled={false}/>}
+                                </TableCell>
+                                <TableCell><TextInput value={e.teacher_comment} studentId={s.id} placeholder="Comment on this student" disabled={false} onChange={handleFCommentChange}/></TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-sm text-muted-foreground">{fFilledCount} / {students.length} entries ready <span className="text-xs text-teal-600 ml-1">• publishes immediately</span></span>
+                      <Button onClick={saveFormative} disabled={saving||fFilledCount===0} className="bg-teal-600 hover:bg-teal-700">
+                        {saving?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Saving…</>:<><CheckCircle className="mr-2 h-4 w-4"/>Save & Publish</>}
+                      </Button>
+                    </div>
+                  </>}
+            </>
           )}
 
         </CardContent>

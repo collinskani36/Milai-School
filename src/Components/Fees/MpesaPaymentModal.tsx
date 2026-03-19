@@ -20,13 +20,11 @@ interface MpesaPaymentModalProps {
   selectedTerm: string;
   selectedYear: string;
   studentFeeId?: string | null;
-  currentTerm?: { term: string; academic_year: string } | null; // NEW: active term from parent
+  currentTerm?: { term: string; academic_year: string } | null;
 }
 
 type Step = "form" | "processing" | "success" | "error";
 
-// ⚠️ LOCAL TESTING: Point to your ngrok URL
-// When done testing, revert handlePay back to supabase.functions.invoke
 const LOCAL_SERVER_URL = "https://c8ac-102-68-78-245.ngrok-free.app";
 
 export default function MpesaPaymentModal({
@@ -37,7 +35,7 @@ export default function MpesaPaymentModal({
   selectedTerm,
   selectedYear,
   studentFeeId,
-  currentTerm, // NEW (unused, added for future sync)
+  currentTerm,
 }: MpesaPaymentModalProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState(
@@ -73,12 +71,10 @@ export default function MpesaPaymentModal({
     setStep("processing");
 
     try {
-      // ── LOCAL TEST: calling Express server via ngrok ──
       const response = await fetch(`${LOCAL_SERVER_URL}/initiate-mpesa-stk`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Required by ngrok to bypass browser warning page
           "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
@@ -111,11 +107,17 @@ export default function MpesaPaymentModal({
     }
   };
 
+  // On mobile: overlay ends at bottom-16 (64px) — exactly the StudentDashboard's
+  // fixed `h-16` bottom nav height. Modal sheet fills the space above it cleanly.
+  // On sm+: standard full-screen centered modal.
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-pop-in">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-4 flex items-center justify-between">
+    <div className="fixed inset-x-0 top-0 bottom-16 sm:inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+
+      {/* Modal sheet */}
+      <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[90vh]">
+
+        {/* Header — sticky, never scrolls away */}
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <Smartphone className="w-5 h-5 text-white" />
@@ -125,18 +127,24 @@ export default function MpesaPaymentModal({
               <p className="text-green-100 text-xs">Lipa na M-Pesa · Secure Payment</p>
             </div>
           </div>
+
+          {/* Close button */}
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            aria-label="Close payment modal"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 active:bg-white/50 transition-colors focus:outline-none focus:ring-2 focus:ring-white/60 flex-shrink-0"
           >
-            <X className="w-4 h-4 text-white" />
+            <X className="w-4 h-4 text-white" strokeWidth={2.5} />
           </button>
         </div>
 
-        <div className="p-5">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5">
+
           {/* STEP: FORM */}
           {(step === "form" || step === "error") && (
             <div className="space-y-4">
+
               {/* Student Info */}
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <div className="flex items-center gap-2 mb-3">
@@ -178,7 +186,7 @@ export default function MpesaPaymentModal({
                 </div>
               </div>
 
-              {/* Phone Number Input */}
+              {/* Phone Number */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   M-Pesa Phone Number
@@ -201,7 +209,7 @@ export default function MpesaPaymentModal({
                 </p>
               </div>
 
-              {/* Amount Input */}
+              {/* Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Amount (KES)
@@ -229,7 +237,7 @@ export default function MpesaPaymentModal({
                 )}
               </div>
 
-              {/* Error Message */}
+              {/* Error */}
               {(error || step === "error") && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
                   <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -245,7 +253,7 @@ export default function MpesaPaymentModal({
                 Send STK Push →
               </button>
 
-              <p className="text-center text-xs text-gray-400">
+              <p className="text-center text-xs text-gray-400 pb-1">
                 🔒 Secured by Safaricom M-Pesa. Your PIN is never shared.
               </p>
             </div>
@@ -254,10 +262,8 @@ export default function MpesaPaymentModal({
           {/* STEP: PROCESSING */}
           {step === "processing" && (
             <div className="flex flex-col items-center justify-center py-10 gap-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-                </div>
+              <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
               </div>
               <div className="text-center">
                 <p className="font-bold text-gray-800 text-base">Sending STK Push...</p>
@@ -299,7 +305,9 @@ export default function MpesaPaymentModal({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Amount</span>
-                    <span className="font-bold text-emerald-600">KES {parseFloat(amount).toLocaleString()}</span>
+                    <span className="font-bold text-emerald-600">
+                      KES {parseFloat(amount).toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Phone</span>
@@ -318,8 +326,13 @@ export default function MpesaPaymentModal({
               </button>
             </div>
           )}
+
         </div>
+        {/* end scrollable body */}
+
       </div>
+      {/* end modal sheet */}
+
     </div>
   );
 }

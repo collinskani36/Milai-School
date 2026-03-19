@@ -43,6 +43,7 @@ interface Assignment {
   file_url: string | null;
   description: string | null;
   total_marks: number | null;
+  teacher_id: string; // FIX: needed to enforce ownership
 }
 
 interface Announcement {
@@ -54,6 +55,7 @@ interface Announcement {
   priority: string;
   expires_at: string | null;
   is_for_all_classes: boolean;
+  teacher_id: string; // FIX: needed to enforce ownership
 }
 
 interface TeacherAssignmentsAnnouncementsProps {
@@ -105,16 +107,17 @@ async function compressFile(file: File): Promise<File> {
   if (type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     return await compressDocx(file);
   if (type.startsWith("image/")) return await compressImage(file);
-  return file; // zip, pptx, xlsx, csv, txt — pass through unchanged
+  return file;
 }
 
 // ─────────────────────────────────────────────
 // Create Assignment Dialog
 // ─────────────────────────────────────────────
 const CreateAssignmentDialog: React.FC<{
+  teacherId: string | undefined;
   teacherClasses: TeacherClass[];
   onAssignmentCreated: () => void;
-}> = ({ teacherClasses, onAssignmentCreated }) => {
+}> = ({ teacherId, teacherClasses, onAssignmentCreated }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [compressing, setCompressing] = useState(false);
@@ -127,26 +130,19 @@ const CreateAssignmentDialog: React.FC<{
   const [selectedClass, setSelectedClass] = useState("");
 
   const resetForm = () => {
-    setTitle("");
-    setDueDate("");
-    setDescription("");
-    setSelectedClass("");
-    setFile(null);
-    setOriginalSize(null);
-    setError(null);
+    setTitle(""); setDueDate(""); setDescription("");
+    setSelectedClass(""); setFile(null); setOriginalSize(null); setError(null);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) { setFile(null); return; }
-
     if (selected.size > 10 * 1024 * 1024) {
       setError("File size exceeds 10MB limit");
       e.target.value = "";
       setFile(null);
       return;
     }
-
     setError(null);
     setOriginalSize(selected.size);
     setCompressing(true);
@@ -154,7 +150,7 @@ const CreateAssignmentDialog: React.FC<{
       const compressed = await compressFile(selected);
       setFile(compressed);
     } catch {
-      setFile(selected); // fallback to original if compression fails
+      setFile(selected);
     } finally {
       setCompressing(false);
     }
@@ -165,24 +161,12 @@ const CreateAssignmentDialog: React.FC<{
       setError("Please fill in all required fields");
       return;
     }
-
     const dueDateObj = new Date(dueDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (dueDateObj < today) {
-      setError("Due date cannot be in the past");
-      return;
-    }
-
-    if (title.trim().length > 200) {
-      setError("Title must be less than 200 characters");
-      return;
-    }
-
-    if (description.length > 5000) {
-      setError("Description must be less than 5000 characters");
-      return;
-    }
+    if (dueDateObj < today) { setError("Due date cannot be in the past"); return; }
+    if (title.trim().length > 200) { setError("Title must be less than 200 characters"); return; }
+    if (description.length > 5000) { setError("Description must be less than 5000 characters"); return; }
 
     setLoading(true);
     setError(null);
@@ -196,30 +180,23 @@ const CreateAssignmentDialog: React.FC<{
       }
 
       let file_url = null;
-
       if (file) {
         const allowedTypes = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png",
                               ".zip", ".ppt", ".pptx", ".xlsx", ".csv", ".txt"];
         const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
-
         if (!allowedTypes.includes(fileExtension)) {
           setError(`File type not allowed. Allowed: ${allowedTypes.join(", ")}`);
           setLoading(false);
           return;
         }
-
         const sanitizedFileName = file.name
           .replace(/[^a-zA-Z0-9._-]/g, "_")
           .replace(/\s+/g, "_");
-
         const filePath = `assignments/${Date.now()}_${Math.random().toString(36).substring(2, 15)}_${sanitizedFileName}`;
-
         const { error: storageError } = await supabase.storage
           .from("assignments")
           .upload(filePath, file, { cacheControl: "3600", upsert: false });
-
         if (storageError) throw new Error(`File upload failed: ${storageError.message}`);
-
         const { data: urlData } = supabase.storage.from("assignments").getPublicUrl(filePath);
         file_url = urlData.publicUrl;
       }
@@ -228,6 +205,7 @@ const CreateAssignmentDialog: React.FC<{
         title: title.trim(),
         subject_id: selectedTeacherClass.subject_id,
         class_id: selectedClass,
+        teacher_id: teacherId, // FIX: store teacher_id on insert so ownership can be verified
         due_date: dueDate,
         description: description.trim(),
         created_at: new Date().toISOString(),
@@ -262,9 +240,7 @@ const CreateAssignmentDialog: React.FC<{
             Files are automatically compressed before upload. Maximum file size: 10MB.
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
-          {/* Class */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Class *</label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -280,46 +256,32 @@ const CreateAssignmentDialog: React.FC<{
               </SelectContent>
             </Select>
           </div>
-
-          {/* Title */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Title *</label>
             <Input
-              placeholder="Assignment title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
+              placeholder="Assignment title" value={title}
+              onChange={(e) => setTitle(e.target.value)} maxLength={200}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
             <div className="text-xs text-gray-500 mt-1">{title.length}/200 characters</div>
           </div>
-
-          {/* Description */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Description (optional)</label>
             <Textarea
-              placeholder="Assignment description"
-              value={description}
+              placeholder="Assignment description" value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="min-h-[60px] text-xs sm:text-sm"
-              maxLength={5000}
+              className="min-h-[60px] text-xs sm:text-sm" maxLength={5000}
             />
             <div className="text-xs text-gray-500 mt-1">{description.length}/5000 characters</div>
           </div>
-
-          {/* Due Date */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Due Date *</label>
             <Input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
               min={new Date().toISOString().split("T")[0]}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
           </div>
-
-          {/* File Upload */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">
               Attach File (optional)
@@ -328,16 +290,12 @@ const CreateAssignmentDialog: React.FC<{
             <Input
               type="file"
               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.ppt,.pptx,.xlsx,.csv,.txt"
-              onChange={handleFileChange}
-              disabled={compressing}
+              onChange={handleFileChange} disabled={compressing}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
-
-            {/* Compression feedback */}
             {compressing && (
               <div className="flex items-center gap-1.5 text-xs text-blue-600 mt-1">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Compressing file...
+                <Loader2 className="h-3 w-3 animate-spin" /> Compressing file...
               </div>
             )}
             {file && !compressing && originalSize && (
@@ -360,13 +318,11 @@ const CreateAssignmentDialog: React.FC<{
               </div>
             )}
           </div>
-
           {error && (
             <div className="text-xs sm:text-sm text-red-500 bg-red-50 p-2 sm:p-3 rounded border border-red-200">
               {error}
             </div>
           )}
-
           <Button
             onClick={handleCreateAssignment}
             className="w-full h-9 sm:h-10 text-xs sm:text-sm"
@@ -388,9 +344,10 @@ const CreateAssignmentDialog: React.FC<{
 // Create Announcement Dialog
 // ─────────────────────────────────────────────
 const CreateAnnouncementDialog: React.FC<{
+  teacherId: string | undefined;
   teacherClasses: TeacherClass[];
   onAnnouncementCreated: () => void;
-}> = ({ teacherClasses, onAnnouncementCreated }) => {
+}> = ({ teacherId, teacherClasses, onAnnouncementCreated }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -417,7 +374,6 @@ const CreateAnnouncementDialog: React.FC<{
       setError("Rate limit exceeded. Please wait 1 minute before sending another announcement.");
       return;
     }
-
     if (!title.trim()) { setError("Title is required"); return; }
     if (title.trim().length > 200) { setError("Title must be less than 200 characters"); return; }
     if (!content.trim()) { setError("Content is required"); return; }
@@ -441,6 +397,7 @@ const CreateAnnouncementDialog: React.FC<{
         title: title.trim(),
         content: content.trim(),
         class_id: selectedClass,
+        teacher_id: teacherId, // FIX: store teacher_id on insert so ownership can be verified
         priority: "normal",
         created_at: new Date().toISOString(),
         expires_at: null,
@@ -492,9 +449,7 @@ const CreateAnnouncementDialog: React.FC<{
             )}
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
-          {/* Class */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Class *</label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -510,39 +465,29 @@ const CreateAnnouncementDialog: React.FC<{
               </SelectContent>
             </Select>
           </div>
-
-          {/* Title */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Title *</label>
             <Input
-              placeholder="Announcement title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
+              placeholder="Announcement title" value={title}
+              onChange={(e) => setTitle(e.target.value)} maxLength={200}
               className="h-9 sm:h-10 text-xs sm:text-sm"
             />
             <div className="text-xs text-gray-500 mt-1">{title.length}/200 characters</div>
           </div>
-
-          {/* Content */}
           <div>
             <label className="text-xs sm:text-sm font-medium mb-1 block">Content *</label>
             <Textarea
-              placeholder="Type your announcement here..."
-              value={content}
+              placeholder="Type your announcement here..." value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="min-h-[80px] sm:min-h-[100px] text-xs sm:text-sm"
-              maxLength={5000}
+              className="min-h-[80px] sm:min-h-[100px] text-xs sm:text-sm" maxLength={5000}
             />
             <div className="text-xs text-gray-500 mt-1">{content.length}/5000 characters</div>
           </div>
-
           {error && (
             <div className="text-xs sm:text-sm text-red-500 bg-red-50 p-2 sm:p-3 rounded border border-red-200">
               {error}
             </div>
           )}
-
           <Button
             onClick={handleSendAnnouncement}
             className="w-full h-9 sm:h-10 text-xs sm:text-sm"
@@ -554,7 +499,6 @@ const CreateAnnouncementDialog: React.FC<{
               <><Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Send Announcement</>
             )}
           </Button>
-
           {announcementAttempts.length > 0 && (
             <div className="text-xs text-gray-500 text-center">
               Announcements in last minute: {announcementAttempts.length}/10
@@ -577,30 +521,25 @@ export default function TeacherAssignmentsAnnouncements({
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false); // FIX: fetch once, not on every tab switch
   const [assignmentToDelete, setAssignmentToDelete] = useState<string | null>(null);
   const [announcementToDelete, setAnnouncementToDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isActive || !teacherClasses.length || !teacherId) return;
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([fetchAssignments(), fetchAnnouncements()]);
-      } catch (e) {
-        console.error("Error fetching data:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [isActive, teacherClasses, teacherId]);
-
+  // FIX: replaced select("*") with specific columns only — includes teacher_id for
+  // ownership checks, excludes any heavy or irrelevant columns.
+  // FIX: added .eq("teacher_id", teacherId) so each teacher only fetches their own
+  // records — not all assignments/announcements across the school.
   const fetchAssignments = useCallback(async () => {
     if (!teacherClasses.length || !teacherId) { setAssignments([]); return; }
     try {
       const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-      const { data, error } = await supabase.from("assignments").select("*").in("class_id", classIds);
+      const { data, error } = await supabase
+        .from("assignments")
+        .select("id, title, subject_id, class_id, due_date, created_at, file_url, description, total_marks, teacher_id")
+        .in("class_id", classIds)
+        .eq("teacher_id", teacherId) // ← only this teacher's assignments
+        .order("created_at", { ascending: false });
       if (error) throw error;
       setAssignments(data || []);
     } catch (e) {
@@ -613,7 +552,12 @@ export default function TeacherAssignmentsAnnouncements({
     if (!teacherClasses.length || !teacherId) { setAnnouncements([]); return; }
     try {
       const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-      const { data, error } = await supabase.from("announcements").select("*").in("class_id", classIds);
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, content, class_id, created_at, priority, expires_at, is_for_all_classes, teacher_id")
+        .in("class_id", classIds)
+        .eq("teacher_id", teacherId) // ← only this teacher's announcements
+        .order("created_at", { ascending: false });
       if (error) throw error;
       setAnnouncements(data || []);
     } catch (e) {
@@ -622,20 +566,46 @@ export default function TeacherAssignmentsAnnouncements({
     }
   }, [teacherClasses, teacherId]);
 
+  // FIX: only fetch once when the tab first becomes active — not on every tab switch
+  useEffect(() => {
+    if (!isActive || !teacherClasses.length || !teacherId || hasFetched) return;
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchAssignments(), fetchAnnouncements()]);
+        setHasFetched(true);
+      } catch (e) {
+        console.error("Error fetching data:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [isActive, teacherClasses, teacherId, hasFetched]);
+
   const handleDeleteAssignment = async (id: string) => {
     if (!teacherId) return;
     try {
       const assignment = assignments.find(a => a.id === id);
       if (!assignment) { setError("Assignment not found"); setAssignmentToDelete(null); return; }
-      if (!teacherClasses.map(tc => tc.class_id).includes(assignment.class_id)) {
-        setError("Unauthorized: You don't have access to delete this assignment");
+
+      // FIX: double-lock — verify ownership both in JS and at the DB query level
+      if (assignment.teacher_id !== teacherId) {
+        setError("Unauthorized: You can only delete your own assignments.");
         setAssignmentToDelete(null);
         return;
       }
-      const { error } = await supabase.from("assignments").delete().eq("id", id);
+
+      const { error } = await supabase
+        .from("assignments")
+        .delete()
+        .eq("id", id)
+        .eq("teacher_id", teacherId); // ← DB-level ownership guard
+
       if (error) throw error;
       setAssignmentToDelete(null);
-      await fetchAssignments();
+      // Update local state directly — no need for a full refetch
+      setAssignments(prev => prev.filter(a => a.id !== id));
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Failed to delete assignment");
     }
@@ -646,15 +616,24 @@ export default function TeacherAssignmentsAnnouncements({
     try {
       const announcement = announcements.find(a => a.id === id);
       if (!announcement) { setError("Announcement not found"); setAnnouncementToDelete(null); return; }
-      if (!teacherClasses.map(tc => tc.class_id).includes(announcement.class_id)) {
-        setError("Unauthorized: You don't have access to delete this announcement");
+
+      // FIX: double-lock — verify ownership both in JS and at the DB query level
+      if (announcement.teacher_id !== teacherId) {
+        setError("Unauthorized: You can only delete your own announcements.");
         setAnnouncementToDelete(null);
         return;
       }
-      const { error } = await supabase.from("announcements").delete().eq("id", id);
+
+      const { error } = await supabase
+        .from("announcements")
+        .delete()
+        .eq("id", id)
+        .eq("teacher_id", teacherId); // ← DB-level ownership guard
+
       if (error) throw error;
       setAnnouncementToDelete(null);
-      await fetchAnnouncements();
+      // Update local state directly — no need for a full refetch
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Failed to delete announcement");
     }
@@ -725,9 +704,12 @@ export default function TeacherAssignmentsAnnouncements({
             <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             <CardTitle className="text-base sm:text-lg">Assignment Management</CardTitle>
           </div>
-          <CreateAssignmentDialog teacherClasses={teacherClasses} onAssignmentCreated={fetchAssignments} />
+          <CreateAssignmentDialog
+            teacherId={teacherId}
+            teacherClasses={teacherClasses}
+            onAssignmentCreated={() => { fetchAssignments(); }}
+          />
         </CardHeader>
-
         <CardContent className="p-4 sm:p-6 pt-0">
           <div className="space-y-3 sm:space-y-4">
             {assignments.length === 0 && (
@@ -757,10 +739,13 @@ export default function TeacherAssignmentsAnnouncements({
                     </a>
                   )}
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => setAssignmentToDelete(assignment.id)}
-                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
-                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
-                </Button>
+                {/* FIX: only render delete button for this teacher's own assignments */}
+                {assignment.teacher_id === teacherId && (
+                  <Button size="icon" variant="ghost" onClick={() => setAssignmentToDelete(assignment.id)}
+                    className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -774,9 +759,12 @@ export default function TeacherAssignmentsAnnouncements({
             <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             <CardTitle className="text-base sm:text-lg">Announcements</CardTitle>
           </div>
-          <CreateAnnouncementDialog teacherClasses={teacherClasses} onAnnouncementCreated={fetchAnnouncements} />
+          <CreateAnnouncementDialog
+            teacherId={teacherId}
+            teacherClasses={teacherClasses}
+            onAnnouncementCreated={() => { fetchAnnouncements(); }}
+          />
         </CardHeader>
-
         <CardContent className="p-4 sm:p-6 pt-0">
           <div className="space-y-3 sm:space-y-4">
             {announcements.length === 0 && (
@@ -804,10 +792,13 @@ export default function TeacherAssignmentsAnnouncements({
                     {announcement.expires_at && ` · Expires: ${new Date(announcement.expires_at).toLocaleDateString()}`}
                   </p>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => setAnnouncementToDelete(announcement.id)}
-                  className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
-                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
-                </Button>
+                {/* FIX: only render delete button for this teacher's own announcements */}
+                {announcement.teacher_id === teacherId && (
+                  <Button size="icon" variant="ghost" onClick={() => setAnnouncementToDelete(announcement.id)}
+                    className="h-7 w-7 sm:h-8 sm:w-8 ml-1 sm:ml-2 flex-shrink-0">
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>

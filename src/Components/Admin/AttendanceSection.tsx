@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from "@/Components/ui/select";
 import { Badge } from "@/Components/ui/badge";
-import { format, startOfWeek, endOfWeek, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns";
+import { useToast } from "@/Components/ui/use-toast";
+import { format, startOfWeek, endOfWeek, parseISO, isBefore, isAfter, differenceInCalendarWeeks } from "date-fns";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AcademicTerm {
@@ -84,6 +85,16 @@ function getWeekStatus(
   };
 }
 
+// Returns 1-based week number within the active term, or null if outside/no term
+function getTermWeekNumber(weekDateStr: string, activeTerm: AcademicTerm | null): number | null {
+  if (!activeTerm) return null;
+  const weekStart = startOfWeek(new Date(weekDateStr), { weekStartsOn: 1 });
+  const termStart = startOfWeek(parseISO(activeTerm.start_date), { weekStartsOn: 1 });
+  const termEnd = parseISO(activeTerm.end_date);
+  if (isBefore(weekStart, termStart) || isAfter(weekStart, termEnd)) return null;
+  return differenceInCalendarWeeks(weekStart, termStart, { weekStartsOn: 1 }) + 1;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function AttendanceSection() {
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -98,6 +109,7 @@ export default function AttendanceSection() {
   const [showFilledWeeks, setShowFilledWeeks] = useState(false);
   const [filledWeeks, setFilledWeeks] = useState<any[]>([]);
   const [isLoadingFilledWeeks, setIsLoadingFilledWeeks] = useState(false);
+  const { toast } = useToast();
 
   // ── Fetch active academic term ────────────────────────────────────────────
   const { data: activeTerm = null } = useQuery<AcademicTerm | null>({
@@ -105,7 +117,7 @@ export default function AttendanceSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("academic_calendar")
-        .select("*")
+        .select("id, academic_year, term, term_name, start_date, end_date, is_current, status")
         .eq("is_current", true)
         .single();
       if (error) return null;
@@ -117,40 +129,30 @@ export default function AttendanceSection() {
   const { data: classes = [] } = useQuery({
     queryKey: ["classes"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("classes").select("*");
+      const { data, error } = await supabase
+        .from("classes")
+        .select("id, name");
       if (error) throw error;
       return data;
     },
   });
 
-  // ── Fetch students ────────────────────────────────────────────────────────
-  const { data: students = [] } = useQuery({
-    queryKey: ["students"],
+  // ── Fetch only the students enrolled in the selected class ────────────────
+  // FIX: replaced two unbounded select("*") table scans (students + enrollments)
+  // with a single filtered join — only runs when a class is chosen.
+  const { data: classStudents = [] } = useQuery({
+    queryKey: ["class-students", selectedClassId],
+    enabled: !!selectedClassId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("students").select("*");
+      const { data, error } = await supabase
+        .from("enrollments")
+        .select("student_id, students!inner(id, first_name, last_name)")
+        .eq("class_id", selectedClassId);
       if (error) throw error;
-      return data;
+      // Unwrap the joined student rows
+      return (data ?? []).map((row: any) => row.students);
     },
   });
-
-  // ── Fetch enrollments ─────────────────────────────────────────────────────
-  const { data: enrollments = [] } = useQuery({
-    queryKey: ["enrollments"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("enrollments").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // ── Compute students in selected class ────────────────────────────────────
-  const classStudents = useMemo(() => {
-    if (!selectedClassId) return [];
-    const enrolledIds = enrollments
-      .filter((e: any) => e.class_id === selectedClassId)
-      .map((e: any) => e.student_id);
-    return students.filter((s: any) => enrolledIds.includes(s.id));
-  }, [selectedClassId, students, enrollments]);
 
   // ── Initialize attendance defaults ────────────────────────────────────────
   useEffect(() => {
@@ -202,14 +204,18 @@ export default function AttendanceSection() {
 
     const { data, error } = await supabase
       .from("attendance")
-      .select("*")
+      .select("student_id, monday, tuesday, wednesday, thursday, friday")
       .eq("class_id", selectedClassId)
       .gte("week_start", weekStart)
       .lte("week_end", weekEnd);
 
     if (error) {
       console.error("Error loading attendance:", error);
-      alert("Failed to load week attendance.");
+      toast({
+        variant: "destructive",
+        title: "Failed to load attendance",
+        description: error.message,
+      });
     } else if (data.length > 0) {
       const existing = data.reduce((acc: any, record: any) => {
         acc[record.student_id] = {
@@ -222,9 +228,18 @@ export default function AttendanceSection() {
         return acc;
       }, {});
       setStudentAttendance(existing);
-      alert("Attendance loaded for this week!");
+      const weekNum = getTermWeekNumber(attendanceDate, activeTerm);
+      toast({
+        title: weekNum ? `Week ${weekNum} loaded` : "Attendance loaded",
+        description: weekNum
+          ? `Term ${activeTerm?.term} · ${activeTerm?.academic_year}`
+          : `Week of ${format(startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }), "MMM d, yyyy")}`,
+      });
     } else {
-      alert("No attendance data found for this week — starting fresh.");
+      toast({
+        title: "No data for this week",
+        description: "No existing records found — starting fresh.",
+      });
     }
 
     setIsLoadingWeek(false);
@@ -233,7 +248,11 @@ export default function AttendanceSection() {
   // ── Fetch filled weeks for the selected class ─────────────────────────────
   const handleViewFilledWeeks = async () => {
     if (!selectedClassId) {
-      alert("Please select a class first.");
+      toast({
+        variant: "destructive",
+        title: "No class selected",
+        description: "Please select a class before viewing filled weeks.",
+      });
       return;
     }
 
@@ -249,7 +268,11 @@ export default function AttendanceSection() {
 
       if (error) {
         console.error("Error fetching filled weeks:", error);
-        alert("Failed to load filled weeks.");
+        toast({
+          variant: "destructive",
+          title: "Failed to load filled weeks",
+          description: error.message,
+        });
       } else {
         const uniqueWeeks = data.reduce((acc: any[], record: any) => {
           const weekKey = `${record.week_start}-${record.week_end}`;
@@ -308,16 +331,32 @@ export default function AttendanceSection() {
 
       if (error) {
         console.error("Error saving attendance:", error);
-        alert("Failed to save attendance. " + error.message);
+        toast({
+          variant: "destructive",
+          title: "Failed to save attendance",
+          description: error.message,
+        });
       } else {
-        alert("Attendance saved successfully!");
+        const weekNum = getTermWeekNumber(attendanceDate, activeTerm);
+        toast({
+          title: weekNum
+            ? `Week ${weekNum} saved successfully ✓`
+            : "Attendance saved successfully ✓",
+          description: weekNum
+            ? `Term ${activeTerm?.term} · ${activeTerm?.academic_year}`
+            : `Week of ${format(startOfWeek(new Date(attendanceDate), { weekStartsOn: 1 }), "MMM d, yyyy")}`,
+        });
         if (showFilledWeeks) {
           handleViewFilledWeeks();
         }
       }
     } catch (err) {
       console.error("Unexpected error:", err);
-      alert("An unexpected error occurred while saving attendance.");
+      toast({
+        variant: "destructive",
+        title: "Unexpected error",
+        description: "Something went wrong while saving attendance.",
+      });
     } finally {
       setIsSubmitting(false);
     }

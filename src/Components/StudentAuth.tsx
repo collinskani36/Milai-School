@@ -53,13 +53,13 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
 
       if (lookupError) throw lookupError;
       if (!profileData) {
-        setError("Registration number not found");
+        setError("Invalid registration number or PIN"); // Fixed: was "Registration number not found" — avoids user enumeration
         return;
       }
 
       const guardianEmail = profileData.guardian_email;
       if (!guardianEmail) {
-        setError("Guardian email not set for this student");
+        setError("Invalid registration number or PIN"); // Fixed: was "Guardian email not set for this student" — avoids leaking account config details
         return;
       }
 
@@ -89,18 +89,16 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
       <div className="bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl p-6 w-full max-w-sm relative overflow-hidden">
 
         {/* Subtle maroon glow */}
-        {/* Subtle maroon glow */}
-<div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
+        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
 
-{/* Logo */}
-<div className="flex justify-center mb-6">
-  <img
-    src="/logo.png"
-    alt="School Logo"
-    className="w-16 h-16 object-contain"
-  />
-</div>
-
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <img
+            src="/logo.png"
+            alt="School Logo"
+            className="w-16 h-16 object-contain"
+          />
+        </div>
 
         {/* Title */}
         <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">

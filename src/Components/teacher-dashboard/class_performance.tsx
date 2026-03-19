@@ -186,76 +186,7 @@ export default function ClassPerformance({ teacherId, teacherClasses, isActive }
     }
   }, [teacherClasses]);
 
-  const fetchClassPerformance = useCallback(async () => {
-    if (!teacherClasses.length) {
-      setClassPerformanceData([]);
-      return;
-    }
-
-    try {
-      const results: ClassPerformanceData[] = [];
-      const classIds = teacherClasses.map(tc => tc.class_id);
-
-      const ASSESSMENT_PAGE_SIZE = 50;
-
-      const { data: assessments, error: assessError } = await supabase
-        .from("assessments")
-        .select("*")
-        .in("class_id", classIds)
-        .order("created_at", { ascending: false })
-        .range(0, ASSESSMENT_PAGE_SIZE - 1);
-
-      if (assessError) throw assessError;
-
-      for (const tc of teacherClasses) {
-        const classAssessments = (assessments || [])
-          .filter(a => a.class_id === tc.class_id)
-          .slice(0, 2);
-
-        for (const assessment of classAssessments) {
-          const RESULT_PAGE_SIZE = 100;
-
-          const { data: resultsData, error: resultsError } = await supabase
-            .from("assessment_results")
-            .select("score")
-            .eq("assessment_id", assessment.id)
-            .eq("subject_id", tc.subject_id)
-            .range(0, RESULT_PAGE_SIZE - 1);
-
-          if (resultsError) {
-            console.error("Error fetching assessment results:", resultsError);
-            continue;
-          }
-
-          if (resultsData && resultsData.length > 0) {
-            const scores = resultsData
-              .map(r => Number(r.score))
-              .filter(s => Number.isFinite(s));
-
-            if (!scores.length) continue;
-
-            const mean = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-
-            const subj = firstRel(tc.subjects);
-            const cls = firstRel(tc.classes);
-
-            results.push({
-              assessment: assessment.title,
-              subject: subj?.name || "Unknown Subject",
-              class: cls?.name || "Unknown Class",
-              mean: Number(mean.toFixed(2)),
-            });
-          }
-        }
-      }
-
-      setClassPerformanceData(results);
-    } catch (error) {
-      console.error("Error fetching class performance:", error);
-      setClassPerformanceData([]);
-    }
-  }, [teacherClasses]);
-
+  
   const averagePerformance = classPerformanceData.length
     ? (classPerformanceData.reduce((sum, d) => sum + d.mean, 0) / classPerformanceData.length).toFixed(1)
     : null;

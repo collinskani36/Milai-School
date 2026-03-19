@@ -45,22 +45,20 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         .eq("auth_id", data.user.id)
         .single();
 
+      // FIX 1: If not found in teachers table, sign out immediately so
+      // App.tsx redirect logic does not override the error message
       if (teacherError || !teacherRecord) {
-        setError("Teacher record not found. Please contact administration.");
+        await supabase.auth.signOut();
+        setError("Access denied. This account is not registered as a teacher.");
         return;
       }
 
       onLogin?.(teacherRecord);
 
-      if (
-        teacherRecord.is_admin === true ||
-        teacherRecord.is_admin === "true" ||
-        teacherRecord.is_admin === 1
-      ) {
-        navigate("/admin-dashboard", { replace: true });
-      } else {
-        navigate("/teacher-dashboard", { replace: true });
-      }
+      // FIX 2: Remove manual navigate() calls — App.tsx redirect controller
+      // already handles routing based on isAdmin once the session is set.
+      // Navigating here races against App.tsx and causes the white screen loop.
+
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Try again.");
     } finally {
@@ -80,18 +78,16 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
       <div className="relative w-full max-w-sm p-6 bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl">
 
         {/* Subtle maroon glow */}
-        {/* Subtle maroon glow */}
-<div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
+        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
 
-{/* Logo */}
-<div className="flex justify-center mb-6">
-  <img
-    src="/logo.png"
-    alt="School Logo"
-    className="w-16 h-16 object-contain"
-  />
-</div>
-
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <img
+            src="/logo.png"
+            alt="School Logo"
+            className="w-16 h-16 object-contain"
+          />
+        </div>
 
         {/* Title */}
         <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">

@@ -12,16 +12,50 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // --- ADMIN AUTH GUARD (added for production security) ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Missing or invalid Authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const callerToken = authHeader.replace("Bearer ", "");
+
+    // Verify the caller's JWT and get their identity
+    const { data: { user: callerUser }, error: callerError } = await supabaseClient.auth.getUser(callerToken);
+    if (callerError || !callerUser) {
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized: invalid or expired token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Confirm the caller is an admin in the teachers table
+    const { data: callerTeacher, error: callerTeacherError } = await supabaseClient
+      .from("teachers")
+      .select("is_admin")
+      .eq("auth_id", callerUser.id)
+      .maybeSingle();
+
+    if (callerTeacherError || !callerTeacher || !callerTeacher.is_admin) {
+      return new Response(JSON.stringify({ success: false, error: "Forbidden: caller is not an admin" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // --- END AUTH GUARD ---
+
     const { teacherId, userId } = await req.json()
     
     if (!teacherId) {
       throw new Error('Teacher ID is required')
     }
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
 
     const result = {
       deletedTeachers: 0,

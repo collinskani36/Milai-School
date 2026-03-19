@@ -17,6 +17,7 @@ import TeacherDashboard from "./Components/teacher-dashboard/TeacherDashboard";
 import Index from "./pages/Index";
 import StudentAuth from "./Components/StudentAuth";
 import TeacherAuth from "./Components/TeacherAuth";
+import { Toaster } from "@/Components/ui/toaster";
 
 import StudentForgotPassword from "./pages/StudentForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -38,6 +39,8 @@ function AppRoutes() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  // FIX 1: Track whether the user exists in the teachers table at all
+  const [isTeacher, setIsTeacher] = useState<boolean | null>(null);
 
   // Ref to track if the current session is strictly for password recovery
   const recoverySession = useRef(false);
@@ -54,9 +57,12 @@ function AppRoutes() {
         .select("is_admin")
         .eq("auth_id", authId)
         .maybeSingle();
+      // FIX 2: Set isTeacher based on whether a record was found at all
+      setIsTeacher(data !== null);
       setIsAdmin(data?.is_admin === true || false);
       lastCheckedId.current = authId;
     } catch {
+      setIsTeacher(false);
       setIsAdmin(false);
     } finally {
       isCheckingAdmin.current = false;
@@ -82,6 +88,8 @@ function AppRoutes() {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setIsAdmin(false);
+        // FIX: Reset isTeacher on sign out
+        setIsTeacher(null);
         lastCheckedId.current = null;
         recoverySession.current = false;
         return;
@@ -160,8 +168,21 @@ function AppRoutes() {
   const StudentRoute = ({ children }: { children: JSX.Element }) =>
     user && !recoverySession.current ? children : <Navigate to="/login" replace />;
 
-  const TeacherRoute = ({ children }: { children: JSX.Element }) =>
-    user ? children : <Navigate to="/teacher-login" replace />;
+  // FIX 3: TeacherRoute now mirrors AdminRoute — waits for role to resolve,
+  // then confirms the user actually exists in the teachers table
+  const TeacherRoute = ({ children }: { children: JSX.Element }) => {
+    if (!user) return <Navigate to="/teacher-login" replace />;
+    if (isTeacher === null) return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7a1f2b] mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+    if (isTeacher === false) return <Navigate to="/teacher-login" replace />;
+    return children;
+  };
 
   const AdminRoute = ({ children }: { children: JSX.Element }) => {
     if (!user) return <Navigate to="/teacher-login" replace />;
@@ -191,6 +212,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AppRoutes />
+         <Toaster />
       </BrowserRouter>
     </QueryClientProvider>
   );

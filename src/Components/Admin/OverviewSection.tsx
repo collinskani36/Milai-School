@@ -7,7 +7,6 @@ import {
   BookOpen,
   ClipboardList,
   Bell,
-  TrendingUp,
 } from 'lucide-react';
 import StatsCard from '@/Components/Admin/StatsCard';
 import { Skeleton } from '@/Components/ui/skeleton';
@@ -24,16 +23,28 @@ export default function OverviewSection({ setActiveView }) {
     return data || [];
   };
 
-  // 👩‍🎓 Students
-  const { data: students = [], isLoading: loadingStudents } = useQuery({
-    queryKey: ['students'],
-    queryFn: () => fetchTable('students'),
+  // 👩‍🎓 Students — count only, no row data
+  const { data: studentCount = 0, isLoading: loadingStudents } = useQuery({
+    queryKey: ['students-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
   });
 
-  // 👩‍🏫 Teachers
-  const { data: teachers = [], isLoading: loadingTeachers } = useQuery({
-    queryKey: ['teachers'],
-    queryFn: () => fetchTable('teachers'),
+  // 👩‍🏫 Teachers — count only, no row data
+  const { data: teacherCount = 0, isLoading: loadingTeachers } = useQuery({
+    queryKey: ['teachers-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('teachers')
+        .select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
   });
 
   // 📚 Classes
@@ -52,12 +63,6 @@ export default function OverviewSection({ setActiveView }) {
   const { data: announcements = [], isLoading: loadingAnnouncements } = useQuery({
     queryKey: ['announcements'],
     queryFn: () => fetchTable('announcements', 5),
-  });
-
-  // 📈 Assessments
-  const { data: assessments = [], isLoading: loadingAssessments } = useQuery({
-    queryKey: ['assessments'],
-    queryFn: () => fetchTable('assessments', 1),
   });
 
   const isLoading =
@@ -81,23 +86,16 @@ export default function OverviewSection({ setActiveView }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard
           title="Total Students"
-          value={students.length}
+          value={studentCount}
           icon={Users}
           color="bg-blue-500"
-          trend={`${students.filter(
-            (s) =>
-              s.created_date &&
-              new Date(s.created_at) >
-                new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-          ).length} new this month`}
           onClick={() => setActiveView('students')}
         />
         <StatsCard
           title="Total Teachers"
-          value={teachers.length}
+          value={teacherCount}
           icon={GraduationCap}
           color="bg-purple-500"
-          trend={`${teachers.filter((t) => t.is_admin).length} admins`}
           onClick={() => setActiveView('teachers')}
         />
         <StatsCard
@@ -117,7 +115,7 @@ export default function OverviewSection({ setActiveView }) {
       </div>
 
       {/* Secondary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <Card className="border-none shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -161,33 +159,6 @@ export default function OverviewSection({ setActiveView }) {
               </div>
             ) : (
               <p className="text-sm text-gray-500 py-4">No announcements yet</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-green-500" />
-              Latest Assessment
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {assessments.length > 0 ? (
-              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
-                <p className="font-semibold text-gray-900">{assessments[0].title}</p>
-                <p className="text-sm text-gray-600 mt-2">
-                  Term {assessments[0].term} • {assessments[0].year}
-                </p>
-                <p className="text-xs text-gray-500 mt-3">
-                  Uploaded{' '}
-                  {assessments[0].created_date
-                    ? format(new Date(assessments[0].created_at), 'MMM d, yyyy')
-                    : 'N/A'}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 py-4">No assessments yet</p>
             )}
           </CardContent>
         </Card>

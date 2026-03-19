@@ -101,37 +101,78 @@ export default function AdminFeesDashboard() {
   const [feeError, setFeeError]                     = useState<string | null>(null);
   const [paymentError, setPaymentError]             = useState<string | null>(null);
 
-  // ─── Queries (unchanged) ───────────────────────────────────────────────────
-  const { data: allPayments = [], isLoading: loadingPayments } = useQuery<Payment[]>({
-    queryKey: ['allPayments'], staleTime: 5 * 60 * 1000,
+  // ─── Queries ───────────────────────────────────────────────────────────────
+
+  // Filter p_payments to the active academic year so the payload stays small.
+  // Falls back to a hard limit of 2 000 rows if no active term is set yet.
+  const { data: allPayments = [], isLoading: loadingPayments, isError: paymentsError } = useQuery<Payment[]>({
+    queryKey: ['allPayments', activeTerm?.academic_year],
+    staleTime: 5 * 60 * 1000,
+    // Wait until we know whether there is an active term before firing so
+    // we never send an unfiltered request on first render.
+    enabled: !termLoading,
     queryFn: async () => {
-      const { data, error } = await supabase.from('p_payments').select('*').order('payment_date', { ascending: false });
+      let q = supabase
+        .from('p_payments')
+        .select('id, student_id, fee_id, amount_paid, payment_date, payment_method, transaction_reference, status, academic_year, term, reference_number, notes')
+        .order('payment_date', { ascending: false });
+      if (activeTerm?.academic_year) {
+        q = q.eq('academic_year', activeTerm.academic_year);
+      } else {
+        // No active term — cap rows to avoid fetching the whole table
+        q = q.limit(2000);
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return (data || []) as Payment[];
-    }
+    },
   });
 
-  const { data: unmatchedPayments = [], isLoading: loadingUnmatched } = useQuery<UnmatchedPayment[]>({
+  // FIX: Select only required columns and cap rows.
+  const { data: unmatchedPayments = [], isLoading: loadingUnmatched, isError: unmatchedError } = useQuery<UnmatchedPayment[]>({
     queryKey: ['unmatchedPayments'], staleTime: 2 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('unmatched_bank_payments').select('*').order('recorded_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('unmatched_bank_payments')
+        .select('id, admission_number, amount, reference, bank_account, narration, recorded_at')
+        .order('recorded_at', { ascending: false })
+        .limit(500);
       if (error) throw error;
       return (data || []) as UnmatchedPayment[];
     }
   });
 
-  const { data: studentFees = [], isLoading: loadingStudentFees } = useQuery<StudentFee[]>({
-    queryKey: ['studentFees'], staleTime: 3 * 60 * 1000,
+  const { data: studentFees = [], isLoading: loadingStudentFees, isError: studentFeesError } = useQuery<StudentFee[]>({
+    queryKey: ['studentFees', activeTerm?.academic_year], staleTime: 3 * 60 * 1000,
+    // Don't fire until useActiveTerm has resolved — prevents an unfiltered
+    // full-table scan when activeTerm is briefly undefined on first render.
+    enabled: !termLoading,
     queryFn: async () => {
+      // FIX: Filter student_fees by the current academic year so we don't pull
+      // the full history of every student on every page load. Select only the
+      // columns required for the list view instead of select('*').
+      const currentYear = activeTerm?.academic_year;
+
+      const studentFeesQuery = (() => {
+        let q = supabase
+          .from('student_fees')
+          .select('id, student_id, fee_structure_id, total_billed, total_paid, outstanding_balance, credit_carried, status, term, academic_year, last_payment_date, inserted_at')
+          .order('inserted_at', { ascending: false });
+        if (currentYear) q = q.eq('academic_year', currentYear);
+        return q;
+      })();
+
       const [
         { data: feesData, error: feesError },
         { data: studentsData, error: studentsError },
         { data: enrollmentsData, error: enrollmentsError },
         { data: feeStructures, error: feeStructureError },
       ] = await Promise.all([
-        supabase.from('student_fees').select('*').order('inserted_at', { ascending: false }),
-        supabase.from('students').select(`id, first_name, last_name, Reg_no, profiles!inner ( student_type )`),
-        supabase.from('enrollments').select(`student_id, class_id, classes (id, name)`),
+        studentFeesQuery,
+        // FIX: Only the columns needed to build the student map
+        supabase.from('students').select('id, first_name, last_name, Reg_no, profiles!inner ( student_type )'),
+        // FIX: Only the columns needed for class name lookup
+        supabase.from('enrollments').select('student_id, class_id, classes (id, name)'),
         supabase.from('fee_structure').select('id, term, academic_year'),
       ]);
       if (feesError) throw feesError;
@@ -217,19 +258,29 @@ export default function AdminFeesDashboard() {
     queryKey: ['allocStudentFees', allocSelectedStudent?.id],
     queryFn: async () => {
       if (!allocSelectedStudent?.id) return [];
-      const { data, error } = await supabase.from('student_fees').select('*, fee_structure(name, term, academic_year)').eq('student_id', allocSelectedStudent.id).order('inserted_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('student_fees')
+        .select('id, student_id, fee_structure_id, total_billed, total_paid, outstanding_balance, credit_carried, status, term, academic_year, last_payment_date, fee_structure(name, term, academic_year)')
+        .eq('student_id', allocSelectedStudent.id)
+        .order('inserted_at', { ascending: false });
       if (error) throw error;
       return (data || []) as FeeRecord[];
     },
     enabled: !!allocSelectedStudent?.id,
   });
 
-  // ─── Mutations (unchanged) ─────────────────────────────────────────────────
+  // ─── Mutations ─────────────────────────────────────────────────────────────
   const feeMutation = useMutation({
     mutationFn: async (data: FeeFormData) => {
+      const amount = Number(data.amount);
+      if (!amount || amount <= 0) throw new Error('Fee amount must be greater than zero.');
+      if (!data.term) throw new Error('Please select a term.');
+      if (!data.academic_year) throw new Error('Please select an academic year.');
+      if (!data.student_type) throw new Error('Please select a student type.');
+
       const classes = data.classes || [];
       const { classes: _classes, ...rest } = data;
-      const payload = { ...rest, student_type: data.student_type, amount: Number(data.amount) };
+      const payload = { ...rest, student_type: data.student_type, amount };
       let feeId = selectedFee?.id;
 
       if (selectedFee) {
@@ -307,6 +358,8 @@ export default function AdminFeesDashboard() {
       if (!selectedStudentFee) throw new Error('No student fee record selected');
       const feeRecord = selectedStudentFee.current_term_fee || (selectedStudentFee as any);
       const amount = parseFloat(data.amount) || 0;
+      if (amount <= 0) throw new Error('Payment amount must be greater than zero.');
+      if (!feeRecord.id && !feeRecord.fee_structure_id) throw new Error('Fee record is missing an ID — cannot record payment.');
       const { data: paymentInserted, error: paymentError } = await supabase.from('p_payments').insert({
         student_id: feeRecord.student_id, fee_id: feeRecord.id || feeRecord.fee_structure_id,
         amount_paid: amount, payment_method: data.payment_method || 'mpesa',
@@ -325,11 +378,16 @@ export default function AdminFeesDashboard() {
 
   const allocateMutation = useMutation({
     mutationFn: async () => {
-      if (!allocatingPayment || !allocSelectedStudent || !allocSelectedFeeId) throw new Error('Please select a student and fee record');
+      if (!allocatingPayment || !allocSelectedStudent || !allocSelectedFeeId)
+        throw new Error('Please select a student and fee record');
       const feeRecord = allocStudentFeeRecords.find((f) => f.id === allocSelectedFeeId);
       if (!feeRecord) throw new Error('Fee record not found');
+      const amount = Number(allocatingPayment.amount);
+      if (!amount || amount <= 0) throw new Error('Payment amount is invalid — cannot allocate.');
+
+      // Step 1: insert the matched payment
       const { error: paymentError } = await supabase.from('p_payments').insert({
-        student_id: allocSelectedStudent.id, fee_id: feeRecord.id, amount_paid: allocatingPayment.amount,
+        student_id: allocSelectedStudent.id, fee_id: feeRecord.id, amount_paid: amount,
         payment_method: allocPaymentMethod, payment_date: allocatingPayment.recorded_at || new Date().toISOString(),
         transaction_reference: allocatingPayment.reference || null, reference_number: allocatingPayment.reference || null,
         status: 'completed', academic_year: feeRecord.academic_year || (feeRecord as any).fee_structure?.academic_year || '',
@@ -337,8 +395,20 @@ export default function AdminFeesDashboard() {
         notes: allocNotes || `Allocated from unmatched payment. Bank: ${allocatingPayment.bank_account || '—'}. Narration: ${allocatingPayment.narration || '—'}`,
       });
       if (paymentError) throw paymentError;
-      const { error: deleteError } = await supabase.from('unmatched_bank_payments').delete().eq('id', allocatingPayment.id);
-      if (deleteError) throw deleteError;
+
+      // Step 2: remove from unmatched. If this fails the payment already exists,
+      // so we throw with a clear message so the admin can manually clean up
+      // rather than silently leaving a duplicate unmatched record.
+      const { error: deleteError } = await supabase
+        .from('unmatched_bank_payments')
+        .delete()
+        .eq('id', allocatingPayment.id);
+      if (deleteError) {
+        throw new Error(
+          `Payment was recorded successfully, but the unmatched entry could not be removed (${deleteError.message}). ` +
+          `Please delete it manually from the Unmatched Payments list.`
+        );
+      }
       return { success: true };
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['unmatchedPayments'] }); queryClient.invalidateQueries({ queryKey: ['studentFees'] }); queryClient.invalidateQueries({ queryKey: ['allPayments'] }); closeAllocModal(); },
@@ -367,9 +437,20 @@ export default function AdminFeesDashboard() {
     return Array.from(years).sort().reverse();
   }, [studentFees]);
 
+  // Build a student_id → Payment[] map once so filteredStudentFees can do an
+  // O(1) lookup instead of re-running allPayments.filter() for every student.
+  const paymentsByStudent = useMemo(() => {
+    const map = new Map<string, Payment[]>();
+    for (const p of allPayments) {
+      if (!map.has(p.student_id)) map.set(p.student_id, []);
+      map.get(p.student_id)!.push(p);
+    }
+    return map;
+  }, [allPayments]);
+
   const filteredStudentFees = useMemo(() => {
     return (studentFees || [])
-      .map(sf => ({ ...sf, payments: allPayments.filter((p) => p.student_id === sf.student_id) }))
+      .map(sf => ({ ...sf, payments: paymentsByStudent.get(sf.student_id) ?? [] }))
       .filter((sf) => {
         const matchesSearch = !searchQuery || (sf.student_name && sf.student_name.toLowerCase().includes(searchQuery.toLowerCase())) || (sf.admission_number && sf.admission_number.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesYear   = selectedYear === 'all' || sf.academic_years?.includes(selectedYear);
@@ -483,6 +564,23 @@ export default function AdminFeesDashboard() {
           })}
         </div>
 
+        {/* Query error banner — shown when any primary data fetch fails */}
+        {(studentFeesError || paymentsError || unmatchedError) && (
+          <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800 text-sm">Failed to load fee data</p>
+              <p className="text-red-700 text-sm mt-0.5">
+                One or more data sources could not be reached. Check your connection and click{' '}
+                <strong>Refresh</strong> to try again.
+                {studentFeesError && ' [Student fees]'}
+                {paymentsError && ' [Payments]'}
+                {unmatchedError && ' [Unmatched]'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-white/80 backdrop-blur-sm shadow-lg border-0 p-1.5 rounded-xl flex-wrap h-auto gap-1">
@@ -579,7 +677,6 @@ export default function AdminFeesDashboard() {
                         {fee.fee_structure_classes?.length > 0 && (
                           <div className="text-xs text-gray-400 mt-1">Classes: {fee.fee_structure_classes.map((fsc) => fsc.classes?.name).join(', ')}</div>
                         )}
-                        {/* Active term match indicator */}
                         {activeTerm && fee.term === termLabel(activeTerm) && fee.academic_year === activeTerm.academic_year && (
                           <Badge className="mt-1.5 bg-green-50 text-green-700 border-green-200 text-xs">● Current term</Badge>
                         )}
@@ -664,7 +761,7 @@ export default function AdminFeesDashboard() {
         </Tabs>
       </div>
 
-      {/* Allocate Payment Modal — unchanged */}
+      {/* Allocate Payment Modal */}
       <Dialog open={!!allocatingPayment} onOpenChange={open => { if (!open) closeAllocModal(); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

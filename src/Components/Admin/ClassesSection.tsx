@@ -5,7 +5,7 @@ import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import {
   Plus, Pencil, Trash2, BookOpen, Users, GraduationCap,
-  X, Calendar, CheckSquare, Square, AlertTriangle, LayoutGrid,
+  X, CheckSquare, Square, AlertTriangle, LayoutGrid,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
@@ -89,11 +89,6 @@ export default function ClassesSection() {
   const [selectedClass, setSelectedClass]   = useState<any>(null);
   const [selectedSubjects, setSelectedSubjects]   = useState<string[]>([]);
   const [optionalSubjects, setOptionalSubjects]   = useState<string[]>([]);
-  const [selectedTerm, setSelectedTerm]           = useState('');
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState(new Date().getFullYear().toString());
-  const [titleInput, setTitleInput]   = useState('');
-  const [uploadFile, setUploadFile]   = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   // Overview filter
   const [overviewFilter, setOverviewFilter] = useState('');
@@ -200,15 +195,17 @@ export default function ClassesSection() {
     },
   });
 
-  const activeClassId = selectedClass?.id ?? promotionClass?.id ?? null;
   const { data: classStudents, isLoading: loadingStudents } = useQuery({
-    queryKey: ['class-students', activeClassId],
-    enabled: !!activeClassId,
-    queryFn: () => fetchStudentsForClass(activeClassId!),
+    queryKey: ['class-students', selectedClass?.id],
+    enabled: !!selectedClass?.id && showClassDetailModal,
+    queryFn: () => fetchStudentsForClass(selectedClass!.id),
   });
 
-  const promotionStudents        = classStudents;
-  const loadingPromotionStudents = loadingStudents;
+  const { data: promotionStudents, isLoading: loadingPromotionStudents } = useQuery({
+    queryKey: ['promotion-students', promotionClass?.id],
+    enabled: !!promotionClass?.id && showPromotionModal,
+    queryFn: () => fetchStudentsForClass(promotionClass!.id),
+  });
 
   const { data: assignedSubjects } = useQuery({
     queryKey: ['assigned-subjects', selectedClass?.id],
@@ -227,21 +224,6 @@ export default function ClassesSection() {
     },
   });
 
-  const { data: timetables } = useQuery({
-    queryKey: ['timetables', selectedClass?.id],
-    enabled: !!selectedClass?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('timetables')
-        .select('id, title, file_url, term, academic_year, uploaded_at')
-        .eq('class_id', selectedClass.id)
-        .order('academic_year', { ascending: false })
-        .order('term');
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
   const { data: currentTerm } = useQuery({
     queryKey: ['current-term'],
     queryFn: async () => {
@@ -255,43 +237,6 @@ export default function ClassesSection() {
   });
 
   // ── Mutations ──────────────────────────────────────────────────────────────
-
-  const uploadTimetableMutation = useMutation({
-    mutationFn: async ({ file, classId, term, academicYear, title }: any) => {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${classId}/${academicYear}/term-${term}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('Timetables').upload(fileName, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data: publicUrlData } = supabase.storage.from('Timetables').getPublicUrl(fileName);
-      const { error: dbError } = await supabase.from('timetables').upsert(
-        { class_id: classId, term, academic_year: academicYear, title, file_url: publicUrlData.publicUrl },
-        { onConflict: 'class_id,term,academic_year' }
-      );
-      if (dbError) throw dbError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['timetables', selectedClass?.id] });
-      setIsUploading(false);
-      setUploadFile(null);
-      setTitleInput('');
-    },
-    onError: (err: any) => { setIsUploading(false); alert('Upload failed: ' + err.message); },
-  });
-
-  const deleteTimetableMutation = useMutation({
-    mutationFn: async ({ id, fileUrl }: { id: string; fileUrl: string }) => {
-      const url       = new URL(fileUrl);
-      const pathParts = url.pathname.split('/');
-      const idx       = pathParts.findIndex(p => p === 'Timetables');
-      if (idx === -1) throw new Error('Invalid file URL');
-      const { error: storageError } = await supabase.storage.from('Timetables').remove([pathParts.slice(idx + 1).join('/')]);
-      if (storageError) throw storageError;
-      const { error: dbError } = await supabase.from('timetables').delete().eq('id', id);
-      if (dbError) throw dbError;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timetables', selectedClass?.id] }),
-    onError:   (err: any) => alert('Delete failed: ' + err.message),
-  });
 
   const createClassMutation = useMutation<any, any, any>({
     mutationFn: async data => {
@@ -452,7 +397,6 @@ export default function ClassesSection() {
 
   const openPromotion = (cls: any) => {
     setPromotionClass(cls);
-    setSelectedClass(cls);
     setDecisions({});
     setSelectedForBulk([]);
     setBulkStatus('promoted');
@@ -558,7 +502,7 @@ export default function ClassesSection() {
     setRunningPromotion(false);
     setPromotionDone(true);
     queryClient.invalidateQueries({ queryKey: ['classes-with-details'] });
-    queryClient.invalidateQueries({ queryKey: ['class-students', promotionClass.id] });
+    queryClient.invalidateQueries({ queryKey: ['promotion-students', promotionClass.id] });
   };
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -1135,72 +1079,6 @@ export default function ClassesSection() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calendar className="w-5 h-5" />Timetables</CardTitle></CardHeader>
-              <CardContent>
-                <div className="mb-4 p-4 border rounded bg-gray-50">
-                  <h4 className="font-medium mb-2">Upload New Timetable</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Term</Label>
-                      <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-                        <SelectTrigger><SelectValue placeholder="Select term" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Term 1">Term 1</SelectItem>
-                          <SelectItem value="Term 2">Term 2</SelectItem>
-                          <SelectItem value="Term 3">Term 3</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Academic Year</Label>
-                      <Input type="text" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)} placeholder="e.g., 2025" />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <Label>Title (optional)</Label>
-                      <Input value={titleInput} onChange={e => setTitleInput(e.target.value)} placeholder="e.g., Form 1A Term 1 Timetable" />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <Label>File (PDF or Image)</Label>
-                      <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
-                    </div>
-                  </div>
-                  <Button
-                    className="mt-4"
-                    disabled={!selectedTerm || !selectedAcademicYear || !uploadFile || isUploading}
-                    onClick={() => {
-                      if (!uploadFile) return;
-                      setIsUploading(true);
-                      uploadTimetableMutation.mutate({
-                        file: uploadFile, classId: selectedClass.id,
-                        term: selectedTerm, academicYear: selectedAcademicYear,
-                        title: titleInput || `${selectedClass?.name} ${selectedTerm} ${selectedAcademicYear} Timetable`,
-                      });
-                    }}
-                  >
-                    {isUploading ? 'Uploading...' : 'Upload Timetable'}
-                  </Button>
-                </div>
-                {timetables && timetables.length > 0 ? (
-                  <div className="space-y-2">
-                    {timetables.map((tt: any) => (
-                      <div key={tt.id} className="flex items-center justify-between p-3 border rounded">
-                        <div>
-                          <p className="font-medium">{tt.title}</p>
-                          <p className="text-sm text-gray-500">{tt.term} · {tt.academic_year} · Uploaded {new Date(tt.uploaded_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" asChild><a href={tt.file_url} target="_blank" rel="noopener noreferrer">View</a></Button>
-                          <Button variant="ghost" size="icon" onClick={() => { if (window.confirm('Delete this timetable?')) deleteTimetableMutation.mutate({ id: tt.id, fileUrl: tt.file_url }); }}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="text-gray-500 text-center py-4">No timetables uploaded yet.</p>}
-              </CardContent>
-            </Card>
           </div>
         </DialogContent>
       </Dialog>
