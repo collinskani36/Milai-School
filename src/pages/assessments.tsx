@@ -157,13 +157,28 @@ const PDFLoadingFallback = () => (
 );
 
 function triggerPDFDownload(blob: Blob, fileName: string) {
-  if (isNative) {
-    window.open(URL.createObjectURL(blob), "_blank");
+  // Android native — use the JS bridge injected by MainActivity.
+  // window.AndroidPdfBridge is only present inside the Capacitor APK,
+  // never in a browser, so web downloads are completely unaffected.
+  if (
+    isNative &&
+    typeof (window as any).AndroidPdfBridge !== "undefined" &&
+    typeof (window as any).AndroidPdfBridge.downloadPdf === "function"
+  ) {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // reader.result is a data URI: "data:application/pdf;base64,XXXX..."
+      const base64 = reader.result as string;
+      (window as any).AndroidPdfBridge.downloadPdf(base64, fileName);
+    };
+    reader.readAsDataURL(blob);
     return;
   }
+
+  // Web / iOS fallback — standard anchor-click download (unchanged)
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href  = url;
+  link.href     = url;
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
