@@ -157,6 +157,23 @@ const PDFLoadingFallback = () => (
 );
 
 function triggerPDFDownload(blob: Blob, fileName: string) {
+  // ── DEBUG: remove these alerts once download is confirmed working ────────
+  const debugIsNative = isNative;
+  const debugBridgeExists = typeof (window as any).AndroidPdfBridge !== "undefined";
+  const debugFnExists =
+    debugBridgeExists &&
+    typeof (window as any).AndroidPdfBridge.downloadPdf === "function";
+
+  alert(
+    `[PDF Debug]\n` +
+    `isNative: ${debugIsNative}\n` +
+    `AndroidPdfBridge exists: ${debugBridgeExists}\n` +
+    `downloadPdf fn exists: ${debugFnExists}\n` +
+    `fileName: ${fileName}\n` +
+    `blobSize: ${blob.size} bytes`
+  );
+  // ── END DEBUG ─────────────────────────────────────────────────────────────
+
   // Android native — use the JS bridge injected by MainActivity.
   // window.AndroidPdfBridge is only present inside the Capacitor APK,
   // never in a browser, so web downloads are completely unaffected.
@@ -167,8 +184,8 @@ function triggerPDFDownload(blob: Blob, fileName: string) {
   ) {
     const reader = new FileReader();
     reader.onloadend = () => {
-      // reader.result is a data URI: "data:application/pdf;base64,XXXX..."
       const base64 = reader.result as string;
+      alert(`[PDF Debug] Calling AndroidPdfBridge.downloadPdf — base64 length: ${base64.length}`);
       (window as any).AndroidPdfBridge.downloadPdf(base64, fileName);
     };
     reader.readAsDataURL(blob);
