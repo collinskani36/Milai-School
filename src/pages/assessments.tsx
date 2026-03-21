@@ -53,6 +53,17 @@ interface Profile {
   [key: string]: unknown;
 }
 
+// PDF components need first_name/last_name as required strings — use this
+// helper to safely cast profile before passing to any PDF component.
+function toPdfProfile(p: unknown): { first_name: string; last_name: string; reg_no?: string; email?: string } {
+  const profile = p as Profile;
+  return {
+    first_name: profile?.first_name ?? "",
+    last_name:  profile?.last_name  ?? "",
+    reg_no:     profile?.reg_no,
+  };
+}
+
 interface AttendanceData {
   totalDays: number;
   presentDays: number;
@@ -157,35 +168,19 @@ const PDFLoadingFallback = () => (
 );
 
 function triggerPDFDownload(blob: Blob, fileName: string) {
-  // ── DEBUG: remove these alerts once download is confirmed working ────────
-  const debugIsNative = isNative;
-  const debugBridgeExists = typeof (window as any).AndroidPdfBridge !== "undefined";
-  const debugFnExists =
-    debugBridgeExists &&
-    typeof (window as any).AndroidPdfBridge.downloadPdf === "function";
-
-  alert(
-    `[PDF Debug]\n` +
-    `isNative: ${debugIsNative}\n` +
-    `AndroidPdfBridge exists: ${debugBridgeExists}\n` +
-    `downloadPdf fn exists: ${debugFnExists}\n` +
-    `fileName: ${fileName}\n` +
-    `blobSize: ${blob.size} bytes`
-  );
-  // ── END DEBUG ─────────────────────────────────────────────────────────────
-
-  // Android native — use the JS bridge injected by MainActivity.
-  // window.AndroidPdfBridge is only present inside the Capacitor APK,
-  // never in a browser, so web downloads are completely unaffected.
+  // Android bridge path — window.AndroidPdfBridge is injected by MainActivity.java
+  // and ONLY exists inside the Capacitor APK. It is never present in a browser,
+  // so the web download path below is completely unaffected.
+  // NOTE: we intentionally do NOT check isNative here because Capacitor's
+  // isNativePlatform() returns false when the app loads from a remote Vercel URL.
   if (
-    isNative &&
     typeof (window as any).AndroidPdfBridge !== "undefined" &&
     typeof (window as any).AndroidPdfBridge.downloadPdf === "function"
   ) {
     const reader = new FileReader();
     reader.onloadend = () => {
+      // reader.result is a data URI: "data:application/pdf;base64,XXXX..."
       const base64 = reader.result as string;
-      alert(`[PDF Debug] Calling AndroidPdfBridge.downloadPdf — base64 length: ${base64.length}`);
       (window as any).AndroidPdfBridge.downloadPdf(base64, fileName);
     };
     reader.readAsDataURL(blob);
@@ -319,7 +314,7 @@ const downloadExamPDF = async (
 
     const { pdf } = await import("@react-pdf/renderer");
     const blob = await pdf(
-      <ExamPDF examRecord={examRecord} profile={profile} className={className} logoUrl={logoUrl} />
+      <ExamPDF examRecord={examRecord} profile={toPdfProfile(profile)} className={className} logoUrl={logoUrl} />
     ).toBlob();
 
     triggerPDFDownload(
@@ -422,7 +417,7 @@ const downloadTermReportPDF = async (
         subjectBreakdowns={subjectBreakdowns}
         formativeRecords={formativeRecords}
         attendance={attendance}
-        profile={profile}
+        profile={toPdfProfile(profile)}
         className={className}
         logoUrl={logoUrl}
       />
@@ -1228,9 +1223,9 @@ const SubjectAnalysisDialog = React.memo(({
                                         <TableCell>
                                           {a.is_absent ? <Badge variant="outline">Absent</Badge> :
                                             <PerformanceBadge level={
-                                              (a.percentage as number) >= 75 ? "EE" :
+                                              ((a.percentage as number) >= 75 ? "EE" :
                                               (a.percentage as number) >= 50 ? "ME" :
-                                              (a.percentage as number) >= 25 ? "AE" : "BE"
+                                              (a.percentage as number) >= 25 ? "AE" : "BE") as "EE" | "ME" | "AE" | "BE"
                                             } />}
                                         </TableCell>
                                         <TableCell className="max-w-xs truncate">{(a.teacher_remarks as string) ?? "-"}</TableCell>
@@ -1293,7 +1288,7 @@ const SubjectAnalysisDialog = React.memo(({
                                           {a.is_absent
                                             ? <Badge variant="outline">Absent</Badge>
                                             : a.performance_level
-                                              ? <PerformanceBadge level={a.performance_level as string} />
+                                              ? <PerformanceBadge level={a.performance_level as "EE" | "ME" | "AE" | "BE"} />
                                               : "-"}
                                         </TableCell>
                                         <TableCell className="max-w-xs truncate">{(a.teacher_remarks as string) ?? "-"}</TableCell>
@@ -2257,7 +2252,7 @@ export default function Assessments({
                       termKey={key}
                       termLabel={termLabel}
                       records={records}
-                      profile={profile as Profile}
+                      profile={toPdfProfile(profile)}
                       className={className ?? ""}
                       logoUrl={logoUrl}
                       classId={classId}
@@ -2272,7 +2267,7 @@ export default function Assessments({
                     document={
                       <PerformanceHistoryPDF
                         performanceHistory={performanceHistory}
-                        profile={profile}
+                        profile={toPdfProfile(profile)}
                         className={className ?? ""}
                         logoUrl={logoUrl}
                       />
