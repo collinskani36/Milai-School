@@ -1,142 +1,497 @@
-import { Button } from "@/Components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
-import { GraduationCap, Users, BookOpen, Award } from "lucide-react";
+import { GraduationCap, Users, BookOpen, ChartBar, FileText, Award, Calendar, Edit, DollarSign, Currency, CurrencyIcon, LucideDollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+
+const MAROON = "#7a1f2b";
+
+type Portal = "student" | "teacher";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [active, setActive] = useState<Portal>("student");
+  const [sliding, setSliding] = useState(false);
+  const [direction, setDirection] = useState<"left" | "right">("right");
+
+  const switchPortal = (to: Portal) => {
+    if (to === active || sliding) return;
+    const goRight = to === "teacher";
+    setDirection(goRight ? "right" : "left");
+    setSliding(true);
+    setTimeout(() => {
+      setActive(to);
+      setSliding(false);
+    }, 280);
+  };
+
+  const studentContent = (
+    <div className="portal-card" key="student">
+      <div className="card-head">
+        <div className="card-icon">
+          <Users size={22} color="#fff" />
+        </div>
+        <div>
+          <h3 className="card-title">Student portal</h3>
+          <p className="card-desc">Access assignments, view grades, and track your academic progress.</p>
+        </div>
+      </div>
+      <div className="feature-row">
+        <div className="feat-chip"><ChartBar size={16} color={MAROON} /><span>Track progress</span></div>
+        <div className="feat-chip"><FileText size={16} color={MAROON} /><span>Assignments</span></div>
+        <div className="feat-chip"><Award size={16} color={MAROON} /><span>Grades</span></div>
+      </div>
+      <button className="signin-btn" onClick={() => navigate("/login")}>
+        Sign in as student
+      </button>
+    </div>
+  );
+
+  const teacherContent = (
+    <div className="portal-card" key="teacher">
+      <div className="card-head">
+        <div className="card-icon">
+          <BookOpen size={22} color="#fff" />
+        </div>
+        <div>
+          <h3 className="card-title">Teacher portal</h3>
+          <p className="card-desc">Manage classes, set assignments, and monitor student performance.</p>
+        </div>
+      </div>
+      <div className="feature-row">
+        <div className="feat-chip"><Users size={16} color={MAROON} /><span>Students</span></div>
+        <div className="feat-chip"><Edit size={16} color={MAROON} /><span>Assignments</span></div>
+        <div className="feat-chip"><Calendar size={16} color={MAROON} /><span>Schedule</span></div>
+      </div>
+      <button className="signin-btn" onClick={() => navigate("/teacher-login")}>
+        Sign in as teacher
+      </button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between items-center bg-gradient-to-br from-[#f6f2f2] via-[#fdfbfb] to-[#f3eded] p-3 md:p-6 overflow-hidden">
+    <>
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      {/* Header */}
-      <nav className="bg-white/80 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-2xl w-full max-w-7xl mb-2 md:mb-4 shadow-sm">
-        <div className="flex justify-center items-center h-14 md:h-16">
-          <div className="flex items-center space-x-3 md:space-x-4">
-            <div className="w-10 h-10 md:w-11 md:h-11 bg-[#7a1f2b] rounded-xl flex items-center justify-center shadow-md">
-              <GraduationCap className="h-5 w-5 md:h-6 md:w-6 text-white" />
+        .page {
+          min-height: 100dvh;
+          max-height: 100dvh;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          background: #fdfbfb;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        /* ── MOBILE ── */
+        .mob-nav {
+          background: ${MAROON};
+          padding: 12px 20px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .mob-nav-icon {
+          width: 28px; height: 28px;
+          border-radius: 7px;
+          background: rgba(255,255,255,0.18);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .mob-nav-title {
+          font-size: 15px; font-weight: 600; color: #fff;
+          letter-spacing: -0.01em;
+        }
+
+        .mob-body {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: space-evenly;
+          padding: 20px 24px;
+          gap: 0;
+        }
+
+        .mob-hero { text-align: center; }
+        .mob-icon-ring {
+          width: 60px; height: 60px;
+          border-radius: 50%;
+          background: rgba(122,31,43,0.1);
+          border: 1.5px solid rgba(122,31,43,0.2);
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 12px;
+        }
+        .mob-heading {
+          font-size: 22px; font-weight: 700;
+          color: #3a1b1f; line-height: 1.25;
+          letter-spacing: -0.02em;
+        }
+        .mob-heading span { color: ${MAROON}; }
+        .mob-sub {
+          font-size: 13px; color: #6b4b50;
+          margin-top: 6px; line-height: 1.5;
+        }
+
+        /* Toggle */
+        .toggle-wrap { width: 100%; }
+        .toggle-pill {
+          display: flex;
+          background: ${MAROON};
+          border-radius: 999px;
+          padding: 4px;
+          width: 100%;
+        }
+        .toggle-btn {
+          flex: 1;
+          padding: 9px 12px;
+          font-size: 13px; font-weight: 600;
+          border-radius: 999px;
+          border: none; cursor: pointer;
+          transition: background 0.22s, color 0.22s;
+          color: rgba(255,255,255,0.75);
+          background: transparent;
+        }
+        .toggle-btn.active {
+          background: #fff;
+          color: ${MAROON};
+        }
+        .toggle-btn:not(.active):hover {
+          color: #fff;
+        }
+
+        /* Portal card slide */
+        .card-viewport {
+          width: 100%;
+          overflow: hidden;
+          position: relative;
+        }
+        .portal-card {
+          background: #fff;
+          border: 0.5px solid rgba(122,31,43,0.18);
+          border-radius: 14px;
+          padding: 16px;
+          display: flex; flex-direction: column; gap: 12px;
+          width: 100%;
+        }
+        .portal-card.slide-out-left  { animation: slideOutLeft  0.28s ease forwards; }
+        .portal-card.slide-out-right { animation: slideOutRight 0.28s ease forwards; }
+        .portal-card.slide-in-right  { animation: slideInRight  0.28s ease forwards; }
+        .portal-card.slide-in-left   { animation: slideInLeft   0.28s ease forwards; }
+
+        @keyframes slideOutLeft  { to { transform: translateX(-110%); opacity: 0; } }
+        @keyframes slideOutRight { to { transform: translateX( 110%); opacity: 0; } }
+        @keyframes slideInRight  { from { transform: translateX( 110%); opacity: 0; } }
+        @keyframes slideInLeft   { from { transform: translateX(-110%); opacity: 0; } }
+
+        .card-head { display: flex; align-items: flex-start; gap: 12px; }
+        .card-icon {
+          width: 40px; height: 40px; flex-shrink: 0;
+          border-radius: 10px;
+          background: ${MAROON};
+          display: flex; align-items: center; justify-content: center;
+        }
+        .card-title { font-size: 15px; font-weight: 600; color: #3a1b1f; }
+        .card-desc  { font-size: 12px; color: #6b4b50; margin-top: 3px; line-height: 1.45; }
+
+        .feature-row { display: flex; gap: 6px; }
+        .feat-chip {
+          flex: 1;
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          background: #faf6f6;
+          border: 0.5px solid rgba(122,31,43,0.12);
+          border-radius: 8px;
+          padding: 8px 4px;
+          font-size: 10px; color: #6b4b50;
+        }
+
+        .signin-btn {
+          width: 100%;
+          background: ${MAROON};
+          color: #fff;
+          border: none; border-radius: 10px;
+          padding: 11px;
+          font-size: 13px; font-weight: 600;
+          cursor: pointer;
+          transition: background 0.18s;
+          letter-spacing: 0.01em;
+        }
+        .signin-btn:hover { background: #6a1a24; }
+
+        .mob-footer {
+          font-size: 10px; color: #9b7a7f; text-align: center;
+        }
+
+        /* ── DESKTOP ── */
+        .desk-layout {
+          display: none;
+          flex: 1;
+          min-height: 0;
+        }
+        .desk-left {
+          width: 45%;
+          background: ${MAROON};
+          display: flex; flex-direction: column;
+          justify-content: space-between;
+          padding: 40px 36px;
+        }
+        .desk-brand {
+          display: flex; align-items: center; gap: 10px; margin-bottom: 32px;
+        }
+        .desk-brand-icon {
+          width: 34px; height: 34px;
+          border-radius: 9px;
+          background: rgba(255,255,255,0.18);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .desk-brand-name {
+          font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9);
+          letter-spacing: -0.01em;
+        }
+        .desk-headline {
+          font-size: 34px; font-weight: 700;
+          color: #fff; line-height: 1.2;
+          letter-spacing: -0.03em;
+        }
+        .desk-headline span { color: rgba(255,255,255,0.45); }
+        .desk-tagline {
+          font-size: 13px; color: rgba(255,255,255,0.6);
+          margin-top: 16px; line-height: 1.65; max-width: 280px;
+        }
+        .desk-footer {
+          font-size: 11px; color: rgba(255,255,255,0.3);
+        }
+
+        .desk-right {
+          flex: 1;
+          background: #fdfbfb;
+          display: flex; flex-direction: column;
+          padding: 40px 36px;
+          gap: 20px;
+        }
+        .desk-right-label {
+          font-size: 11px; font-weight: 600;
+          color: #9b7a7f; letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .desk-card-viewport {
+          flex: 1; position: relative; overflow: hidden;
+        }
+        .desk-portal-card {
+          position: absolute; inset: 0;
+          background: #fff;
+          border: 0.5px solid rgba(122,31,43,0.15);
+          border-radius: 16px;
+          padding: 24px;
+          display: flex; flex-direction: column; gap: 18px;
+        }
+        .desk-portal-card.slide-out-left  { animation: slideOutLeft  0.28s ease forwards; }
+        .desk-portal-card.slide-out-right { animation: slideOutRight 0.28s ease forwards; }
+        .desk-portal-card.slide-in-right  { animation: slideInRight  0.28s ease forwards; }
+        .desk-portal-card.slide-in-left   { animation: slideInLeft   0.28s ease forwards; }
+        .desk-card-icon {
+          width: 48px; height: 48px;
+          border-radius: 12px; background: ${MAROON};
+          display: flex; align-items: center; justify-content: center;
+        }
+        .desk-card-title {
+          font-size: 18px; font-weight: 700; color: #3a1b1f;
+          letter-spacing: -0.02em; margin-top: 4px;
+        }
+        .desk-card-desc {
+          font-size: 13px; color: #6b4b50; line-height: 1.6;
+        }
+        .desk-feature-row { display: flex; gap: 8px; }
+        .desk-feat-chip {
+          flex: 1;
+          background: #faf6f6;
+          border: 0.5px solid rgba(122,31,43,0.12);
+          border-radius: 10px;
+          padding: 10px 8px;
+          display: flex; flex-direction: column; align-items: center; gap: 5px;
+          font-size: 11px; color: #6b4b50;
+        }
+        .desk-signin-btn {
+          width: 100%; margin-top: auto;
+          background: ${MAROON}; color: #fff;
+          border: none; border-radius: 12px;
+          padding: 14px;
+          font-size: 14px; font-weight: 600;
+          cursor: pointer;
+          transition: background 0.18s;
+          letter-spacing: 0.01em;
+        }
+        .desk-signin-btn:hover { background: #6a1a24; }
+
+        @media (min-width: 768px) {
+          .mob-nav, .mob-body, .mob-footer-wrap { display: none; }
+          .desk-layout { display: flex; }
+          .page { max-height: 100dvh; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .portal-card, .desk-portal-card { animation: none !important; }
+        }
+      `}</style>
+
+      <div className="page">
+
+        {/* ── MOBILE NAV ── */}
+        <nav className="mob-nav">
+          <div className="mob-nav-icon">
+            <GraduationCap size={16} color="#fff" />
+          </div>
+          <span className="mob-nav-title">Milai School Portal</span>
+        </nav>
+
+        {/* ── MOBILE BODY ── */}
+        <main className="mob-body">
+
+          {/* Hero */}
+          <div className="mob-hero">
+            <div className="mob-icon-ring">
+              <GraduationCap size={28} color={MAROON} />
             </div>
-            <h1 className="text-lg md:text-2xl font-bold tracking-tight text-[#3a1b1f]">
-              Milai School Portal
+            <h1 className="mob-heading">
+              Welcome to <span>Milai School</span>
             </h1>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col justify-start items-center text-center w-full">
-
-        {/* Hero */}
-        <div className="flex flex-col items-center space-y-1 md:space-y-2 mt-2 md:mt-4">
-          <div className="w-20 h-20 md:w-24 md:h-24 bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 rounded-full flex items-center justify-center relative mb-1 md:mb-2">
-            <div className="absolute inset-0 rounded-full bg-[#7a1f2b]/5 animate-ping" />
-            <GraduationCap className="h-10 w-10 md:h-12 md:w-12 text-[#7a1f2b]" />
+            <p className="mob-sub">Academic excellence, powered by technology</p>
           </div>
 
-          <h1 className="text-3xl md:text-5xl font-extrabold text-[#3a1b1f] tracking-tight leading-snug md:leading-snug">
-            Welcome to{" "}
-            <span className="bg-gradient-to-r from-[#7a1f2b] via-[#9b2c3a] to-[#7a1f2b] bg-clip-text text-transparent">
-              Milai School
-            </span>
-          </h1>
-
-          <p className="text-xs md:text-base text-[#6b4b50] font-medium leading-snug max-w-xs md:max-w-xl mt-1 md:mt-2">
-            Your gateway to academic excellence. Access courses, track progress, and stay connected.
-          </p>
-        </div>
-
-        {/* Sign In Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 w-full max-w-2xl mt-3 md:mt-5">
-
-          {/* Student Card */}
-          <Card
-            className="group bg-white border border-[#7a1f2b]/10 hover:border-[#7a1f2b]/30 transition-all duration-500 cursor-pointer overflow-hidden relative shadow-sm hover:shadow-md"
-            onClick={() => navigate("/login")}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-[#7a1f2b]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <CardHeader className="text-center py-2 md:py-3">
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-[#f6f2f2] rounded-2xl flex items-center justify-center mx-auto mb-2 md:mb-3 group-hover:scale-105 group-hover:bg-[#7a1f2b] transition-all duration-500">
-                <Users className="h-5 w-5 md:h-7 md:w-7 text-[#7a1f2b] group-hover:text-white" />
-              </div>
-              <CardTitle className="text-lg md:text-xl font-bold text-[#3a1b1f]">
-                Student Portal
-              </CardTitle>
-              <CardDescription className="text-[#6b4b50] text-xs md:text-sm">
-                Access assignments, grades, and academic progress
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center pb-2 md:pb-3">
-              <Button
-                size="lg"
-                className="w-full bg-[#7a1f2b] hover:bg-[#6a1a24] text-white font-black h-10 md:h-11 rounded-xl shadow-md"
+          {/* Toggle */}
+          <div className="toggle-wrap">
+            <div className="toggle-pill">
+              <button
+                className={`toggle-btn${active === "student" ? " active" : ""}`}
+                onClick={() => switchPortal("student")}
               >
-                Student Sign In
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Teacher Card */}
-          <Card
-            className="group bg-white border border-[#7a1f2b]/10 hover:border-[#7a1f2b]/30 transition-all duration-500 cursor-pointer overflow-hidden relative shadow-sm hover:shadow-md"
-            onClick={() => navigate("/teacher-login")}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-[#7a1f2b]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <CardHeader className="text-center py-2 md:py-3">
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-[#f6f2f2] rounded-2xl flex items-center justify-center mx-auto mb-2 md:mb-3 group-hover:scale-105 group-hover:bg-[#7a1f2b] transition-all duration-500">
-                <BookOpen className="h-5 w-5 md:h-7 md:w-7 text-[#7a1f2b] group-hover:text-white" />
-              </div>
-              <CardTitle className="text-lg md:text-xl font-bold text-[#3a1b1f]">
-                Teacher Portal
-              </CardTitle>
-              <CardDescription className="text-[#6b4b50] text-xs md:text-sm">
-                Manage classes, assignments, and student progress
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center pb-2 md:pb-3">
-              <Button
-                size="lg"
-                className="w-full bg-[#7a1f2b] hover:bg-[#6a1a24] text-white font-black h-10 md:h-11 rounded-xl shadow-md"
+                Student
+              </button>
+              <button
+                className={`toggle-btn${active === "teacher" ? " active" : ""}`}
+                onClick={() => switchPortal("teacher")}
               >
-                Teacher Sign In
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+                Teacher
+              </button>
+            </div>
+          </div>
 
-        {/* Features */}
-        <div className="mt-2 md:mt-4 w-full max-w-2xl overflow-x-auto no-scrollbar">
-          <div className="flex space-x-2 md:space-x-3 py-1 md:py-2">
+          {/* Card viewport */}
+          <div className="card-viewport">
+            <div
+              className={`portal-card${
+                sliding
+                  ? direction === "right"
+                    ? " slide-out-left"
+                    : " slide-out-right"
+                  : ""
+              }`}
+            >
+              {active === "student" ? studentContent : teacherContent}
+            </div>
+          </div>
 
-            {[
-              { icon: Award, title: "Track Progress", desc: "Monitor academic performance with analytics and insights" },
-              { icon: Users, title: "Stay Connected", desc: "Seamless communication between students, teachers, and parents" },
-              { icon: BookOpen, title: "Manage Learning", desc: "Organize assignments, resources, and schedules efficiently" },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="flex-shrink-0 w-40 md:w-48 bg-white rounded-2xl p-2 md:p-3 text-center border border-[#7a1f2b]/10 shadow-sm">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 rounded-2xl flex items-center justify-center mx-auto mb-1 md:mb-2">
-                  <Icon className="h-5 w-5 md:h-6 md:w-6 text-[#7a1f2b]" />
+          {/* Footer */}
+          <p className="mob-footer">© 2026 Milai School · Empowering education</p>
+        </main>
+
+        {/* ── DESKTOP ── */}
+        <div className="desk-layout">
+
+          {/* Left brand panel */}
+          <div className="desk-left">
+            <div>
+              <div className="desk-brand">
+                <div className="desk-brand-icon">
+                  <GraduationCap size={18} color="#fff" />
                 </div>
-                <h3 className="text-sm md:text-lg font-bold text-[#3a1b1f] mb-1">{title}</h3>
-                <p className="text-xs md:text-sm text-[#6b4b50] leading-snug md:leading-relaxed">{desc}</p>
+                <span className="desk-brand-name">Milai School Portal</span>
               </div>
-            ))}
+              <h1 className="desk-headline">
+                Shaping minds.<br /><span>Building futures.</span>
+              </h1>
+              <p className="desk-tagline">
+                Your gateway to academic excellence — access courses, track progress, and stay connected.
+              </p>
+            </div>
+            <p className="desk-footer">© 2026 Milai School · All rights reserved</p>
+          </div>
 
+          {/* Right portal panel */}
+          <div className="desk-right">
+            <p className="desk-right-label">Sign in to your portal</p>
+
+            {/* Toggle */}
+            <div className="toggle-pill">
+              <button
+                className={`toggle-btn${active === "student" ? " active" : ""}`}
+                onClick={() => switchPortal("student")}
+              >
+                Student
+              </button>
+              <button
+                className={`toggle-btn${active === "teacher" ? " active" : ""}`}
+                onClick={() => switchPortal("teacher")}
+              >
+                Teacher
+              </button>
+            </div>
+
+            {/* Card */}
+            <div className="desk-card-viewport">
+              <div
+                className={`desk-portal-card${
+                  sliding
+                    ? direction === "right"
+                      ? " slide-out-left"
+                      : " slide-out-right"
+                    : ""
+                }`}
+              >
+                {active === "student" ? (
+                  <>
+                    <div>
+                      <div className="desk-card-icon"><Users size={24} color="#fff" /></div>
+                      <h2 className="desk-card-title">Student portal</h2>
+                      <p className="desk-card-desc">
+                        Access assignments, view grades, and track your academic progress in one place.
+                      </p>
+                    </div>
+                    <div className="desk-feature-row">
+                      <div className="desk-feat-chip"><ChartBar size={18} color={MAROON} /><span>Track progress</span></div>
+                      <div className="desk-feat-chip"><FileText size={18} color={MAROON} /><span>Assignments</span></div>
+                      <div className="desk-feat-chip"><Award size={18} color={MAROON} /><span>Grades</span></div>
+                      <div className="desk-feat-chip"><LucideDollarSign size={18} color={MAROON} /><span>Fees</span></div>
+                    </div>
+                    <button className="desk-signin-btn" onClick={() => navigate("/login")}>
+                      Sign in as student
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="desk-card-icon"><BookOpen size={24} color="#fff" /></div>
+                      <h2 className="desk-card-title">Teacher portal</h2>
+                      <p className="desk-card-desc">
+                        Manage classes, set assignments, and monitor student performance with ease.
+                      </p>
+                    </div>
+                    <div className="desk-feature-row">
+                      <div className="desk-feat-chip"><Users size={18} color={MAROON} /><span>Students</span></div>
+                      <div className="desk-feat-chip"><Edit size={18} color={MAROON} /><span>Assignments</span></div>
+                      <div className="desk-feat-chip"><Calendar size={18} color={MAROON} /><span>Schedule</span></div>
+                    </div>
+                    <button className="desk-signin-btn" onClick={() => navigate("/teacher-login")}>
+                      Sign in as teacher
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-[#7a1f2b]/10 py-2 md:py-4 w-full bg-white/70">
-        <div className="text-center px-4">
-          <p className="text-[#6b4b50] font-medium text-xs md:text-sm">
-            &copy; 2026 Milai School Portal. All rights reserved.
-          </p>
-          <p className="mt-1 text-[10px] md:text-sm text-[#9b7a7f] uppercase tracking-widest">
-            Empowering education through technology
-          </p>
-        </div>
-      </footer>
-    </div>
+      </div>
+    </>
   );
 };
 
