@@ -354,7 +354,7 @@ const Index = () => {
             <h1 className="mob-heading">
               Welcome to <span>Milai School</span>
             </h1>
-            <p className="mob-sub">Academic excellence, powered by technology</p>
+            <p className="mob-sub">Your gateway to academic excellence — access courses, track progress, and stay connected</p>
           </div>
 
           {/* Toggle */}

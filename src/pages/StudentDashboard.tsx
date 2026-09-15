@@ -1,5 +1,5 @@
 // StudentDashboard.tsx (updated with academic progress card)
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
@@ -105,6 +105,7 @@ export default function StudentDashboard({ handleLogout }) {
 
   // Tab state for mobile navigation (5 tabs)
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
+  const [tabVisible, setTabVisible] = useState(true);
 
   // Tab content states
   const [showAssessments, setShowAssessments] = useState(false);
@@ -132,19 +133,21 @@ export default function StudentDashboard({ handleLogout }) {
 
   // Handle tab switching (similar to teacher dashboard)
   const handleTabSwitch = (tab: "overview" | "assessments" | "assignments" | "fees" | "settings") => {
-    setActiveTab(tab);
-    
-    // Close all tab content first
-    setShowAssessments(false);
-    setShowAssignments(false);
-    setShowFees(false);
-    setShowSettings(false);
-    
-    // Open the selected tab content
-    if (tab === "assessments") setShowAssessments(true);
-    else if (tab === "assignments") setShowAssignments(true);
-    else if (tab === "fees") setShowFees(true);
-    else if (tab === "settings") setShowSettings(true);
+    if (tab === activeTab) return;
+    // Fade out, swap, fade in
+    setTabVisible(false);
+    setTimeout(() => {
+      setActiveTab(tab);
+      setShowAssessments(false);
+      setShowAssignments(false);
+      setShowFees(false);
+      setShowSettings(false);
+      if (tab === "assessments") setShowAssessments(true);
+      else if (tab === "assignments") setShowAssignments(true);
+      else if (tab === "fees") setShowFees(true);
+      else if (tab === "settings") setShowSettings(true);
+      setTabVisible(true);
+    }, 120);
   };
 
   // Helper to normalize relation fields
@@ -522,12 +525,25 @@ export default function StudentDashboard({ handleLogout }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <>
+        {/* Mobile branded splash */}
+        <div className="sm:hidden h-[100dvh] bg-maroon flex flex-col items-center justify-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center animate-pulse">
+            <BookOpen className="h-8 w-8 text-white" />
+          </div>
+          <div className="text-center">
+            <p className="text-white font-semibold text-base tracking-tight">Milai School</p>
+            <p className="text-white/50 text-xs mt-1">Loading your dashboard…</p>
+          </div>
         </div>
-      </div>
+        {/* Desktop loader */}
+        <div className="hidden sm:flex min-h-screen bg-white items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </>
     );
   }
   if (error) return <p className="text-red-500">Error: {error}</p>;
@@ -548,8 +564,70 @@ export default function StudentDashboard({ handleLogout }) {
   // Overview Content Component
   const OverviewContent = () => (
     <div className="space-y-6 md:space-y-8">
-      {/* WELCOME HEADER */}
-      <div className="bg-maroon-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-maroon-200 shadow-sm">
+      {/* ── MOBILE WELCOME HEADER ── compact hero tile */}
+      <div
+        className="sm:hidden rounded-2xl overflow-hidden"
+        style={{
+          background: "#fff",
+          border: "0.5px solid rgba(122,31,43,0.15)",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        }}
+      >
+        {/* Maroon band */}
+        <div style={{ background: "#7a1f2b", padding: "14px 16px 12px" }}>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", letterSpacing: "0.02em", marginBottom: 2 }}>
+            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}
+          </p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+            {profile.first_name} {profile.last_name}
+          </h1>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+            {profile?.reg_no} · {className}
+          </p>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: "flex", borderTop: "0.5px solid rgba(122,31,43,0.08)" }}>
+          {/* Attendance */}
+          <div style={{ flex: 1, padding: "12px 16px", borderRight: "0.5px solid rgba(122,31,43,0.08)" }}>
+            <p style={{ fontSize: 10, color: "#9b7a7f", marginBottom: 3 }}>Attendance</p>
+            <p style={{ fontSize: 22, fontWeight: 700, color: "#7a1f2b", letterSpacing: "-0.03em", lineHeight: 1 }}>
+              {attendanceData?.attendanceRate ?? 0}%
+            </p>
+            {attendanceData && (
+              <p style={{ fontSize: 10, color: "#9b7a7f", marginTop: 2 }}>
+                {attendanceData.presentDays}/{attendanceData.totalDays} days
+              </p>
+            )}
+            {activeTerm && (
+              <p style={{ fontSize: 9, color: "#c4a4a8", marginTop: 1 }}>
+                Term {activeTerm.term} · {activeTerm.academic_year}
+              </p>
+            )}
+          </div>
+          {/* Grade */}
+          <div style={{ flex: 1, padding: "12px 16px", borderRight: "0.5px solid rgba(122,31,43,0.08)" }}>
+            <p style={{ fontSize: 10, color: "#9b7a7f", marginBottom: 3 }}>Grade</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#7a1f2b", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+              {performanceLoading ? "—" : performanceData.currentLevel}
+            </p>
+            <p style={{ fontSize: 10, color: "#9b7a7f", marginTop: 2 }}>
+              {performanceLoading ? "" : `${performanceData.averageScore}% avg`}
+            </p>
+          </div>
+          {/* Exams */}
+          <div style={{ flex: 1, padding: "12px 16px" }}>
+            <p style={{ fontSize: 10, color: "#9b7a7f", marginBottom: 3 }}>Exams</p>
+            <p style={{ fontSize: 22, fontWeight: 700, color: "#7a1f2b", letterSpacing: "-0.03em", lineHeight: 1 }}>
+              {performanceLoading ? "—" : performanceData.totalExams}
+            </p>
+            <p style={{ fontSize: 10, color: "#9b7a7f", marginTop: 2 }}>completed</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── WEB WELCOME HEADER (unchanged) ── */}
+      <div className="hidden sm:block bg-maroon-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-maroon-200 shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0">
           <div className="flex-1 w-full">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
@@ -558,110 +636,237 @@ export default function StudentDashboard({ handleLogout }) {
             <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
               Ready to achieve your academic goals today
             </p>
-            
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-6 mt-4 text-xs sm:text-sm text-gray-600 pb-4 border-b border-maroon-100">
               <div className="flex items-center gap-2">
-                <User className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                <User className="h-4 w-4 text-maroon" />
                 <span>ID: <span className="font-semibold">{profile?.reg_no}</span></span>
               </div>
               <div className="flex items-center gap-2">
-                <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                <BookOpen className="h-4 w-4 text-maroon" />
                 <span>Class: <span className="font-semibold">{className}</span></span>
               </div>
               <div className="flex items-center gap-2">
-                <Award className="h-3 w-3 sm:h-4 sm:w-4 text-maroon" />
+                <Award className="h-4 w-4 text-maroon" />
                 <span>Current Level: <span className="font-semibold">{performanceData.currentLevel}</span></span>
               </div>
             </div>
-            
-            {/* Buttons for web view - hidden on mobile */}
-            <div className="hidden sm:flex flex-wrap gap-3 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAssessmentsOpen(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
-              >
-                <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="truncate">View Assessments</span>
+            <div className="flex flex-wrap gap-3 mt-4">
+              <Button variant="outline" size="sm" onClick={() => setIsAssessmentsOpen(true)}
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-sm px-3 py-2 h-auto min-h-[40px]">
+                <BarChart3 className="h-4 w-4" /><span>View Assessments</span>
               </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAssignmentsAnnouncementsOpen(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
-              >
-                <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="truncate">Assignments & Announcements</span>
+              <Button variant="outline" size="sm" onClick={() => setIsAssignmentsAnnouncementsOpen(true)}
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-sm px-3 py-2 h-auto min-h-[40px]">
+                <Bell className="h-4 w-4" /><span>Assignments & Announcements</span>
               </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  handleFeesManagement();
-                }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
-              >
-                <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="truncate">Fee Statement</span>
+              <Button variant="outline" size="sm" onClick={() => handleFeesManagement()}
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-sm px-3 py-2 h-auto min-h-[40px]">
+                <CreditCard className="h-4 w-4" /><span>Fee Statement</span>
               </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsSettingsOpen(true);
-                }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-xs sm:text-sm px-3 py-2 h-auto min-h-[40px]"
-              >
-                <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="truncate">Settings</span>
+              <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-maroon hover:text-white transition-colors text-sm px-3 py-2 h-auto min-h-[40px]">
+                <Settings className="h-4 w-4" /><span>Settings</span>
               </Button>
             </div>
           </div>
-          
-          {/* ── ATTENDANCE BOX IN WELCOME CARD ── now shows both % and X/Y days */}
-          <div className="flex flex-col items-center sm:items-end gap-4 mt-4 sm:mt-0 sm:ml-6 flex-shrink-0 w-full sm:w-auto">
-            <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-[100px] sm:min-w-28 border border-maroon/10 shadow-lg w-full sm:w-auto">
-              <div className="text-2xl sm:text-3xl font-extrabold text-maroon">
-                {attendanceData?.attendanceRate || 0}%
-              </div>
-              <div className="text-xs sm:text-sm text-gray-600 mt-1">
+          <div className="flex flex-col items-end gap-4 mt-4 sm:mt-0 sm:ml-6 flex-shrink-0">
+            <div className="bg-maroon/5 rounded-xl p-4 text-center min-w-28 border border-maroon/10 shadow-lg">
+              <div className="text-3xl font-extrabold text-maroon">{attendanceData?.attendanceRate || 0}%</div>
+              <div className="text-sm text-gray-600 mt-1">
                 Attendance Rate
                 {activeTerm && (
-                  <span className="block text-[10px] text-gray-400 mt-0.5">
-                    Term {activeTerm.term} · {activeTerm.academic_year}
-                  </span>
+                  <span className="block text-[10px] text-gray-400 mt-0.5">Term {activeTerm.term} · {activeTerm.academic_year}</span>
                 )}
               </div>
               {attendanceData && (
-                <div className="text-xs font-semibold text-maroon mt-1">
-                  {attendanceData.presentDays}/{attendanceData.totalDays} days
-                </div>
+                <div className="text-xs font-semibold text-maroon mt-1">{attendanceData.presentDays}/{attendanceData.totalDays} days</div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* DASHBOARD SUMMARY CARDS - 3 CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {/* Academic Progress Card */}
-        <Card className="bg-maroon-50 border-l-4 border-l-maroon">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-maroon" />
+      {/* ── MOBILE SUMMARY TILES ── */}
+      <div className="sm:hidden space-y-3">
+        {/* Quick info row: class + ID chips */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{
+            flex: 1, background: "#fff",
+            border: "0.5px solid rgba(122,31,43,0.12)",
+            borderRadius: 12, padding: "10px 12px",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: "#7a1f2b",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <Target size={14} color="#fff" />
             </div>
             <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Academic Progress</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">Overall performance</CardDescription>
+              <p style={{ fontSize: 9, color: "#9b7a7f", textTransform: "uppercase", letterSpacing: "0.05em" }}>Class</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#3a1b1f", letterSpacing: "-0.01em" }}>{className}</p>
+            </div>
+          </div>
+          <div style={{
+            flex: 1, background: "#fff",
+            border: "0.5px solid rgba(122,31,43,0.12)",
+            borderRadius: 12, padding: "10px 12px",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: "#7a1f2b",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <User size={14} color="#fff" />
+            </div>
+            <div>
+              <p style={{ fontSize: 9, color: "#9b7a7f", textTransform: "uppercase", letterSpacing: "0.05em" }}>Student ID</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#3a1b1f", letterSpacing: "-0.01em", fontFamily: "monospace" }}>{profile?.reg_no}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Updates tile — two sub-tabs: Announcements & Assignments */}
+        {(() => {
+          const [updatesTab, setUpdatesTab] = React.useState<"announcements" | "assignments">("announcements");
+          return (
+            <div style={{
+              background: "#fff",
+              border: "0.5px solid rgba(122,31,43,0.12)",
+              borderRadius: 14,
+              overflow: "hidden",
+            }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "0.5px solid rgba(122,31,43,0.08)" }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 9,
+                  background: "#7a1f2b",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <Bell size={16} color="#fff" />
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#3a1b1f", letterSpacing: "-0.01em", flex: 1 }}>Updates</p>
+              </div>
+
+              {/* Sub-tab pill */}
+              <div style={{ padding: "8px 14px 0", display: "flex", gap: 6 }}>
+                {(["announcements", "assignments"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setUpdatesTab(t)}
+                    style={{
+                      flex: 1,
+                      padding: "5px 0",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      border: "none",
+                      cursor: "pointer",
+                      letterSpacing: "-0.01em",
+                      WebkitTapHighlightColor: "transparent",
+                      background: updatesTab === t ? "#7a1f2b" : "#faf6f6",
+                      color: updatesTab === t ? "#fff" : "#9b7a7f",
+                      transition: "background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {t === "announcements" ? "Announcements" : "Assignments"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Content */}
+              <div style={{ padding: "10px 14px 12px" }}>
+                {updatesTab === "announcements" ? (
+                  announcementsLoading ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {[1, 2].map(i => (
+                        <div key={i} style={{ height: 12, borderRadius: 6, background: "#f5eded", width: i === 1 ? "75%" : "50%" }} />
+                      ))}
+                    </div>
+                  ) : announcementPreviews.length === 0 ? (
+                    <p style={{ fontSize: 11, color: "#9b7a7f" }}>No announcements yet</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {announcementPreviews.map((a) => (
+                        <button
+                          key={a.id}
+                          onClick={() => handleTabSwitch("assignments")}
+                          style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent" }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 12, fontWeight: 600, color: "#3a1b1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.title}</p>
+                              <p style={{ fontSize: 10, color: "#9b7a7f", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.content}</p>
+                            </div>
+                            <span style={{ fontSize: 9, color: "#c4a4a8", whiteSpace: "nowrap", flexShrink: 0, marginTop: 2 }}>{formatAnnouncementDate(a.created_at)}</span>
+                          </div>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handleTabSwitch("assignments")}
+                        style={{ fontSize: 10, color: "#7a1f2b", fontWeight: 600, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", marginTop: 2 }}
+                      >
+                        See all →
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  /* Assignments sub-tab — fetched via AssignmentAnnouncement on the full tab,
+                     here we show a quick preview using the same announcementPreviews pattern
+                     but for assignments — tap to go to full assignments tab */
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ fontSize: 11, color: "#9b7a7f" }}>
+                      Tap below to view your assignments and due dates.
+                    </p>
+                    <button
+                      onClick={() => handleTabSwitch("assignments")}
+                      style={{
+                        width: "100%",
+                        background: "#faf6f6",
+                        border: "0.5px solid rgba(122,31,43,0.12)",
+                        borderRadius: 10,
+                        padding: "10px 12px",
+                        display: "flex", alignItems: "center", gap: 10,
+                        cursor: "pointer",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                      onPointerDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                      onPointerUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                      onPointerLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                    >
+                      <FileText size={16} color="#7a1f2b" />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#3a1b1f", flex: 1, textAlign: "left" }}>Open Assignments</span>
+                      <ChevronLeft size={13} color="#9b7a7f" style={{ transform: "rotate(180deg)" }} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── WEB DASHBOARD SUMMARY CARDS (unchanged) ── */}
+      <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Academic Progress Card */}
+        <Card className="bg-maroon-50 border-l-4 border-l-maroon">
+          <CardHeader className="flex flex-row items-center space-y-0 pb-4">
+            <div className="w-12 h-12 bg-maroon/10 rounded-full flex items-center justify-center mr-4">
+              <TrendingUp className="h-6 w-6 text-maroon" />
+            </div>
+            <div>
+              <CardTitle className="text-lg text-gray-900">Academic Progress</CardTitle>
+              <CardDescription className="text-sm text-gray-600">Overall performance</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             {performanceLoading ? (
-              <div className="space-y-2 sm:space-y-3">
+              <div className="space-y-3">
                 <div className="animate-pulse flex justify-between items-center">
                   <div className="h-4 bg-gray-200 rounded w-24"></div>
                   <div className="h-6 bg-gray-200 rounded w-16"></div>
@@ -670,30 +875,20 @@ export default function StudentDashboard({ handleLogout }) {
                   <div className="h-4 bg-gray-200 rounded w-24"></div>
                   <div className="h-6 bg-gray-200 rounded w-8"></div>
                 </div>
-                <div className="animate-pulse flex justify-between items-center">
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                  <div className="h-6 bg-gray-200 rounded w-12"></div>
-                </div>
               </div>
             ) : (
-              <div className="space-y-2 sm:space-y-3">
+              <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs sm:text-sm text-gray-700">Current Level</span>
-                  <Badge variant="secondary" className="bg-maroon/10 text-maroon text-xs">
-                    {performanceData.currentLevel}
-                  </Badge>
+                  <span className="text-sm text-gray-700">Current Level</span>
+                  <Badge variant="secondary" className="bg-maroon/10 text-maroon text-xs">{performanceData.currentLevel}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs sm:text-sm text-gray-700">Exams Completed</span>
-                  <span className="text-xs sm:text-sm font-medium text-gray-900">
-                    {performanceData.totalExams}
-                  </span>
+                  <span className="text-sm text-gray-700">Exams Completed</span>
+                  <span className="text-sm font-medium text-gray-900">{performanceData.totalExams}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs sm:text-sm text-gray-700">Average Score</span>
-                  <span className="text-xs sm:text-sm font-medium text-gray-900">
-                    {performanceData.averageScore}%
-                  </span>
+                  <span className="text-sm text-gray-700">Average Score</span>
+                  <span className="text-sm font-medium text-gray-900">{performanceData.averageScore}%</span>
                 </div>
               </div>
             )}
@@ -702,53 +897,45 @@ export default function StudentDashboard({ handleLogout }) {
 
         {/* Today's Summary Card */}
         <Card className="border-l-4 border-l-green-500 bg-white">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <Target className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
+          <CardHeader className="flex flex-row items-center space-y-0 pb-4">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
+              <Target className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Today's Summary</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">Your current status</CardDescription>
+              <CardTitle className="text-lg text-gray-900">Today's Summary</CardTitle>
+              <CardDescription className="text-sm text-gray-600">Your current status</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="space-y-2 sm:space-y-3">
+            <div className="space-y-3">
               <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Attendance Today</span>
-                <Badge variant="outline" className="border-green-200 text-green-700 text-xs">
-                  {attendanceData?.presentDays || 0} days
-                </Badge>
+                <span className="text-sm text-gray-700">Days Present</span>
+                <Badge variant="outline" className="border-green-200 text-green-700 text-xs">{attendanceData?.presentDays || 0} days</Badge>
               </div>
               <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Class</span>
-                <span className="text-xs sm:text-sm font-medium text-gray-900">{className}</span>
+                <span className="text-sm text-gray-700">Class</span>
+                <span className="text-sm font-medium text-gray-900">{className}</span>
               </div>
               <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                <span className="text-xs sm:text-sm text-gray-700">Student ID</span>
-                <span className="text-xs sm:text-sm font-medium text-gray-900">{profile?.reg_no}</span>
+                <span className="text-sm text-gray-700">Student ID</span>
+                <span className="text-sm font-medium text-gray-900">{profile?.reg_no}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* ── ANNOUNCEMENTS CARD — entire card is tappable ── */}
+        {/* Announcements Card */}
         <Card
-          onClick={() => {
-            if (window.innerWidth < 640) {
-              handleTabSwitch("assignments");
-            } else {
-              setIsAssignmentsAnnouncementsOpen(true);
-            }
-          }}
-          className="border-l-4 border-l-blue-500 bg-white sm:col-span-2 lg:col-span-1 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]"
+          onClick={() => setIsAssignmentsAnnouncementsOpen(true)}
+          className="border-l-4 border-l-blue-500 bg-white col-span-2 lg:col-span-1 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]"
         >
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3 sm:pb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 sm:mr-4">
-              <Megaphone className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+          <CardHeader className="flex flex-row items-center space-y-0 pb-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+              <Megaphone className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <CardTitle className="text-base sm:text-lg text-gray-900">Announcements</CardTitle>
-              <CardDescription className="text-xs sm:text-sm text-gray-600">Latest updates</CardDescription>
+              <CardTitle className="text-lg text-gray-900">Announcements</CardTitle>
+              <CardDescription className="text-sm text-gray-600">Latest updates</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
@@ -764,26 +951,17 @@ export default function StudentDashboard({ handleLogout }) {
             ) : announcementPreviews.length === 0 ? (
               <div className="text-center py-4">
                 <Megaphone className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500 text-xs sm:text-sm">No announcements yet</p>
+                <p className="text-gray-500 text-sm">No announcements yet</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {announcementPreviews.map((announcement) => (
-                  <div
-                    key={announcement.id}
-                    className="w-full text-left p-2 rounded-lg bg-blue-50"
-                  >
+                  <div key={announcement.id} className="w-full text-left p-2 rounded-lg bg-blue-50">
                     <div className="flex justify-between items-start gap-2">
-                      <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate leading-tight">
-                        {announcement.title}
-                      </p>
-                      <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 mt-0.5">
-                        {formatAnnouncementDate(announcement.created_at)}
-                      </span>
+                      <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{announcement.title}</p>
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 mt-0.5">{formatAnnouncementDate(announcement.created_at)}</span>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 line-clamp-1 leading-snug">
-                      {announcement.content}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 leading-snug">{announcement.content}</p>
                   </div>
                 ))}
               </div>
@@ -1003,38 +1181,233 @@ export default function StudentDashboard({ handleLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-white touch-manipulation pb-20 sm:pb-0">
+    <>
+    {/* ─────────────────────────────────────────────
+        MOBILE NATIVE SHELL  (hidden on sm+)
+    ───────────────────────────────────────────── */}
+    <div
+      className="sm:hidden flex flex-col touch-manipulation"
+      style={{
+        height: "100dvh",
+        overflow: "hidden",
+        background: "#fdfbfb",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      {/* ── Mobile App Header ── */}
+      <div
+        style={{
+          background: "#7a1f2b",
+          paddingTop: "env(safe-area-inset-top)",
+          flexShrink: 0,
+        }}
+      >
+        <div className="flex items-center justify-between px-4 h-14">
+          {/* Left: icon + school name */}
+          <div className="flex items-center gap-2.5">
+            <div
+              style={{
+                width: 32, height: 32,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <BookOpen size={16} color="#fff" />
+            </div>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+                Milai School
+              </p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>
+                {className ?? "Student Portal"}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: logout */}
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "none", border: "none",
+              cursor: "pointer", padding: "4px 0",
+              WebkitTapHighlightColor: "transparent",
+              color: "rgba(255,255,255,0.7)",
+              fontSize: 12, fontWeight: 500,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Log out
+          </button>
+        </div>
+      </div>
+
+      {/* ── Scrollable Tab Content ── */}
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{
+          transition: "opacity 0.12s ease, transform 0.12s ease",
+          opacity: tabVisible ? 1 : 0,
+          transform: tabVisible ? "translateY(0)" : "translateY(6px)",
+        }}
+      >
+        <div className="px-4 py-4 pb-6">
+          {activeTab === "overview" && <OverviewContent />}
+
+          {activeTab === "assessments" && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Assessments</h1>
+                <p className="text-xs text-gray-500 mt-0.5">Exam results and performance</p>
+              </div>
+              {showAssessments && (
+                <Assessments
+                  studentId={studentId}
+                  classId={classId}
+                  className={className}
+                  profile={profile}
+                  isOpen={true}
+                  onClose={() => handleTabSwitch("overview")}
+                  academicCalendar={academicCalendar}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === "assignments" && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Assignments</h1>
+                <p className="text-xs text-gray-500 mt-0.5">Due work and announcements</p>
+              </div>
+              {showAssignments && (
+                <AssignmentAnnouncement
+                  classId={classId}
+                  isOpen={true}
+                  onClose={() => handleTabSwitch("overview")}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === "fees" && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Fee Statement</h1>
+                <p className="text-xs text-gray-500 mt-0.5">Balance, payments, and breakdown</p>
+              </div>
+              {showFees && profile && student && (
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                  <StudentFeesDialog
+                    onClose={() => handleTabSwitch("overview")}
+                    studentData={{
+                      ...student,
+                      first_name: profile?.first_name,
+                      last_name: profile?.last_name,
+                      Reg_no: profile?.reg_no,
+                      guardian_phone: profile?.guardian_phone || profile?.phone || "2547XXXXXXXX"
+                    }}
+                    classId={classId}
+                    className={className}
+                    isMobileTab={true}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "settings" && showSettings && (
+            <SettingsContent />
+          )}
+        </div>
+      </div>
+
+      {/* ── Native Bottom Tab Bar ── */}
+      <div
+        style={{
+          background: "#fdfbfb",
+          borderTop: "0.5px solid rgba(122,31,43,0.1)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", height: 60 }}>
+          {(
+            [
+              { id: "overview",     icon: Home,       label: "Home"        },
+              { id: "assessments",  icon: BarChart3,   label: "Results"     },
+              { id: "assignments",  icon: Bell,        label: "Updates"     },
+              { id: "fees",         icon: CreditCard,  label: "Fees"        },
+              { id: "settings",     icon: Settings,    label: "Settings"    },
+            ] as const
+          ).map(({ id, icon: Icon, label }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => handleTabSwitch(id)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "transform 0.1s ease",
+                  transform: "scale(1)",
+                }}
+                onPointerDown={e => (e.currentTarget.style.transform = "scale(0.88)")}
+                onPointerUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onPointerLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                {/* Active indicator dot */}
+                <div style={{
+                  width: isActive ? 20 : 0,
+                  height: 3,
+                  borderRadius: 99,
+                  background: "#7a1f2b",
+                  marginBottom: 2,
+                  transition: "width 0.2s ease",
+                  overflow: "hidden",
+                }} />
+                <Icon
+                  size={20}
+                  color={isActive ? "#7a1f2b" : "#9b7a7f"}
+                  strokeWidth={isActive ? 2.2 : 1.7}
+                />
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? "#7a1f2b" : "#9b7a7f",
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1,
+                }}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+
+    {/* ─────────────────────────────────────────────
+        DESKTOP / TABLET VIEW  (hidden on mobile)
+    ───────────────────────────────────────────── */}
+    <div className="hidden sm:block min-h-screen bg-white touch-manipulation pb-0">
       <Navbar {...({ showLogout: true, handleLogout } as any)} />
-      
-      {/* Tab Content Area */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6">
-        {/* Overview Dashboard - Only shown when activeTab is "overview" */}
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
         {activeTab === "overview" ? (
           <OverviewContent />
         ) : activeTab === "assessments" ? (
-          /* Assessments Tab - Full screen focus on mobile */
-          <div className="space-y-4 sm:space-y-6">
-            {/* Back to Overview Button - Only shown on mobile */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTabSwitch("overview")}
-              className="flex items-center gap-2 mb-4 sm:hidden"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Overview
-            </Button>
-
-            {/* Page Title - Only shown when in mobile tab view */}
-            <div className="mb-6 sm:hidden">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Assessments
-              </h1>
-              <p className="text-sm text-gray-600">
-                View your exam results and performance analysis
-              </p>
-            </div>
-
+          <div className="space-y-6">
             {showAssessments && (
               <Assessments
                 studentId={studentId}
@@ -1048,29 +1421,7 @@ export default function StudentDashboard({ handleLogout }) {
             )}
           </div>
         ) : activeTab === "assignments" ? (
-          /* Assignments Tab - Full screen focus on mobile */
-          <div className="space-y-4 sm:space-y-6">
-            {/* Back to Overview Button - Only shown on mobile */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTabSwitch("overview")}
-              className="flex items-center gap-2 mb-4 sm:hidden"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Overview
-            </Button>
-
-            {/* Page Title - Only shown when in mobile tab view */}
-            <div className="mb-6 sm:hidden">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Assignments & Announcements
-              </h1>
-              <p className="text-sm text-gray-600">
-                Check due work and important announcements
-              </p>
-            </div>
-
+          <div className="space-y-6">
             {showAssignments && (
               <AssignmentAnnouncement
                 classId={classId}
@@ -1080,31 +1431,14 @@ export default function StudentDashboard({ handleLogout }) {
             )}
           </div>
         ) : activeTab === "fees" ? (
-          /* Fees Tab - Full screen focus on mobile */
-          <div className="space-y-4 sm:space-y-6">
-            {/* Back to Overview Button - Only shown on mobile */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTabSwitch("overview")}
-              className="flex items-center gap-2 mb-4 sm:hidden"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Overview
-            </Button>
-
+          <div className="space-y-6">
             <div className="mb-6">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Fee Statement
-              </h1>
-              <p className="text-sm text-gray-600">
-                View your fee balance, payment history, and fee breakdown
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900">Fee Statement</h1>
+              <p className="text-sm text-gray-600">View your fee balance, payment history, and fee breakdown</p>
             </div>
-
             {showFees && profile && student && (
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <StudentFeesDialog 
+                <StudentFeesDialog
                   onClose={() => handleTabSwitch("overview")}
                   studentData={{
                     ...student,
@@ -1121,23 +1455,13 @@ export default function StudentDashboard({ handleLogout }) {
             )}
           </div>
         ) : activeTab === "settings" ? (
-          /* Settings Tab - Full screen focus on mobile */
-          <div className="space-y-4 sm:space-y-6">
-            {/* Back to Overview Button - Only shown on mobile */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTabSwitch("overview")}
-              className="flex items-center gap-2 mb-4 sm:hidden"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Overview
-            </Button>
-
+          <div className="space-y-6">
             {showSettings && <SettingsContent />}
           </div>
         ) : null}
       </div>
+
+      {/* ── Desktop bottom nav (hidden — tabs handled by web view top buttons) ── */}
 
       {/* MODALS FOR WEB VIEW (not lazy loaded) */}
       {isAssessmentsOpen && (
@@ -1300,70 +1624,7 @@ export default function StudentDashboard({ handleLogout }) {
         </DialogContent>
       </Dialog>
 
-      {/* Bottom Navigation Bar for Mobile - Now with 5 tabs */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 sm:hidden z-50 shadow-lg">
-        <div className="flex justify-around items-center h-16">
-          <button
-            onClick={() => handleTabSwitch("overview")}
-            className={`flex flex-col items-center justify-center flex-1 h-full ${
-              activeTab === "overview" 
-                ? "text-maroon border-t-2 border-maroon" 
-                : "text-gray-500"
-            }`}
-          >
-            <Home className="h-5 w-5 mb-1" />
-            <span className="text-xs">Overview</span>
-          </button>
-          
-          <button
-            onClick={() => handleTabSwitch("assessments")}
-            className={`flex flex-col items-center justify-center flex-1 h-full ${
-              activeTab === "assessments" 
-                ? "text-maroon border-t-2 border-maroon" 
-                : "text-gray-500"
-            }`}
-          >
-            <BarChart3 className="h-5 w-5 mb-1" />
-            <span className="text-xs">Assessments</span>
-          </button>
-          
-          <button
-            onClick={() => handleTabSwitch("assignments")}
-            className={`flex flex-col items-center justify-center flex-1 h-full ${
-              activeTab === "assignments" 
-                ? "text-maroon border-t-2 border-maroon" 
-                : "text-gray-500"
-            }`}
-          >
-            <Bell className="h-5 w-5 mb-1" />
-            <span className="text-xs">Assignments</span>
-          </button>
-
-          <button
-            onClick={() => handleTabSwitch("fees")}
-            className={`flex flex-col items-center justify-center flex-1 h-full ${
-              activeTab === "fees" 
-                ? "text-maroon border-t-2 border-maroon" 
-                : "text-gray-500"
-            }`}
-          >
-            <CreditCard className="h-5 w-5 mb-1" />
-            <span className="text-xs">Fees</span>
-          </button>
-
-          <button
-            onClick={() => handleTabSwitch("settings")}
-            className={`flex flex-col items-center justify-center flex-1 h-full ${
-              activeTab === "settings" 
-                ? "text-maroon border-t-2 border-maroon" 
-                : "text-gray-500"
-            }`}
-          >
-            <Settings className="h-5 w-5 mb-1" />
-            <span className="text-xs">Settings</span>
-          </button>
-        </div>
-      </div>
     </div>
+    </> 
   );
 }
