@@ -1,3 +1,4 @@
+// src/Components/Admin/AssessmentsSection.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
@@ -7,9 +8,9 @@ import { Badge } from '@/Components/ui/badge';
 import {
   Plus, ClipboardList, Loader2, AlertTriangle,
   Eye, Trash2, Users, Hash, BookOpen,
-  CalendarDays, ChevronDown, ChevronRight, RefreshCw,
+  CalendarDays, ChevronDown, ChevronRight, RefreshCw, X,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
+import { Card, CardContent } from '@/Components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/Components/ui/table';
@@ -24,12 +25,20 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/Components/ui/tabs';
 import AssessmentResultsView from './AssessmentResultsView';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Design tokens (mirrors every other Admin section) ───────────────────────
+const MAROON = '#7a1f2b';
+const MAROON_GRADIENT = 'linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)';
+const CARD_SHADOW = '0 6px 26px -18px rgba(122,31,43,0.22)';
+const CARD_SHADOW_HOVER = '0 10px 40px -18px rgba(122,31,43,0.35)';
+const GRADIENT_BTN_STYLE: React.CSSProperties = {
+  background: MAROON_GRADIENT,
+  boxShadow: '0 8px 18px -10px rgba(122,31,43,0.5)',
+};
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface ActiveTerm {
   id: string; academic_year: string; term: number; start_date: string; end_date: string;
 }
-
 interface AssessmentClass { id: string; name: string; grade_level: string | number; }
 interface Assessment {
   id: string; title: string; class_id: string; term: number; year: number;
@@ -37,7 +46,6 @@ interface Assessment {
   max_marks: number | null; assessment_date: string | null; created_at: string;
   classes: AssessmentClass | null;
 }
-
 interface FormativeActivity {
   id: string; title: string; description: string | null;
   term: number; year: number; class_id: string; subject_id: string;
@@ -49,14 +57,11 @@ interface FormativeActivity {
   subjects:    { id: string; name: string } | null;
   teachers:    { id: string; first_name: string; last_name: string } | null;
 }
-
 interface ClassRow { id: string; name: string; grade_level: string | number; }
-
 interface StatusEntry  { drafts: number; published: number; }
 interface StatusResult { hasDrafts: boolean; isPublished: boolean; draftCount: number; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function fmtDate(d: string | null | undefined) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -64,47 +69,128 @@ function fmtDate(d: string | null | undefined) {
 
 const termBadgeColor = (term: number | string) => {
   const t = Number(term);
-  if (t === 1) return 'bg-blue-100 text-blue-800';
-  if (t === 2) return 'bg-green-100 text-green-800';
-  if (t === 3) return 'bg-purple-100 text-purple-800';
-  return 'bg-gray-100 text-gray-800';
+  if (t === 1) return 'bg-[#7a1f2b]/8 text-[#7a1f2b] border border-[#7a1f2b]/15';
+  if (t === 2) return 'bg-amber-50 text-amber-700 border border-amber-200';
+  if (t === 3) return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  return 'bg-gray-100 text-gray-700 border border-gray-200';
 };
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
+function SectionHeader({
+  icon: Icon, microLabel, title, description, right,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  microLabel: string; title: string; description?: string; right?: React.ReactNode;
+}) {
+  return (
+    <div className="relative overflow-hidden px-4 sm:px-5 py-3.5" style={{ background: MAROON_GRADIENT }}>
+      <div className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
+      <div className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)' }} />
+      <div className="relative flex items-start gap-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">{microLabel}</p>
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight">{title}</h3>
+          {description && (
+            <p className="text-white/70 text-[11px] sm:text-xs mt-0.5 leading-snug">{description}</p>
+          )}
+        </div>
+        {right && <div className="shrink-0">{right}</div>}
+      </div>
+    </div>
+  );
+}
+
+function DialogHero({
+  icon: Icon, microLabel, title, subtitle,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  microLabel: string; title: string; subtitle?: string;
+}) {
+  return (
+    <div className="relative overflow-hidden shrink-0" style={{ background: MAROON_GRADIENT }}>
+      <div className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
+      <div className="relative px-5 py-4 flex items-center gap-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">{microLabel}</p>
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight truncate">{title}</h3>
+          {subtitle && <p className="text-white/70 text-[11px] sm:text-xs mt-0.5 truncate">{subtitle}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatusBadge({ id, draftLabel = 'drafts', getStatus, statusReady }: {
   id: string; draftLabel?: string;
   getStatus: (id: string) => StatusResult; statusReady: boolean;
 }) {
-  if (!statusReady) return <span className="inline-block h-5 w-20 rounded bg-gray-100 animate-pulse" />;
+  if (!statusReady) {
+    return <span className="inline-block h-5 w-20 rounded-full animate-pulse" style={{ background: 'rgba(122,31,43,0.08)' }} />;
+  }
   const { hasDrafts, isPublished, draftCount } = getStatus(id);
-  if (hasDrafts)   return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">{draftCount} {draftLabel}</Badge>;
-  if (isPublished) return <Badge variant="outline" className="bg-green-100 text-green-800">Published</Badge>;
-  return <span className="text-muted-foreground text-sm">No results</span>;
+  if (hasDrafts) {
+    return (
+      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+        {draftCount} {draftLabel}
+      </span>
+    );
+  }
+  if (isPublished) {
+    return (
+      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+        Published
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground text-xs">No results</span>;
 }
 
 function ActiveTermBanner({ term }: { term: ActiveTerm | null | undefined }) {
-  if (term === undefined) return (
-    <div className="p-3 rounded-md bg-gray-50 border border-gray-200 text-sm text-gray-500 flex items-center gap-2">
-      <Loader2 className="h-4 w-4 animate-spin" /> Loading active term…
-    </div>
-  );
-  if (!term) return (
-    <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-center gap-2">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      No active term found. Please activate a term in <strong>Academic Calendar</strong> before creating assessments.
-    </div>
-  );
+  if (term === undefined) {
+    return (
+      <div className="rounded-xl px-4 py-3 text-sm text-muted-foreground flex items-center gap-2 border border-[#7a1f2b]/10 bg-white"
+        style={{ boxShadow: CARD_SHADOW }}>
+        <Loader2 className="h-4 w-4 animate-spin text-[#7a1f2b]" />
+        Loading active term…
+      </div>
+    );
+  }
+  if (!term) {
+    return (
+      <div className="rounded-xl px-4 py-3 text-sm text-amber-800 flex items-center gap-2 border border-amber-200 bg-amber-50">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>
+          No active term found. Please activate a term in <strong>Academic Calendar</strong> before creating assessments.
+        </span>
+      </div>
+    );
+  }
   return (
-    <div className="p-3 rounded-md bg-blue-50 border border-blue-200 text-sm flex items-center gap-2">
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-      </span>
-      <span className="text-blue-700">
-        Active Term: <strong>Term {term.term}, {term.academic_year}</strong>
-        <span className="ml-2 text-blue-500 font-normal">({fmtDate(term.start_date)} → {fmtDate(term.end_date)})</span>
-      </span>
+    <div className="relative overflow-hidden rounded-xl px-4 py-3 text-white"
+      style={{ background: MAROON_GRADIENT, boxShadow: '0 12px 30px -20px rgba(122,31,43,0.45)' }}>
+      <div className="absolute -top-16 -right-8 w-40 h-40 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
+      <div className="relative flex items-center gap-3 flex-wrap">
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+        </span>
+        <span className="text-sm">
+          Active Term: <strong>Term {term.term}, {term.academic_year}</strong>
+          <span className="ml-2 text-white/70 font-normal text-xs">
+            ({fmtDate(term.start_date)} → {fmtDate(term.end_date)})
+          </span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -112,10 +198,14 @@ function ActiveTermBanner({ term }: { term: ActiveTerm | null | undefined }) {
 function FetchErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="text-center py-10">
-      <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-amber-400" />
-      <p className="font-medium text-gray-700">Failed to load assessments</p>
-      <p className="text-sm text-gray-500 mt-1 mb-4">Check your connection and try again.</p>
-      <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
+      <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+        style={{ background: 'rgba(245,158,11,0.10)' }}>
+        <AlertTriangle className="w-6 h-6 text-amber-500" />
+      </div>
+      <p className="font-semibold text-[#3a1b1f]">Failed to load assessments</p>
+      <p className="text-sm text-muted-foreground mt-1 mb-4">Check your connection and try again.</p>
+      <Button variant="outline" size="sm" onClick={onRetry}
+        className="gap-2 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">
         <RefreshCw className="w-4 h-4" /> Retry
       </Button>
     </div>
@@ -124,16 +214,15 @@ function FetchErrorState({ onRetry }: { onRetry: () => void }) {
 
 function SkeletonRows({ count = 3 }: { count?: number }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="h-14 rounded-lg bg-gray-100 animate-pulse" />
+        <div key={i} className="h-14 rounded-xl animate-pulse" style={{ background: 'rgba(122,31,43,0.06)' }} />
       ))}
     </div>
   );
 }
 
 // ─── Summative row/card ───────────────────────────────────────────────────────
-
 interface SummativeRowProps {
   a: Assessment; getClassName: (id: string) => string;
   getStatus: (id: string) => StatusResult; statusReady: boolean;
@@ -145,23 +234,35 @@ function SummativeRow({ a, getClassName, getStatus, statusReady, onView, onPubli
   const { hasDrafts, isPublished } = getStatus(a.id);
   const busy = publishingId === a.id;
   return (
-    <TableRow>
+    <TableRow className="border-b border-[#7a1f2b]/5 hover:bg-[#7a1f2b]/[0.03] transition-colors">
       <TableCell className="py-3">
-        <div className="font-medium">{a.title}</div>
-        {a.assessment_date && <div className="text-xs text-blue-600 mt-0.5 flex items-center gap-1"><CalendarDays className="h-3 w-3" />{fmtDate(a.assessment_date)}</div>}
+        <div className="font-medium text-[#3a1b1f]">{a.title}</div>
+        {a.assessment_date && (
+          <div className="text-xs text-[#7a1f2b]/70 mt-0.5 flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" />{fmtDate(a.assessment_date)}
+          </div>
+        )}
       </TableCell>
       <TableCell><Badge className={termBadgeColor(a.term)}>Term {a.term}</Badge></TableCell>
-      <TableCell>{a.year}-{a.year + 1}</TableCell>
-      <TableCell>{a.max_marks ?? 100}</TableCell>
+      <TableCell className="text-sm text-[#3a1b1f]/80">{a.year}-{a.year + 1}</TableCell>
+      <TableCell className="text-sm text-[#3a1b1f]/80">{a.max_marks ?? 100}</TableCell>
       <TableCell><StatusBadge id={a.id} getStatus={getStatus} statusReady={statusReady} /></TableCell>
       <TableCell>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="h-8" onClick={() => onView(a)}><Eye className="w-3 h-3 mr-1" />View</Button>
-          <Button variant="outline" size="sm" className="h-8 text-green-600 hover:bg-green-50"
+        <div className="flex gap-1.5 flex-wrap">
+          <Button variant="outline" size="sm" className="h-8 rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b] active:scale-[0.98]"
+            onClick={() => onView(a)}>
+            <Eye className="w-3 h-3 mr-1" />View
+          </Button>
+          <Button variant="outline" size="sm"
+            className="h-8 rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 active:scale-[0.98]"
             onClick={() => onPublish(a.id)} disabled={!statusReady || !hasDrafts || busy}>
             {busy ? 'Publishing…' : isPublished ? 'Published' : 'Publish'}
           </Button>
-          <Button variant="outline" size="sm" className="h-8 text-red-600 hover:bg-red-50" onClick={() => onDelete(a)}><Trash2 className="w-3 h-3 mr-1" />Delete</Button>
+          <Button variant="outline" size="sm"
+            className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 active:scale-[0.98]"
+            onClick={() => onDelete(a)}>
+            <Trash2 className="w-3 h-3 mr-1" />Delete
+          </Button>
         </div>
       </TableCell>
     </TableRow>
@@ -172,41 +273,58 @@ function SummativeMobileCard({ a, getClassName, getStatus, statusReady, onView, 
   const { hasDrafts, isPublished } = getStatus(a.id);
   const busy = publishingId === a.id;
   return (
-    <Card className="p-4">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="font-medium text-base mb-1 truncate">{a.title}</div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-1"><Users className="w-3 h-3" />{a.classes?.name ?? getClassName(a.class_id)}</div>
-          {a.assessment_date && <div className="flex items-center gap-1 text-xs text-blue-600"><CalendarDays className="w-3 h-3" />{fmtDate(a.assessment_date)}</div>}
+    <Card className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-3.5" style={{ boxShadow: CARD_SHADOW }}>
+      <div className="flex justify-between items-start mb-3 gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm text-[#3a1b1f] mb-1 truncate">{a.title}</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1 truncate">
+            <Users className="w-3 h-3 shrink-0" />
+            {a.classes?.name ?? getClassName(a.class_id)}
+          </div>
+          {a.assessment_date && (
+            <div className="flex items-center gap-1 text-[11px] text-[#7a1f2b]/70">
+              <CalendarDays className="w-3 h-3" />{fmtDate(a.assessment_date)}
+            </div>
+          )}
         </div>
-        <Badge className={`${termBadgeColor(a.term)} text-xs`}>Term {a.term}</Badge>
+        <Badge className={`${termBadgeColor(a.term)} text-[10px] shrink-0`}>Term {a.term}</Badge>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-        <div className="flex items-center gap-1"><Hash className="w-3 h-3 text-gray-400" />{a.year}-{a.year + 1}</div>
-        <div>Max: <strong>{a.max_marks ?? 100}</strong></div>
+      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div className="flex items-center gap-1 text-[#3a1b1f]/80">
+          <Hash className="w-3 h-3 text-[#7a1f2b]/40" />{a.year}-{a.year + 1}
+        </div>
+        <div className="text-[#3a1b1f]/80">Max: <strong className="text-[#7a1f2b]">{a.max_marks ?? 100}</strong></div>
       </div>
-      <div className="flex items-center justify-between border-t pt-2">
+      <div className="flex items-center justify-between border-t border-[#7a1f2b]/8 pt-2.5">
         <StatusBadge id={a.id} getStatus={getStatus} statusReady={statusReady} />
-        <Button variant="outline" size="sm" className="h-7 text-xs text-green-600"
+        <Button variant="outline" size="sm"
+          className="h-7 text-[11px] rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 active:scale-[0.98]"
           onClick={() => onPublish(a.id)} disabled={!statusReady || !hasDrafts || busy}>
           {busy ? 'Publishing…' : isPublished ? 'Published' : 'Publish'}
         </Button>
       </div>
       <div className="flex flex-wrap gap-2 pt-3">
-        <Button variant="outline" size="sm" className="h-8 flex-1" onClick={() => onView(a)}><Eye className="w-3 h-3 mr-1" />View</Button>
-        <Button variant="outline" size="sm" className="h-8 flex-1 text-red-600 hover:bg-red-50" onClick={() => onDelete(a)}><Trash2 className="w-3 h-3 mr-1" />Delete</Button>
+        <Button variant="outline" size="sm"
+          className="h-9 flex-1 rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b] active:scale-[0.98]"
+          onClick={() => onView(a)}>
+          <Eye className="w-3 h-3 mr-1" />View
+        </Button>
+        <Button variant="outline" size="sm"
+          className="h-9 flex-1 rounded-lg border-red-200 text-red-600 hover:bg-red-50 active:scale-[0.98]"
+          onClick={() => onDelete(a)}>
+          <Trash2 className="w-3 h-3 mr-1" />Delete
+        </Button>
       </div>
     </Card>
   );
 }
 
 // ─── Formative inline results panel ──────────────────────────────────────────
-
 const LEVEL_STYLES: Record<string, string> = {
-  EE: 'bg-green-100 text-green-800 border-green-300',
-  ME: 'bg-blue-100 text-blue-800 border-blue-300',
-  AE: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  BE: 'bg-red-100 text-red-800 border-red-300',
+  EE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  ME: 'bg-[#7a1f2b]/8 text-[#7a1f2b] border-[#7a1f2b]/20',
+  AE: 'bg-amber-50 text-amber-700 border-amber-200',
+  BE: 'bg-red-50 text-red-700 border-red-200',
 };
 
 function FormativeResultsPanel({ fa }: { fa: FormativeActivity }) {
@@ -226,50 +344,67 @@ function FormativeResultsPanel({ fa }: { fa: FormativeActivity }) {
       .order('student_id')
       .then(({ data, error }) => {
         if (error) { setErr('Failed to load results.'); setLoading(false); return; }
-        setResults((data ?? []) as typeof results);
+        setResults(
+          (data ?? []).map(row => ({
+            ...row,
+            students: Array.isArray(row.students) ? (row.students[0] ?? null) : row.students,
+          })) as typeof results,
+        );
         setLoading(false);
       });
   }, [fa.id]);
 
   return (
-    <div className="bg-teal-50/40 border-t border-teal-100 px-4 py-3 space-y-3">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-        <span><span className="font-medium">Date:</span> {fmtDate(fa.activity_date)}</span>
-        <span><span className="font-medium">Term:</span> {fa.term} · {fa.year}-{fa.year + 1}</span>
+    <div className="border-t border-[#7a1f2b]/10 px-4 py-3 space-y-3"
+      style={{ background: 'rgba(122,31,43,0.03)' }}>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span><span className="font-semibold text-[#7a1f2b]/70">Date:</span> {fmtDate(fa.activity_date)}</span>
+        <span><span className="font-semibold text-[#7a1f2b]/70">Term:</span> {fa.term} · {fa.year}-{fa.year + 1}</span>
         {fa.strands?.name && (
-          <span><span className="font-medium">Strand:</span> {fa.strands.name}{fa.sub_strands?.name && <> › {fa.sub_strands.name}</>}</span>
+          <span>
+            <span className="font-semibold text-[#7a1f2b]/70">Strand:</span> {fa.strands.name}
+            {fa.sub_strands?.name && <> › {fa.sub_strands.name}</>}
+          </span>
         )}
-        {fa.subjects?.name && <span><span className="font-medium">Subject:</span> {fa.subjects.name}</span>}
+        {fa.subjects?.name && (
+          <span><span className="font-semibold text-[#7a1f2b]/70">Subject:</span> {fa.subjects.name}</span>
+        )}
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-400 py-2"><Loader2 className="h-4 w-4 animate-spin" />Loading results…</div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="h-4 w-4 animate-spin text-[#7a1f2b]" />Loading results…
+        </div>
       ) : err ? (
         <div className="text-sm text-red-600 flex items-center gap-1"><AlertTriangle className="h-4 w-4" />{err}</div>
       ) : results.length === 0 ? (
-        <p className="text-sm text-gray-400 italic">No results recorded yet.</p>
+        <p className="text-sm text-muted-foreground italic">No results recorded yet.</p>
       ) : (
         <>
-          <div className="hidden sm:block overflow-x-auto rounded border border-teal-100">
+          <div className="hidden sm:block overflow-x-auto rounded-xl border border-[#7a1f2b]/10 bg-white">
             <Table>
               <TableHeader>
-                <TableRow className="bg-teal-50">
-                  <TableHead className="py-2 text-xs">Reg No</TableHead>
-                  <TableHead className="py-2 text-xs">Student Name</TableHead>
-                  <TableHead className="py-2 text-xs">Performance</TableHead>
+                <TableRow className="hover:bg-transparent border-b border-[#7a1f2b]/10">
+                  <TableHead className="py-2 text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Reg No</TableHead>
+                  <TableHead className="py-2 text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Student Name</TableHead>
+                  <TableHead className="py-2 text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Performance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {results.map(r => (
-                  <TableRow key={r.student_id} className={r.is_absent ? "opacity-50" : ""}>
-                    <TableCell className="py-2 font-mono text-xs">{r.students?.Reg_no ?? "—"}</TableCell>
-                    <TableCell className="py-2 text-sm">{r.students ? `${r.students.first_name} ${r.students.last_name}` : "—"}</TableCell>
+                  <TableRow key={r.student_id} className={`border-b border-[#7a1f2b]/5 ${r.is_absent ? "opacity-50" : ""}`}>
+                    <TableCell className="py-2 font-mono text-xs text-[#3a1b1f]">{r.students?.Reg_no ?? "—"}</TableCell>
+                    <TableCell className="py-2 text-sm text-[#3a1b1f]">
+                      {r.students ? `${r.students.first_name} ${r.students.last_name}` : "—"}
+                    </TableCell>
                     <TableCell className="py-2">
                       {r.is_absent ? (
-                        <span className="text-xs text-gray-400 italic">Absent</span>
+                        <span className="text-[11px] text-muted-foreground italic">Absent</span>
                       ) : r.performance_level ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-bold ${LEVEL_STYLES[r.performance_level] ?? "bg-gray-100 text-gray-700"}`}>{r.performance_level}</span>
-                      ) : <span className="text-xs text-gray-400">—</span>}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-bold ${LEVEL_STYLES[r.performance_level] ?? "bg-gray-100 text-gray-700"}`}>
+                          {r.performance_level}
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -278,18 +413,23 @@ function FormativeResultsPanel({ fa }: { fa: FormativeActivity }) {
           </div>
           <div className="sm:hidden space-y-1.5">
             {results.map(r => (
-              <div key={r.student_id} className={`flex items-center justify-between p-2 rounded bg-white border border-teal-100 ${r.is_absent ? "opacity-50" : ""}`}>
-                <div>
-                  <div className="text-xs font-mono text-gray-500">{r.students?.Reg_no}</div>
-                  <div className="text-sm font-medium">{r.students ? `${r.students.first_name} ${r.students.last_name}` : "—"}</div>
+              <div key={r.student_id}
+                className={`flex items-center justify-between p-2.5 rounded-xl bg-white border border-[#7a1f2b]/10 ${r.is_absent ? "opacity-50" : ""}`}>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono text-muted-foreground">{r.students?.Reg_no}</div>
+                  <div className="text-sm font-medium text-[#3a1b1f] truncate">
+                    {r.students ? `${r.students.first_name} ${r.students.last_name}` : "—"}
+                  </div>
                 </div>
-                {r.is_absent ? <span className="text-xs text-gray-400 italic">Absent</span>
-                  : r.performance_level ? <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-bold ${LEVEL_STYLES[r.performance_level] ?? "bg-gray-100 text-gray-700"}`}>{r.performance_level}</span>
-                  : <span className="text-xs text-gray-400">—</span>}
+                {r.is_absent ? <span className="text-[11px] text-muted-foreground italic shrink-0">Absent</span>
+                  : r.performance_level ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-bold shrink-0 ${LEVEL_STYLES[r.performance_level] ?? "bg-gray-100 text-gray-700"}`}>{r.performance_level}</span>
+                  : <span className="text-xs text-muted-foreground shrink-0">—</span>}
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-400">{results.filter(r => !r.is_absent).length} result{results.length !== 1 ? "s" : ""} · {results.filter(r => r.is_absent).length} absent</p>
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-semibold text-[#7a1f2b]">{results.filter(r => !r.is_absent).length}</span> result{results.length !== 1 ? "s" : ""} · {results.filter(r => r.is_absent).length} absent
+          </p>
         </>
       )}
     </div>
@@ -297,23 +437,33 @@ function FormativeResultsPanel({ fa }: { fa: FormativeActivity }) {
 }
 
 // ─── Formative row/card ───────────────────────────────────────────────────────
-
 function FormativeActivityRow({ fa, isExpanded, onView }: {
   fa: FormativeActivity; isExpanded: boolean; onView: (fa: FormativeActivity) => void;
 }) {
   return (
-    <TableRow className={isExpanded ? "bg-teal-50/30" : ""}>
+    <TableRow className={`border-b border-[#7a1f2b]/5 transition-colors ${isExpanded ? 'bg-[#7a1f2b]/[0.04]' : 'hover:bg-[#7a1f2b]/[0.02]'}`}>
       <TableCell className="py-3 pl-10">
-        <div className="font-medium">{fa.title}</div>
-        {fa.description && <div className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{fa.description}</div>}
-        <div className="text-xs text-gray-400 mt-0.5">{fmtDate(fa.activity_date)}</div>
-        {fa.sub_strands?.name && <div className="text-xs text-teal-600 mt-0.5">↳ {fa.sub_strands.name}</div>}
+        <div className="font-medium text-[#3a1b1f]">{fa.title}</div>
+        {fa.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xs">{fa.description}</div>}
+        <div className="text-[11px] text-muted-foreground/70 mt-0.5">{fmtDate(fa.activity_date)}</div>
+        {fa.sub_strands?.name && <div className="text-[11px] text-[#7a1f2b]/70 mt-0.5">↳ {fa.sub_strands.name}</div>}
       </TableCell>
       <TableCell><Badge className={termBadgeColor(fa.term)}>Term {fa.term}</Badge></TableCell>
-      <TableCell>{fa.year}-{fa.year + 1}</TableCell>
-      <TableCell><Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">Published</Badge></TableCell>
+      <TableCell className="text-sm text-[#3a1b1f]/80">{fa.year}-{fa.year + 1}</TableCell>
       <TableCell>
-        <Button variant="outline" size="sm" className={`h-8 ${isExpanded ? "bg-teal-50 border-teal-300 text-teal-700" : ""}`} onClick={() => onView(fa)}>
+        <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          Published
+        </span>
+      </TableCell>
+      <TableCell>
+        <Button variant="outline" size="sm"
+          className={`h-8 rounded-lg active:scale-[0.98] ${
+            isExpanded
+              ? 'border-[#7a1f2b]/40 text-[#7a1f2b]'
+              : 'border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]'
+          }`}
+          style={isExpanded ? { background: 'rgba(122,31,43,0.06)' } : undefined}
+          onClick={() => onView(fa)}>
           {isExpanded ? <><ChevronDown className="w-3 h-3 mr-1" />Hide</> : <><Eye className="w-3 h-3 mr-1" />View</>}
         </Button>
       </TableCell>
@@ -325,16 +475,28 @@ function FormativeActivityCard({ fa, isExpanded, onView }: {
   fa: FormativeActivity; isExpanded: boolean; onView: (fa: FormativeActivity) => void;
 }) {
   return (
-    <Card className={`border-l-4 border-l-teal-400 ${isExpanded ? "rounded-b-none" : ""}`}>
-      <div className="flex justify-between items-start p-3">
+    <Card
+      className={`rounded-2xl border border-[#7a1f2b]/10 bg-white overflow-hidden ${isExpanded ? 'rounded-b-none' : ''}`}
+      style={{ boxShadow: CARD_SHADOW }}
+    >
+      <div className="flex justify-between items-start p-3 gap-2">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">{fa.title}</div>
-          {fa.sub_strands?.name && <div className="text-xs text-teal-600">↳ {fa.sub_strands.name}</div>}
-          {fa.description && <div className="text-xs text-gray-500 mt-0.5 truncate">{fa.description}</div>}
-          <div className="text-xs text-gray-400 mt-0.5">{fmtDate(fa.activity_date)}</div>
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs mt-1">Published</Badge>
+          <div className="font-medium text-sm text-[#3a1b1f] truncate">{fa.title}</div>
+          {fa.sub_strands?.name && <div className="text-[11px] text-[#7a1f2b]/70">↳ {fa.sub_strands.name}</div>}
+          {fa.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{fa.description}</div>}
+          <div className="text-[11px] text-muted-foreground/70 mt-0.5">{fmtDate(fa.activity_date)}</div>
+          <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mt-1.5">
+            Published
+          </span>
         </div>
-        <Button variant="outline" size="sm" className={`h-8 ml-2 shrink-0 ${isExpanded ? "bg-teal-50 border-teal-300 text-teal-700" : ""}`} onClick={() => onView(fa)}>
+        <Button variant="outline" size="sm"
+          className={`h-8 ml-2 shrink-0 rounded-lg active:scale-[0.98] ${
+            isExpanded
+              ? 'border-[#7a1f2b]/40 text-[#7a1f2b]'
+              : 'border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]'
+          }`}
+          style={isExpanded ? { background: 'rgba(122,31,43,0.06)' } : undefined}
+          onClick={() => onView(fa)}>
           {isExpanded ? <><ChevronDown className="w-3 h-3 mr-1" />Hide</> : <><Eye className="w-3 h-3 mr-1" />View</>}
         </Button>
       </div>
@@ -344,7 +506,6 @@ function FormativeActivityCard({ fa, isExpanded, onView }: {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function AssessmentsSection() {
   const [viewingAssessment,       setViewingAssessment]       = useState<Assessment | null>(null);
   const [showAddModal,            setShowAddModal]            = useState(false);
@@ -360,7 +521,6 @@ export default function AssessmentsSection() {
 
   const queryClient = useQueryClient();
 
-  // ── Active Term ────────────────────────────────────────────────────────────
   const { data: activeTerm, isLoading: termLoading } = useQuery<ActiveTerm | null>({
     queryKey: ['activeTerm'],
     refetchOnMount: true, refetchOnWindowFocus: true,
@@ -372,7 +532,6 @@ export default function AssessmentsSection() {
     },
   });
 
-  // ── Summative assessments ──────────────────────────────────────────────────
   const { data: assessments = [], isLoading: assessmentsLoading, isError: assessmentsError, refetch: refetchAssessments } =
     useQuery<Assessment[]>({
       queryKey: ['assessments'],
@@ -385,11 +544,13 @@ export default function AssessmentsSection() {
           .eq('category', 'summative')
           .order('created_at', { ascending: false });
         if (error) throw error;
-        return (data ?? []) as Assessment[];
+        return (data ?? []).map(row => ({
+          ...row,
+          classes: Array.isArray(row.classes) ? (row.classes[0] ?? null) : row.classes,
+        })) as Assessment[];
       },
     });
 
-  // ── Formative activities (from new table) ─────────────────────────────────
   const { data: formativeActivities = [], isLoading: formativeLoading, isError: formativeError, refetch: refetchFormative } =
     useQuery<FormativeActivity[]>({
       queryKey: ['formativeActivities'],
@@ -409,7 +570,14 @@ export default function AssessmentsSection() {
           `)
           .order('activity_date', { ascending: false });
         if (error) throw error;
-        return (data ?? []) as FormativeActivity[];
+        return (data ?? []).map(row => ({
+          ...row,
+          classes:     Array.isArray(row.classes)     ? (row.classes[0]     ?? null) : row.classes,
+          strands:     Array.isArray(row.strands)     ? (row.strands[0]     ?? null) : row.strands,
+          sub_strands: Array.isArray(row.sub_strands) ? (row.sub_strands[0] ?? null) : row.sub_strands,
+          subjects:    Array.isArray(row.subjects)    ? (row.subjects[0]    ?? null) : row.subjects,
+          teachers:    Array.isArray(row.teachers)    ? (row.teachers[0]    ?? null) : row.teachers,
+        })) as FormativeActivity[];
       },
     });
 
@@ -423,11 +591,7 @@ export default function AssessmentsSection() {
     },
   });
 
-  // ── Summative status map — lazy per-class loading ─────────────────────────
-  // Status is only fetched when a class row is expanded for the first time.
-  // Uses the approach from the working file: Set refs + loadedClassIds tracking
-  // so re-expanding a class never double-fetches.
-
+  // ── Summative status map — lazy per-class loading ──────────────────────────
   const [resultStatusMap, setResultStatusMap] = useState<Record<string, StatusEntry>>({});
   const [loadedClassIds,  setLoadedClassIds]  = useState<Set<string>>(new Set());
   const [loadingClassIds, setLoadingClassIds] = useState<Set<string>>(new Set());
@@ -446,8 +610,6 @@ export default function AssessmentsSection() {
     } else {
       setResultStatusMap(prev => {
         const next = { ...prev };
-        // Seed all IDs with zero first so assessments with no results
-        // show "No results" rather than staying as a skeleton indefinitely.
         assessmentIds.forEach(id => { if (!next[id]) next[id] = { drafts: 0, published: 0 }; });
         (data ?? []).forEach(r => {
           if (!next[r.assessment_id]) next[r.assessment_id] = { drafts: 0, published: 0 };
@@ -462,7 +624,6 @@ export default function AssessmentsSection() {
     setLoadingClassIds(prev => { const n = new Set(prev); n.delete(classId); return n; });
   }, []);
 
-  // After publish, refresh only that assessment's class.
   const refreshStatusForClass = useCallback((assessmentId: string, allAssessments: Assessment[]) => {
     const a = allAssessments.find(x => x.id === assessmentId);
     if (!a) return;
@@ -472,7 +633,6 @@ export default function AssessmentsSection() {
     void fetchStatusForClass(a.class_id, ids);
   }, [fetchStatusForClass]);
 
-  // When returning from detail view, refresh that assessment's class.
   const prevViewingRef = useRef<Assessment | null>(null);
   useEffect(() => {
     const prev = prevViewingRef.current;
@@ -498,11 +658,6 @@ export default function AssessmentsSection() {
     if (!summativeByClass[a.class_id]) summativeByClass[a.class_id] = { className: cn, gradeLevel: gl, items: [] };
     summativeByClass[a.class_id].items.push(a);
   });
-
-  // ── Formative: grouped by class → subject → strand ───────────────────────
-  // Structure: classId → { className, gradeLevel,
-  //   subjects: { subjectId → { subjectName,
-  //     strands: { strandKey → { strandName, items[] } } } } }
 
   type StrandGroup  = { strandName: string; items: FormativeActivity[] };
   type SubjectGroup = { subjectName: string; strands: Record<string, StrandGroup> };
@@ -530,8 +685,6 @@ export default function AssessmentsSection() {
     formativeByClass[fa.class_id].subjects[subjectKey].strands[strandKey].items.push(fa);
   });
 
-  // ── Toggle helpers ─────────────────────────────────────────────────────────
-
   const toggleSummClass = (classId: string, classAsmIds: string[]) => {
     setExpandedSummClasses(prev => {
       const n = new Set(prev);
@@ -539,7 +692,6 @@ export default function AssessmentsSection() {
         n.delete(classId);
       } else {
         n.add(classId);
-        // Lazy-fetch status on first expand only
         if (!loadedClassIds.has(classId) && !loadingClassIds.has(classId)) {
           void fetchStatusForClass(classId, classAsmIds);
         }
@@ -551,15 +703,12 @@ export default function AssessmentsSection() {
   const toggleFormClass = (id: string) =>
     setExpandedFormClasses(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  // Subject expand key = `${classId}__subj__${subjectId}`
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
   const toggleSubject = (key: string) =>
     setExpandedSubjects(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const toggleStrand = (key: string) =>
     setExpandedStrands(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
-
-  // ── Mutations ──────────────────────────────────────────────────────────────
 
   const createAssessmentMutation = useMutation<void, Error,
     Omit<Assessment, 'id' | 'created_at' | 'classes'>>({
@@ -593,12 +742,10 @@ export default function AssessmentsSection() {
     },
     onMutate: (id: string) => setPublishingId(id),
     onSuccess: ({ assessmentId }: { assessmentId: string; count: number }) => {
-      // Optimistic update — flip drafts→published immediately in local map
       setResultStatusMap(prev => {
         const e = prev[assessmentId]; if (!e) return prev;
         return { ...prev, [assessmentId]: { drafts: 0, published: e.published + e.drafts } };
       });
-      // Also clear the class cache so re-expanding re-fetches fresh data
       refreshStatusForClass(assessmentId, assessments);
       setPublishError(null); setPublishingId(null);
     },
@@ -606,8 +753,6 @@ export default function AssessmentsSection() {
   });
   const publishRef = useRef(publishMutation);
   publishRef.current = publishMutation;
-
-  // ── Summative: grouped by class ───────────────────────────────────────────
 
   const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setFormError(null);
@@ -643,94 +788,146 @@ export default function AssessmentsSection() {
     return <AssessmentResultsView assessment={viewingAssessment} onBack={() => setViewingAssessment(null)} />;
 
   // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 pb-[calc(88px+env(safe-area-inset-bottom))] sm:pb-0">
 
       <ActiveTermBanner term={termLoading ? undefined : activeTerm} />
 
-      <Card className="border-none shadow-sm">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
-            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" /> Assessments
-            </CardTitle>
-            <Button onClick={() => { setShowAddModal(true); setFormError(null); }} disabled={!activeTerm}
+      <Card className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
+        <SectionHeader
+          icon={ClipboardList}
+          microLabel="Assessment"
+          title="Assessments"
+          description="Manage summative exams and review formative activities across classes"
+          right={
+            <button
+              onClick={() => { setShowAddModal(true); setFormError(null); }}
+              disabled={!activeTerm}
               title={!activeTerm ? 'Activate a term first' : undefined}
-              className="bg-orange-600 hover:bg-orange-700 h-10 sm:h-auto" size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Create Assessment</span>
-              <span className="sm:hidden">Create</span>
-            </Button>
-          </div>
-        </CardHeader>
+              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-white text-xs font-medium border border-white/20 bg-white/15 hover:bg-white/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-[0.98]"
+            >
+              <Plus className="h-3.5 w-3.5" /> Create Assessment
+            </button>
+          }
+        />
 
-        <CardContent className="p-4 sm:p-6">
+        <div className="sm:hidden p-3 border-b border-[#7a1f2b]/10 bg-[#fdfbfb]">
+          <Button
+            onClick={() => { setShowAddModal(true); setFormError(null); }}
+            disabled={!activeTerm}
+            className="w-full h-10 rounded-xl text-white border-0 active:scale-[0.98] disabled:opacity-40"
+            style={activeTerm ? GRADIENT_BTN_STYLE : undefined}
+          >
+            <Plus className="w-4 h-4 mr-1.5" /> Create Assessment
+          </Button>
+        </div>
+
+        <CardContent className="p-3 sm:p-5">
           <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'summative' | 'formative')}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="summative">
+            <TabsList className="mb-4 w-full sm:w-auto rounded-xl bg-[#7a1f2b]/5 p-1 h-auto">
+              <TabsTrigger
+                value="summative"
+                className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
+              >
                 Exams / Summative
-                <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 text-xs">{assessments.length}</Badge>
+                <Badge className="ml-2 bg-[#7a1f2b]/10 text-[#7a1f2b] border-[#7a1f2b]/20 text-[10px]">{assessments.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="formative">
+              <TabsTrigger
+                value="formative"
+                className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
+              >
                 Formative Activities
-                <Badge className="ml-2 bg-teal-100 text-teal-800 border-teal-200 text-xs">{formativeActivities.length}</Badge>
+                <Badge className="ml-2 bg-[#7a1f2b]/10 text-[#7a1f2b] border-[#7a1f2b]/20 text-[10px]">{formativeActivities.length}</Badge>
               </TabsTrigger>
             </TabsList>
 
-            {/* ── Summative: class → assessments ──────────────────────────── */}
+            {/* ══════════════ SUMMATIVE TAB ══════════════ */}
             <TabsContent value="summative">
               {assessmentsError ? (
                 <FetchErrorState onRetry={() => void refetchAssessments()} />
               ) : assessmentsLoading ? (
                 <SkeletonRows count={3} />
               ) : Object.keys(summativeByClass).length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <ClipboardList className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                  <p className="font-medium text-gray-500">No assessments yet</p>
-                  <p className="text-sm mt-1">Click <strong>Create Assessment</strong> above to add one.</p>
+                <div className="text-center py-10">
+                  <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+                    style={{ background: 'rgba(122,31,43,0.06)' }}>
+                    <ClipboardList className="w-6 h-6 text-[#7a1f2b]/40" />
+                  </div>
+                  <p className="font-semibold text-[#3a1b1f]">No assessments yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Click <strong className="text-[#7a1f2b]">Create Assessment</strong> above to add one.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {Object.entries(summativeByClass).map(([classId, group]) => {
                     const isOpen        = expandedSummClasses.has(classId);
                     const classAsmIds   = group.items.map(a => a.id);
                     const statusLoading = isClassStatusLoading(classId);
                     return (
-                      <div key={classId} className="border rounded-lg overflow-hidden">
-                        <button className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                      <div key={classId}
+                        className="rounded-2xl border border-[#7a1f2b]/10 bg-white overflow-hidden"
+                        style={{ boxShadow: CARD_SHADOW }}>
+                        <button
+                          className={`w-full flex items-center justify-between px-3.5 sm:px-4 py-3 text-left transition-colors active:scale-[0.995] ${
+                            isOpen ? 'text-white' : 'hover:bg-[#7a1f2b]/[0.04]'
+                          }`}
+                          style={isOpen ? { background: MAROON_GRADIENT } : undefined}
                           onClick={() => toggleSummClass(classId, classAsmIds)}>
-                          <div className="flex items-center gap-3">
-                            <Users className="h-4 w-4 text-purple-600 shrink-0" />
-                            <span className="font-semibold text-sm">{group.className}</span>
-                            {group.gradeLevel && <span className="text-xs text-gray-500">Grade {group.gradeLevel}</span>}
-                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">
-                              {group.items.length} assessment{group.items.length !== 1 ? 's' : ''}
-                            </Badge>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isOpen ? 'bg-white/15 border border-white/20' : ''}`}
+                              style={!isOpen ? { background: 'rgba(122,31,43,0.08)' } : undefined}
+                            >
+                              <Users className={`h-4 w-4 ${isOpen ? 'text-white' : 'text-[#7a1f2b]'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className={`font-semibold text-sm truncate ${isOpen ? 'text-white' : 'text-[#3a1b1f]'}`}>
+                                {group.className}
+                              </div>
+                              {group.gradeLevel && (
+                                <div className={`text-[10px] uppercase tracking-wider ${isOpen ? 'text-white/70' : 'text-muted-foreground'}`}>
+                                  Grade {group.gradeLevel}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full shrink-0 ${
+                                isOpen
+                                  ? 'bg-white/20 text-white border border-white/15'
+                                  : 'bg-[#7a1f2b]/10 text-[#7a1f2b] border border-[#7a1f2b]/20'
+                              }`}
+                            >
+                              {group.items.length}
+                            </span>
                           </div>
-                          {isOpen ? <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" /> : <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />}
+                          {isOpen
+                            ? <ChevronDown className="h-4 w-4 text-white/80 shrink-0" />
+                            : <ChevronRight className="h-4 w-4 text-[#7a1f2b]/40 shrink-0" />}
                         </button>
+
                         {isOpen && (
                           statusLoading ? (
-                            <div className="px-4 py-2 bg-white"><SkeletonRows count={group.items.length} /></div>
+                            <div className="px-4 py-3 bg-white"><SkeletonRows count={group.items.length} /></div>
                           ) : (
                             <>
-                              <div className="sm:hidden divide-y bg-white">
+                              <div className="sm:hidden divide-y divide-[#7a1f2b]/5 bg-[#fdfbfb] p-2.5 space-y-2.5">
                                 {group.items.map(a => (
-                                  <div key={a.id} className="p-3">
-                                    <SummativeMobileCard a={a} getClassName={getClassName} getStatus={getStatus}
-                                      statusReady={!statusLoading} onView={handleView} onPublish={handlePublish}
-                                      onDelete={confirmDelete} publishingId={publishingId} />
-                                  </div>
+                                  <SummativeMobileCard key={a.id} a={a} getClassName={getClassName} getStatus={getStatus}
+                                    statusReady={!statusLoading} onView={handleView} onPublish={handlePublish}
+                                    onDelete={confirmDelete} publishingId={publishingId} />
                                 ))}
                               </div>
-                              <div className="hidden sm:block overflow-x-auto">
+                              <div className="hidden sm:block overflow-x-auto bg-white">
                                 <Table>
                                   <TableHeader>
-                                    <TableRow className="bg-gray-50/50">
-                                      <TableHead>Title / Date</TableHead><TableHead>Term</TableHead>
-                                      <TableHead>Academic Year</TableHead><TableHead>Max Marks</TableHead>
-                                      <TableHead>Status</TableHead><TableHead>Actions</TableHead>
+                                    <TableRow className="hover:bg-transparent border-b border-[#7a1f2b]/10">
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Title / Date</TableHead>
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Term</TableHead>
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Academic Year</TableHead>
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Max Marks</TableHead>
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Status</TableHead>
+                                      <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Actions</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -752,11 +949,12 @@ export default function AssessmentsSection() {
               )}
             </TabsContent>
 
-            {/* ── Formative: class → subject → strand → activities ─────────── */}
+            {/* ══════════════ FORMATIVE TAB ══════════════ */}
             <TabsContent value="formative">
-              <div className="mb-3 p-3 rounded-lg bg-teal-50 border border-teal-200 text-sm text-teal-800 flex items-start gap-2">
-                <BookOpen className="h-4 w-4 mt-0.5 shrink-0" />
-                Formative activities are recorded by teachers. Grouped by class, then subject, then strand.
+              <div className="mb-3 rounded-xl px-3 py-2.5 text-xs text-[#7a1f2b] leading-relaxed border border-[#7a1f2b]/15 flex items-start gap-2"
+                style={{ background: 'rgba(122,31,43,0.04)' }}>
+                <BookOpen className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>Formative activities are recorded by teachers. Grouped by class, then subject, then strand.</span>
               </div>
 
               {formativeError ? (
@@ -764,37 +962,67 @@ export default function AssessmentsSection() {
               ) : formativeLoading ? (
                 <SkeletonRows count={2} />
               ) : Object.keys(formativeByClass).length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                  <p className="font-medium text-gray-500">No formative activities yet</p>
-                  <p className="text-sm mt-1">These appear here when teachers record class activities.</p>
+                <div className="text-center py-10">
+                  <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+                    style={{ background: 'rgba(122,31,43,0.06)' }}>
+                    <BookOpen className="w-6 h-6 text-[#7a1f2b]/40" />
+                  </div>
+                  <p className="font-semibold text-[#3a1b1f]">No formative activities yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">These appear here when teachers record class activities.</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {Object.entries(formativeByClass).map(([classId, classGroup]) => {
                     const isClassOpen = expandedFormClasses.has(classId);
                     const totalItems  = Object.values(classGroup.subjects)
                       .flatMap(sg => Object.values(sg.strands))
                       .reduce((s, g) => s + g.items.length, 0);
                     return (
-                      <div key={classId} className="border rounded-lg overflow-hidden">
+                      <div key={classId}
+                        className="rounded-2xl border border-[#7a1f2b]/10 bg-white overflow-hidden"
+                        style={{ boxShadow: CARD_SHADOW }}>
 
-                        {/* ── Class header ── */}
-                        <button className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                        {/* Class header */}
+                        <button
+                          className={`w-full flex items-center justify-between px-3.5 sm:px-4 py-3 text-left transition-colors active:scale-[0.995] ${
+                            isClassOpen ? 'text-white' : 'hover:bg-[#7a1f2b]/[0.04]'
+                          }`}
+                          style={isClassOpen ? { background: MAROON_GRADIENT } : undefined}
                           onClick={() => toggleFormClass(classId)}>
-                          <div className="flex items-center gap-3">
-                            <Users className="h-4 w-4 text-teal-600 shrink-0" />
-                            <span className="font-semibold text-sm">{classGroup.className}</span>
-                            {classGroup.gradeLevel && <span className="text-xs text-gray-500">Grade {classGroup.gradeLevel}</span>}
-                            <Badge className="bg-teal-100 text-teal-800 border-teal-200 text-xs">
-                              {totalItems} activit{totalItems !== 1 ? 'ies' : 'y'}
-                            </Badge>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isClassOpen ? 'bg-white/15 border border-white/20' : ''}`}
+                              style={!isClassOpen ? { background: 'rgba(122,31,43,0.08)' } : undefined}
+                            >
+                              <Users className={`h-4 w-4 ${isClassOpen ? 'text-white' : 'text-[#7a1f2b]'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className={`font-semibold text-sm truncate ${isClassOpen ? 'text-white' : 'text-[#3a1b1f]'}`}>
+                                {classGroup.className}
+                              </div>
+                              {classGroup.gradeLevel && (
+                                <div className={`text-[10px] uppercase tracking-wider ${isClassOpen ? 'text-white/70' : 'text-muted-foreground'}`}>
+                                  Grade {classGroup.gradeLevel}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full shrink-0 ${
+                                isClassOpen
+                                  ? 'bg-white/20 text-white border border-white/15'
+                                  : 'bg-[#7a1f2b]/10 text-[#7a1f2b] border border-[#7a1f2b]/20'
+                              }`}
+                            >
+                              {totalItems}
+                            </span>
                           </div>
-                          {isClassOpen ? <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" /> : <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />}
+                          {isClassOpen
+                            ? <ChevronDown className="h-4 w-4 text-white/80 shrink-0" />
+                            : <ChevronRight className="h-4 w-4 text-[#7a1f2b]/40 shrink-0" />}
                         </button>
 
                         {isClassOpen && (
-                          <div className="bg-white divide-y">
+                          <div className="bg-white divide-y divide-[#7a1f2b]/8">
                             {Object.entries(classGroup.subjects).map(([subjectId, subjectGroup]) => {
                               const subjKey     = `${classId}__subj__${subjectId}`;
                               const isSubjOpen  = expandedSubjects.has(subjKey);
@@ -802,55 +1030,68 @@ export default function AssessmentsSection() {
                               return (
                                 <div key={subjectId}>
 
-                                  {/* ── Subject sub-header ── */}
-                                  <button className="w-full flex items-center justify-between px-5 py-2.5 bg-gray-50/80 hover:bg-gray-100/80 transition-colors text-left"
+                                  {/* Subject sub-header */}
+                                  <button
+                                    className={`w-full flex items-center justify-between px-5 py-2.5 text-left transition-colors active:scale-[0.995] ${
+                                      isSubjOpen ? 'bg-[#7a1f2b]/[0.05]' : 'bg-[#fdfbfb] hover:bg-[#7a1f2b]/[0.03]'
+                                    }`}
                                     onClick={() => toggleSubject(subjKey)}>
-                                    <div className="flex items-center gap-2">
-                                      <ClipboardList className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                                      <span className="text-sm font-semibold text-gray-800">{subjectGroup.subjectName}</span>
-                                      <span className="text-xs text-gray-400">{subjTotal} activit{subjTotal !== 1 ? 'ies' : 'y'}</span>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <ClipboardList className="h-3.5 w-3.5 text-[#7a1f2b] shrink-0" />
+                                      <span className="text-sm font-semibold text-[#3a1b1f] truncate">{subjectGroup.subjectName}</span>
+                                      <span className="text-[11px] text-muted-foreground shrink-0">
+                                        {subjTotal} activit{subjTotal !== 1 ? 'ies' : 'y'}
+                                      </span>
                                     </div>
-                                    {isSubjOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                                    {isSubjOpen
+                                      ? <ChevronDown className="h-3.5 w-3.5 text-[#7a1f2b]/60 shrink-0" />
+                                      : <ChevronRight className="h-3.5 w-3.5 text-[#7a1f2b]/40 shrink-0" />}
                                   </button>
 
                                   {isSubjOpen && (
-                                    <div className="divide-y">
+                                    <div className="divide-y divide-[#7a1f2b]/5">
                                       {Object.entries(subjectGroup.strands).map(([strandKey, strandGroup]) => {
                                         const expandKey    = `${classId}__${subjectId}__${strandKey}`;
                                         const isStrandOpen = expandedStrands.has(expandKey);
                                         return (
                                           <div key={strandKey}>
 
-                                            {/* ── Strand sub-header ── */}
-                                            <button className="w-full flex items-center justify-between px-8 py-2 bg-white hover:bg-gray-50 transition-colors text-left"
+                                            {/* Strand sub-header */}
+                                            <button
+                                              className={`w-full flex items-center justify-between px-8 py-2 text-left transition-colors active:scale-[0.995] ${
+                                                isStrandOpen ? 'bg-[#7a1f2b]/[0.03]' : 'bg-white hover:bg-[#7a1f2b]/[0.02]'
+                                              }`}
                                               onClick={() => toggleStrand(expandKey)}>
-                                              <div className="flex items-center gap-2">
-                                                <BookOpen className="h-3 w-3 text-teal-400 shrink-0" />
-                                                <span className="text-xs font-medium text-gray-600">{strandGroup.strandName}</span>
-                                                <span className="text-xs text-gray-400">{strandGroup.items.length} item{strandGroup.items.length !== 1 ? 's' : ''}</span>
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <BookOpen className="h-3 w-3 text-[#7a1f2b]/50 shrink-0" />
+                                                <span className="text-xs font-medium text-[#3a1b1f]/80 truncate">{strandGroup.strandName}</span>
+                                                <span className="text-[11px] text-muted-foreground shrink-0">
+                                                  {strandGroup.items.length} item{strandGroup.items.length !== 1 ? 's' : ''}
+                                                </span>
                                               </div>
-                                              {isStrandOpen ? <ChevronDown className="h-3 w-3 text-gray-300 shrink-0" /> : <ChevronRight className="h-3 w-3 text-gray-300 shrink-0" />}
+                                              {isStrandOpen
+                                                ? <ChevronDown className="h-3 w-3 text-[#7a1f2b]/40 shrink-0" />
+                                                : <ChevronRight className="h-3 w-3 text-[#7a1f2b]/30 shrink-0" />}
                                             </button>
 
-                                            {/* ── Activity rows ── */}
                                             {isStrandOpen && (
                                               <>
-                                                <div className="sm:hidden space-y-2 px-4 py-3">
+                                                <div className="sm:hidden space-y-2 px-3 py-3 bg-[#fdfbfb]">
                                                   {strandGroup.items.map(fa => (
                                                     <FormativeActivityCard key={fa.id} fa={fa}
-                                                    isExpanded={expandedActivityIds.has(fa.id)}
-                                                    onView={handleViewFormative} />
+                                                      isExpanded={expandedActivityIds.has(fa.id)}
+                                                      onView={handleViewFormative} />
                                                   ))}
                                                 </div>
                                                 <div className="hidden sm:block">
                                                   <Table>
                                                     <TableHeader>
-                                                      <TableRow className="bg-gray-50/20">
-                                                        <TableHead className="pl-10">Title / Date</TableHead>
-                                                        <TableHead>Term</TableHead>
-                                                        <TableHead>Year</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Actions</TableHead>
+                                                      <TableRow className="hover:bg-transparent border-b border-[#7a1f2b]/10">
+                                                        <TableHead className="pl-10 text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Title / Date</TableHead>
+                                                        <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Term</TableHead>
+                                                        <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Year</TableHead>
+                                                        <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Status</TableHead>
+                                                        <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Actions</TableHead>
                                                       </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -895,29 +1136,41 @@ export default function AssessmentsSection() {
 
       {/* ════════ Create Assessment Dialog ════════ */}
       <Dialog open={showAddModal} onOpenChange={open => { setShowAddModal(open); if (!open) { createAssessmentMutation.reset(); setFormError(null); } }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg max-w-[95vw] p-4 sm:p-6">
-          <DialogHeader className="pb-2">
-            <DialogTitle>Create New Assessment</DialogTitle>
-            <DialogDescription>
-              {activeTerm ? <>Locked to active term: <strong>Term {activeTerm.term}, {activeTerm.academic_year}</strong>.</> : 'No active term found.'}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreateSubmit}>
-            <div className="space-y-4 py-2">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg max-w-[95vw] p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+          <DialogHero
+            icon={Plus}
+            microLabel="New Assessment"
+            title="Create New Assessment"
+            subtitle={activeTerm
+              ? `Locked to Term ${activeTerm.term}, ${activeTerm.academic_year}`
+              : 'No active term found'}
+          />
+          <form onSubmit={handleCreateSubmit} className="p-4 sm:p-5">
+            <div className="space-y-4 py-1">
               {activeTerm && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-blue-500" />
-                  <span><strong>Term {activeTerm.term}</strong> · {activeTerm.academic_year} · {fmtDate(activeTerm.start_date)} → {fmtDate(activeTerm.end_date)}</span>
+                <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 border border-[#7a1f2b]/15"
+                  style={{ background: 'rgba(122,31,43,0.04)' }}>
+                  <CalendarDays className="h-4 w-4 shrink-0 text-[#7a1f2b]" />
+                  <span className="text-xs text-[#7a1f2b]">
+                    <strong>Term {activeTerm.term}</strong> · {activeTerm.academic_year} · {fmtDate(activeTerm.start_date)} → {fmtDate(activeTerm.end_date)}
+                  </span>
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label htmlFor="title">Assessment Title *</Label>
-                <Input id="title" name="title" required placeholder="e.g. CAT 1, Mid Term, End Term" className="h-10" />
+                <Label htmlFor="title" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">
+                  Assessment Title *
+                </Label>
+                <Input id="title" name="title" required placeholder="e.g. CAT 1, Mid Term, End Term"
+                  className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="class_id">Class *</Label>
+                <Label htmlFor="class_id" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">
+                  Class *
+                </Label>
                 <Select name="class_id" required>
-                  <SelectTrigger id="class_id" className="h-10"><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectTrigger id="class_id" className="h-10 rounded-xl border-[#7a1f2b]/15">
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
                   <SelectContent>
                     {classes.map(cls => (
                       <SelectItem key={cls.id} value={cls.id}>
@@ -928,23 +1181,43 @@ export default function AssessmentsSection() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="assessment_date">
+                <Label htmlFor="assessment_date" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">
                   Assessment Date *
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">Applied to all student results</span>
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground normal-case tracking-normal">
+                    Applied to all student results
+                  </span>
                 </Label>
-                <Input id="assessment_date" name="assessment_date" type="date" required className="h-10"
+                <Input id="assessment_date" name="assessment_date" type="date" required
+                  className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30"
                   min={activeTerm?.start_date} max={activeTerm?.end_date} />
-                {activeTerm && <p className="text-xs text-muted-foreground">Must fall within: {fmtDate(activeTerm.start_date)} → {fmtDate(activeTerm.end_date)}</p>}
+                {activeTerm && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Must fall within: {fmtDate(activeTerm.start_date)} → {fmtDate(activeTerm.end_date)}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="max_marks">Max Marks *</Label>
-                <Input id="max_marks" name="max_marks" type="number" required defaultValue="100" min="1" className="h-10" />
+                <Label htmlFor="max_marks" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">
+                  Max Marks *
+                </Label>
+                <Input id="max_marks" name="max_marks" type="number" required defaultValue="100" min="1"
+                  className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
             </div>
-            {formError && <div className="mt-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{formError}</div>}
-            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t mt-4">
-              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
-              <Button type="submit" disabled={createAssessmentMutation.isPending || !activeTerm} className="bg-orange-600 hover:bg-orange-700">
+            {formError && (
+              <div className="mt-3 rounded-xl p-3 bg-red-50 text-red-700 text-sm flex items-start gap-2 border border-red-200">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 mt-4 border-t border-[#7a1f2b]/10">
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}
+                className="h-10 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createAssessmentMutation.isPending || !activeTerm}
+                className="h-10 rounded-xl text-white border-0 active:scale-[0.98] disabled:opacity-40"
+                style={activeTerm ? GRADIENT_BTN_STYLE : undefined}>
                 {createAssessmentMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating…</> : 'Create Assessment'}
               </Button>
             </DialogFooter>
@@ -954,19 +1227,32 @@ export default function AssessmentsSection() {
 
       {/* ════════ Delete Confirmation Dialog ════════ */}
       <Dialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent className="sm:max-w-md max-w-[95vw] p-4 sm:p-6">
+        <DialogContent className="sm:max-w-md max-w-[95vw] p-4 sm:p-6 rounded-2xl border-[#7a1f2b]/15">
           <DialogHeader className="pb-2">
-            <DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="w-5 h-5" />Delete Assessment</DialogTitle>
-            <DialogDescription className="pt-2">
-              Are you sure you want to delete <strong>"{deleteTarget?.title}"</strong>?
-              <span className="block mt-1 text-red-600 font-medium">This will permanently delete all associated results and cannot be undone.</span>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <div className="w-9 h-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4 text-red-500" />
+              </div>
+              Delete Assessment
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-[#3a1b1f]/80">
+              Are you sure you want to delete <strong className="text-[#3a1b1f]">"{deleteTarget?.title}"</strong>?
+              <span className="block mt-1.5 text-red-600 font-medium text-xs">
+                This will permanently delete all associated results and cannot be undone.
+              </span>
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t mt-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" disabled={deleteAssessmentMutation.isPending}
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-[#7a1f2b]/10 mt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}
+              className="rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">
+              Cancel
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white rounded-xl active:scale-[0.98] border-0"
+              disabled={deleteAssessmentMutation.isPending}
               onClick={() => { if (!deleteTarget) return; deleteAssessmentMutation.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) }); }}>
-              {deleteAssessmentMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</> : <><Trash2 className="w-4 h-4 mr-2" />Yes, Delete</>}
+              {deleteAssessmentMutation.isPending
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</>
+                : <><Trash2 className="w-4 h-4 mr-2" />Yes, Delete</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -974,12 +1260,16 @@ export default function AssessmentsSection() {
 
       {/* ════════ Publish error toast ════════ */}
       {publishError && (
-        <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-50 max-w-sm">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="text-sm">{publishError}</span>
-            <button onClick={() => setPublishError(null)} className="ml-auto">✕</button>
-          </div>
+        <div
+          className="fixed bottom-4 right-4 max-w-sm rounded-2xl border border-red-200 bg-red-50 px-4 py-3 z-50 flex items-start gap-2"
+          style={{ boxShadow: '0 18px 40px -18px rgba(220,38,38,0.35)' }}
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+          <span className="text-sm text-red-700 flex-1">{publishError}</span>
+          <button onClick={() => setPublishError(null)}
+            className="w-6 h-6 rounded-lg text-red-500/60 hover:text-red-600 hover:bg-red-100/60 flex items-center justify-center transition-colors shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+// src/Components/Admin/StudentsSection.jsx
 import React, { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
@@ -6,10 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/Components/ui/input';
 import {
   Plus, Search, Pencil, Trash2, UserPlus,
-  ChevronUp, ChevronDown, Upload, X,
-  CheckCircle2, AlertCircle, Loader2, ChevronRight,
+  Upload, X, CheckCircle2, AlertCircle, Loader2,
+  ChevronRight, Users,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
+import { Card, CardContent } from '@/Components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
@@ -24,6 +25,68 @@ import {
   SelectTrigger, SelectValue,
 } from '@/Components/ui/select';
 import { Skeleton } from '@/Components/ui/skeleton';
+
+// ─── Design tokens (mirrors Teacher / Student / Admin dashboards) ─────────────
+
+const MAROON = '#7a1f2b';
+const MAROON_GRADIENT =
+  'linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)';
+const CARD_SHADOW = '0 6px 26px -18px rgba(122,31,43,0.22)';
+const CARD_SHADOW_HOVER = '0 10px 40px -18px rgba(122,31,43,0.35)';
+const HERO_SHADOW = '0 18px 40px -22px rgba(122,31,43,0.45)';
+
+// ─── Shared SectionHeader (matches Teacher dashboard) ────────────────────────
+
+function SectionHeader({
+  icon: Icon, microLabel, title, description, right,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  microLabel: string;
+  title: string;
+  description?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden px-4 sm:px-5 py-3.5"
+      style={{ background: MAROON_GRADIENT }}
+    >
+      <div
+        className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)',
+        }}
+      />
+      <div
+        className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)',
+        }}
+      />
+      <div className="relative flex items-start gap-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">
+            {microLabel}
+          </p>
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight">
+            {title}
+          </h3>
+          {description && (
+            <p className="text-white/70 text-[11px] sm:text-xs mt-0.5 leading-snug">
+              {description}
+            </p>
+          )}
+        </div>
+        {right && <div className="shrink-0">{right}</div>}
+      </div>
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -172,9 +235,6 @@ function BulkAddModal({
     if (hasErrors) { setGlobalError('Fix the highlighted errors before submitting.'); return; }
 
     setSubmitting(true);
-
-    // FIX: Track successCount in a local variable, not from state
-    // (state updates are async so reading rows[].status after setRows gives stale values)
     let successCount = 0;
 
     for (let i = 0; i < rows.length; i++) {
@@ -205,7 +265,6 @@ function BulkAddModal({
     }
 
     setSubmitting(false);
-    // FIX: Use local successCount, not rows[].status (state hasn't settled yet)
     toast({ title: 'Bulk import done', description: `${successCount} student${successCount !== 1 ? 's' : ''} imported successfully.` });
     if (successCount > 0) onAllDone();
   };
@@ -216,7 +275,7 @@ function BulkAddModal({
     const value = row[col.key] ?? '';
     const isSelect = col.key === 'gender' || col.key === 'student_type' || col.key === 'class_id';
     const disabled = submitting || row.status === 'success';
-    const baseClass = `h-8 text-xs rounded-none border-0 border-r border-b border-gray-200 bg-transparent px-2 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-[#800020] focus:z-10 ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${row.status === 'error' ? 'bg-red-50' : row.status === 'success' ? 'bg-green-50' : ''}`;
+    const baseClass = `h-8 text-xs rounded-none border-0 border-r border-b border-[#7a1f2b]/10 bg-transparent px-2 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-[#7a1f2b] focus:z-10 ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${row.status === 'error' ? 'bg-red-50' : row.status === 'success' ? 'bg-green-50' : ''}`;
 
     if (isSelect) {
       const displayOptions = col.key === 'class_id'
@@ -249,53 +308,83 @@ function BulkAddModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[98vw] w-full max-h-[95vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-5 pt-4 pb-3 border-b shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <Upload className="w-4 h-4 text-[#800020]" />
-              Bulk Add Students
-              <span className="text-xs font-normal text-gray-500 ml-1">
-                — use <kbd className="bg-gray-100 px-1 rounded text-[10px]">Enter</kbd> / <kbd className="bg-gray-100 px-1 rounded text-[10px]">↑↓←→</kbd> to navigate
+      <DialogContent className="max-w-[98vw] w-full max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+        {/* ── Gradient header (safe-area aware) ── */}
+        <div
+          className="relative overflow-hidden shrink-0"
+          style={{ background: MAROON_GRADIENT }}
+        >
+          <div
+            className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)',
+            }}
+          />
+          <div className="relative px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+                <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">
+                  Bulk Import
+                </p>
+                <h3 className="text-white font-bold text-sm sm:text-base leading-tight truncate">
+                  Bulk Add Students
+                </h3>
+                <p className="text-white/70 text-[11px] sm:text-xs mt-0.5 truncate">
+                  Use <kbd className="bg-white/15 px-1 rounded text-[10px] text-white">Enter</kbd> / <kbd className="bg-white/15 px-1 rounded text-[10px] text-white">↑↓←→</kbd> to navigate
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] text-white/70 hidden sm:inline">
+                {filledRows.length} filled
               </span>
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">{filledRows.length} student{filledRows.length !== 1 ? 's' : ''} filled</span>
-              <Button variant="ghost" size="sm" onClick={clearAll} disabled={submitting} className="h-7 text-xs text-gray-500">Clear all</Button>
+              <button
+                onClick={clearAll}
+                disabled={submitting}
+                className="text-[11px] font-medium text-white/80 hover:text-white px-2.5 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                Clear all
+              </button>
             </div>
           </div>
-        </DialogHeader>
-        <div className="overflow-auto flex-1 min-h-0">
+        </div>
+
+        {/* ── Table area ── */}
+        <div className="overflow-auto flex-1 min-h-0 bg-white">
           <table className="border-collapse text-xs" style={{ tableLayout: 'fixed', minWidth: '1400px' }}>
-            <thead className="sticky top-0 z-20 bg-gray-50 border-b-2 border-gray-300">
+            <thead className="sticky top-0 z-20 border-b-2 border-[#7a1f2b]/20" style={{ background: 'rgba(122,31,43,0.05)' }}>
               <tr>
-                <th className="w-8 text-center text-gray-400 font-normal border-r border-gray-200 py-1.5 bg-gray-50">#</th>
+                <th className="w-8 text-center text-[#7a1f2b]/50 font-normal border-r border-[#7a1f2b]/10 py-1.5" style={{ background: 'rgba(122,31,43,0.05)' }}>#</th>
                 {BULK_COLUMNS.map(col => (
-                  <th key={col.key} className="text-left font-medium text-gray-600 border-r border-gray-200 py-1.5 px-2 bg-gray-50 whitespace-nowrap" style={{ width: col.width, minWidth: col.width }}>
+                  <th key={col.key} className="text-left font-medium text-[#7a1f2b]/80 border-r border-[#7a1f2b]/10 py-1.5 px-2 whitespace-nowrap" style={{ width: col.width, minWidth: col.width, background: 'rgba(122,31,43,0.05)' }}>
                     {col.label}{col.required && <span className="text-red-400 ml-0.5">*</span>}
                   </th>
                 ))}
-                <th className="w-16 bg-gray-50 border-r border-gray-200" />
+                <th className="w-16 border-r border-[#7a1f2b]/10" style={{ background: 'rgba(122,31,43,0.05)' }} />
               </tr>
             </thead>
             <tbody>
               {rows.map((row, rowIdx) => {
                 const isEmpty = !row.reg_no && !row.first_name && !row.last_name;
                 return (
-                  <tr key={rowIdx} className={`border-b border-gray-200 hover:bg-rose-50/20 transition-colors ${row.status === 'success' ? 'bg-green-50' : row.status === 'error' ? 'bg-red-50' : isEmpty ? 'bg-gray-50/40' : 'bg-white'}`}>
-                    <td className="text-center text-gray-400 font-mono text-[10px] border-r border-gray-200 align-middle select-none" style={{ width: '32px' }}>
-                      {row.status === 'loading' ? <Loader2 className="w-3 h-3 animate-spin mx-auto" />
+                  <tr key={rowIdx} className={`border-b border-[#7a1f2b]/10 hover:bg-[#7a1f2b]/[0.03] transition-colors ${row.status === 'success' ? 'bg-green-50' : row.status === 'error' ? 'bg-red-50' : isEmpty ? 'bg-[#fdfbfb]' : 'bg-white'}`}>
+                    <td className="text-center text-[#7a1f2b]/40 font-mono text-[10px] border-r border-[#7a1f2b]/10 align-middle select-none" style={{ width: '32px' }}>
+                      {row.status === 'loading' ? <Loader2 className="w-3 h-3 animate-spin mx-auto text-[#7a1f2b]" />
                         : row.status === 'success' ? <CheckCircle2 className="w-3 h-3 text-green-500 mx-auto" />
                         : row.status === 'error' ? <span title={row.error}><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></span>
                         : rowIdx + 1}
                     </td>
                     {BULK_COLUMNS.map((col, colIdx) => (
-                      <td key={col.key} className="p-0 border-r border-gray-200 align-middle" style={{ width: col.width, minWidth: col.width }} title={row.error || undefined}>
+                      <td key={col.key} className="p-0 border-r border-[#7a1f2b]/10 align-middle" style={{ width: col.width, minWidth: col.width }} title={row.error || undefined}>
                         {renderCell(row, rowIdx, col, colIdx)}
                       </td>
                     ))}
-                    <td className="text-center border-r border-gray-200 align-middle" style={{ width: '48px' }}>
-                      <button onClick={() => removeRow(rowIdx)} disabled={submitting || rows.length === 1} className="text-gray-300 hover:text-red-400 disabled:opacity-30 p-1" title="Remove row">
+                    <td className="text-center border-r border-[#7a1f2b]/10 align-middle" style={{ width: '48px' }}>
+                      <button onClick={() => removeRow(rowIdx)} disabled={submitting || rows.length === 1} className="text-[#7a1f2b]/30 hover:text-red-400 disabled:opacity-30 p-1" title="Remove row">
                         <X className="w-3 h-3" />
                       </button>
                     </td>
@@ -305,18 +394,30 @@ function BulkAddModal({
             </tbody>
           </table>
         </div>
-        <div className="px-5 py-3 border-t bg-gray-50 shrink-0 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={submitting} className="h-8 text-xs gap-1">
+
+        {/* ── Footer ── */}
+        <div
+          className="px-4 sm:px-5 py-3 border-t border-[#7a1f2b]/10 shrink-0 flex items-center justify-between gap-3"
+          style={{ background: 'rgba(122,31,43,0.03)' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={submitting} className="h-8 text-xs gap-1 border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">
               <Plus className="w-3.5 h-3.5" />Add row
             </Button>
-            {globalError && <span className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{globalError}</span>}
+            {globalError && <span className="text-xs text-red-600 flex items-center gap-1 truncate"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{globalError}</span>}
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={submitting} className="h-8 text-xs">Cancel</Button>
-            <Button type="button" size="sm" onClick={handleSubmit} disabled={submitting || filledRows.length === 0} className="h-8 text-xs bg-[#800020] hover:bg-[#600018] text-white gap-1">
+          <div className="flex items-center gap-2 shrink-0">
+            <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={submitting} className="h-8 text-xs border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">Cancel</Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSubmit}
+              disabled={submitting || filledRows.length === 0}
+              className="h-8 text-xs text-white gap-1 active:scale-[0.98] border-0"
+              style={{ background: MAROON_GRADIENT, boxShadow: '0 8px 18px -10px rgba(122,31,43,0.5)' }}
+            >
               {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              Import {filledRows.length > 0 ? `${filledRows.length} student${filledRows.length > 1 ? 's' : ''}` : ''}
+              Import {filledRows.length > 0 ? `${filledRows.length}` : ''}
             </Button>
           </div>
         </div>
@@ -326,9 +427,6 @@ function BulkAddModal({
 }
 
 // ─── Class Strip ──────────────────────────────────────────────────────────────
-// Clicking a class strip fetches ONLY that class's students on demand.
-// This replaces the previous "load all 600 students at once" approach.
-// React Query caches each class independently — second click is instant.
 
 function ClassStrip({
   cls,
@@ -349,11 +447,10 @@ function ClassStrip({
   onDelete: (student: any) => void;
   isDeleting: boolean;
 }) {
-  // ── Per-class student query — only fires when this strip is expanded ──
   const { data: students, isLoading } = useQuery({
     queryKey: ['class-students-list', cls.id],
     enabled: isExpanded,
-    staleTime: 1000 * 60 * 5, // 5 min — avoids re-fetching on every toggle
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const { data: enrollments, error: eErr } = await supabase
         .from('enrollments')
@@ -406,73 +503,92 @@ function ClassStrip({
   const count = students?.length ?? 0;
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      {/* ── Strip header (always visible, click to expand) ── */}
+    <div
+      className="rounded-2xl overflow-hidden border border-[#7a1f2b]/10 bg-white transition-shadow"
+      style={{ boxShadow: isExpanded ? CARD_SHADOW_HOVER : CARD_SHADOW }}
+    >
+      {/* ── Strip header ── */}
       <button
         onClick={onToggle}
-        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${isExpanded ? 'bg-[#800020] text-white' : 'bg-white hover:bg-[#800020]/5'}`}
+        className={`w-full flex items-center justify-between px-3.5 sm:px-4 py-3 text-left transition-colors active:scale-[0.995] ${
+          isExpanded ? 'text-white' : 'hover:bg-[#7a1f2b]/[0.04]'
+        }`}
+        style={isExpanded ? { background: MAROON_GRADIENT } : undefined}
       >
-        <div className="flex items-center gap-3">
-          <ChevronRight className={`w-4 h-4 transition-transform shrink-0 ${isExpanded ? 'rotate-90 text-white' : 'text-gray-400'}`} />
-          <div>
-            <span className={`font-semibold text-sm ${isExpanded ? 'text-white' : 'text-gray-800'}`}>{cls.name}</span>
-            <span className={`ml-2 text-xs ${isExpanded ? 'text-white/70' : 'text-gray-400'}`}>{cls.grade_level}</span>
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              isExpanded ? 'bg-white/15 backdrop-blur-md border border-white/20' : ''
+            }`}
+            style={!isExpanded ? { background: 'rgba(122,31,43,0.08)' } : undefined}
+          >
+            <ChevronRight className={`w-4 h-4 transition-transform shrink-0 ${isExpanded ? 'rotate-90 text-white' : 'text-[#7a1f2b]/70'}`} />
+          </div>
+          <div className="min-w-0">
+            <div className={`font-semibold text-sm truncate ${isExpanded ? 'text-white' : 'text-[#3a1b1f]'}`}>{cls.name}</div>
+            <div className={`text-[11px] mt-0.5 ${isExpanded ? 'text-white/70' : 'text-muted-foreground'}`}>{cls.grade_level}</div>
           </div>
         </div>
         {isExpanded && (
-  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-white/20 text-white">
-    {isLoading ? '...' : `${count} student${count !== 1 ? 's' : ''}`}
-  </span>
-)}
+          <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/20 text-white shrink-0 border border-white/15">
+            {isLoading ? '…' : `${count} student${count !== 1 ? 's' : ''}`}
+          </span>
+        )}
       </button>
 
       {/* ── Expandable student list ── */}
       {isExpanded && (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-[#7a1f2b]/10 bg-[#fdfbfb]">
           {isLoading ? (
             <div className="p-4 space-y-2">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+              {[1, 2, 3].map(i => (
+                <Skeleton
+                  key={i}
+                  className="h-10 w-full rounded-lg"
+                  style={{ background: 'rgba(122,31,43,0.06)' }}
+                />
+              ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">
+            <div className="py-8 text-center text-sm text-muted-foreground">
               {searchTerm ? 'No students match your search' : 'No students enrolled in this class'}
             </div>
           ) : (
             <>
               {/* Desktop table */}
-              <div className="hidden sm:block overflow-x-auto">
+              <div className="hidden sm:block overflow-x-auto bg-white">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="py-2 pl-6 text-xs">Reg No</TableHead>
-                      <TableHead className="py-2 text-xs">Name</TableHead>
-                      <TableHead className="py-2 text-xs">Gender</TableHead>
-                      <TableHead className="py-2 text-xs">Type</TableHead>
-                      <TableHead className="py-2 w-[80px] text-xs">Actions</TableHead>
+                    <TableRow className="hover:bg-transparent border-b border-[#7a1f2b]/10">
+                      <TableHead className="py-2 pl-6 text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Reg No</TableHead>
+                      <TableHead className="py-2 text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Name</TableHead>
+                      <TableHead className="py-2 text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Gender</TableHead>
+                      <TableHead className="py-2 text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Type</TableHead>
+                      <TableHead className="py-2 w-[80px] text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.map(student => (
                       <TableRow
                         key={student.id}
-                        className="cursor-pointer hover:bg-[#800020]/5 transition-colors"
+                        className="cursor-pointer hover:bg-[#7a1f2b]/[0.04] border-b border-[#7a1f2b]/5 transition-colors"
                         onClick={() => onView(student)}
                       >
-                        <TableCell className="font-mono font-medium py-2.5 pl-6 text-sm">{student.profile?.reg_no}</TableCell>
-                        <TableCell className="py-2.5 text-sm">{student.profile?.first_name} {student.profile?.last_name}</TableCell>
-                        <TableCell className="py-2.5 text-sm text-gray-600">{student.profile?.gender}</TableCell>
+                        <TableCell className="font-mono font-medium py-2.5 pl-6 text-sm text-[#3a1b1f]">{student.profile?.reg_no}</TableCell>
+                        <TableCell className="py-2.5 text-sm text-[#3a1b1f]">{student.profile?.first_name} {student.profile?.last_name}</TableCell>
+                        <TableCell className="py-2.5 text-sm text-muted-foreground">{student.profile?.gender}</TableCell>
                         <TableCell className="py-2.5">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${student.profile?.student_type === 'Boarding' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${student.profile?.student_type === 'Boarding' ? 'bg-[#7a1f2b]/10 text-[#7a1f2b]' : 'bg-emerald-50 text-emerald-700'}`}>
                             {student.profile?.student_type || 'Day Scholar'}
                           </span>
                         </TableCell>
                         <TableCell className="py-2.5">
                           <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(student)}>
-                              <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-[#7a1f2b]/5 active:scale-95" onClick={() => onEdit(student)}>
+                              <Pencil className="w-3.5 h-3.5 text-[#7a1f2b]/70" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isDeleting} onClick={() => onDelete(student)}>
-                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-50 active:scale-95" disabled={isDeleting} onClick={() => onDelete(student)}>
+                              <Trash2 className="w-3.5 h-3.5 text-red-500/80" />
                             </Button>
                           </div>
                         </TableCell>
@@ -483,28 +599,31 @@ function ClassStrip({
               </div>
 
               {/* Mobile cards */}
-              <div className="sm:hidden divide-y divide-gray-100">
+              <div className="sm:hidden divide-y divide-[#7a1f2b]/5 bg-white">
                 {filtered.map(student => (
                   <div
                     key={student.id}
-                    className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+                    className="p-3.5 flex items-center justify-between hover:bg-[#7a1f2b]/[0.03] active:bg-[#7a1f2b]/[0.06] cursor-pointer transition-colors"
                     onClick={() => onView(student)}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-[#800020]/10 flex items-center justify-center text-xs font-bold text-[#800020] shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="h-10 w-10 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
+                        style={{ background: MAROON_GRADIENT, boxShadow: '0 6px 14px -8px rgba(122,31,43,0.5)' }}
+                      >
                         {student.profile?.first_name?.[0]}{student.profile?.last_name?.[0]}
                       </div>
-                      <div>
-                        <div className="font-medium text-sm">{student.profile?.first_name} {student.profile?.last_name}</div>
-                        <div className="text-xs text-gray-400">{student.profile?.reg_no} · {student.profile?.gender}</div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm text-[#3a1b1f] truncate">{student.profile?.first_name} {student.profile?.last_name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{student.profile?.reg_no} · {student.profile?.gender}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(student)}>
-                        <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-[#7a1f2b]/5 active:scale-95" onClick={() => onEdit(student)}>
+                        <Pencil className="w-3.5 h-3.5 text-[#7a1f2b]/70" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isDeleting} onClick={() => onDelete(student)}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-red-50 active:scale-95" disabled={isDeleting} onClick={() => onDelete(student)}>
+                        <Trash2 className="w-3.5 h-3.5 text-red-500/80" />
                       </Button>
                     </div>
                   </div>
@@ -540,8 +659,6 @@ export default function StudentsSection() {
     password: '', student_type: 'Day Scholar',
   });
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
   const camelToSnake = (s: string) => s.replace(/([A-Z])/g, '_$1').toLowerCase();
   const normalizeFormKeys = (obj: Record<string, any>) => {
     const out: Record<string, any> = {};
@@ -554,13 +671,6 @@ export default function StudentsSection() {
     setFormError(null);
   };
 
-  // ── Queries ───────────────────────────────────────────────────────────────
-  //
-  // KEY CHANGE: We no longer fetch all students on mount.
-  // Instead we fetch only the classes list here (lightweight — just id/name/grade_level).
-  // Each ClassStrip fetches its own students only when expanded.
-  // This reduces initial load from ~3 heavy queries to 1 tiny query.
-
   const { data: classes, isLoading: loadingClasses } = useQuery({
     queryKey: ['classes-with-details'],
     queryFn: async () => {
@@ -569,10 +679,6 @@ export default function StudentsSection() {
         .select('id, name, grade_level');
       if (error) throw error;
 
-      // Natural school grade ordering.
-      // Supabase returns rows alphabetically — "Grade 7" sorts before "PP1".
-      // We sort client-side by bucket (PP → Grade → Form) then by number,
-      // then by class name as tiebreaker.
       const stageBucket = (gl: string): number => {
         const l = (gl || '').toLowerCase().trim();
         if (l.startsWith('pp') || l.startsWith('pre') || l.startsWith('nursery') || l.startsWith('baby') || l.startsWith('pg')) return 0;
@@ -595,8 +701,6 @@ export default function StudentsSection() {
     },
   });
 
-  // ── Global search query (only fires when searchTerm is non-empty) ──────────
-  // Searches across ALL classes without expanding them one by one.
   const isSearching = searchTerm.trim().length > 0;
 
   const { data: searchResults, isLoading: loadingSearch } = useQuery({
@@ -648,8 +752,6 @@ export default function StudentsSection() {
     },
   });
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
-
   const createMutation = useMutation<any, any, Record<string, any>>({
     mutationFn: async data => {
       const payload = {
@@ -667,7 +769,6 @@ export default function StudentsSection() {
       throw new Error('Edge function failed to create user.');
     },
     onSuccess: (_, variables) => {
-      // Invalidate only the class this student was added to
       queryClient.invalidateQueries({ queryKey: ['class-students-list', variables.class_id] });
       setShowAddModal(false); setEditingStudent(null); resetForm();
       setCreationSuccess('Student was successfully created!');
@@ -710,7 +811,6 @@ export default function StudentsSection() {
       return { newClassId: data.class_id, oldClassId: editingStudent.enrollment?.class_id };
     },
     onSuccess: (result) => {
-      // Invalidate old and new class caches if class changed
       queryClient.invalidateQueries({ queryKey: ['class-students-list', result.oldClassId] });
       if (result.newClassId !== result.oldClassId) {
         queryClient.invalidateQueries({ queryKey: ['class-students-list', result.newClassId] });
@@ -733,7 +833,6 @@ export default function StudentsSection() {
       return res.data;
     },
     onSuccess: (data, variables) => {
-      // Invalidate only the affected class cache
       queryClient.invalidateQueries({ queryKey: ['class-students-list', variables.classId] });
       toast({ title: 'Student deleted', description: data.message || 'Student has been removed.' });
     },
@@ -744,8 +843,6 @@ export default function StudentsSection() {
 
   const isDeleting           = deleteMutation.isPending;
   const isCreatingOrUpdating = createMutation.isPending || updateMutation.isPending;
-
-  // ── Event handlers ────────────────────────────────────────────────────────
 
   const handleInputChange = (field: string, value: string) => setFormData(prev => ({ ...prev, [field]: value }));
 
@@ -804,89 +901,149 @@ export default function StudentsSection() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 pb-[calc(88px+env(safe-area-inset-bottom))] sm:pb-0">
       {creationSuccess && (
-        <div className="w-full bg-green-100 text-green-700 rounded px-4 py-2 mb-2 text-center font-medium text-sm">
+        <div
+          className="w-full rounded-xl px-4 py-3 text-sm font-medium text-center border flex items-center justify-center gap-2"
+          style={{
+            background: 'rgba(16,185,129,0.08)',
+            borderColor: 'rgba(16,185,129,0.25)',
+            color: '#047857',
+          }}
+        >
+          <CheckCircle2 className="w-4 h-4" />
           {creationSuccess}
         </div>
       )}
 
-      <Card className="border-none shadow-sm">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
-            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-[#800020]" />
-              <span className="text-lg sm:text-2xl">Students</span>
-            </CardTitle>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search students..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-9 text-sm h-10"
-                />
-              </div>
-              <Button onClick={() => setShowBulkModal(true)} variant="outline" className="border-[#800020] text-[#800020] hover:bg-[#800020]/10 h-10" size="sm">
-                <Upload className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Bulk Add</span><span className="sm:hidden">Bulk</span>
+      <Card
+        className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden"
+        style={{ boxShadow: CARD_SHADOW }}
+      >
+        {/* ── Themed header ── */}
+        <SectionHeader
+          icon={Users}
+          microLabel="Administration"
+          title="Students"
+          description="Manage enrollment, profiles and class assignments"
+        />
+
+        {/* ── Toolbar ── */}
+        <div className="p-3 sm:p-4 border-b border-[#7a1f2b]/10 bg-[#fdfbfb]">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7a1f2b]/40 w-4 h-4" />
+              <Input
+                placeholder="Search students by name or reg no…"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-9 text-sm h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30 focus-visible:border-[#7a1f2b]/40 bg-white"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md text-[#7a1f2b]/40 hover:text-[#7a1f2b] hover:bg-[#7a1f2b]/5 flex items-center justify-center"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2.5">
+              <Button
+                onClick={() => setShowBulkModal(true)}
+                variant="outline"
+                className="flex-1 sm:flex-none h-10 rounded-xl border-[#7a1f2b]/25 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b] active:scale-[0.98]"
+                size="sm"
+              >
+                <Upload className="w-4 h-4 mr-1.5" />
+                <span className="hidden sm:inline">Bulk Add</span>
+                <span className="sm:hidden">Bulk</span>
               </Button>
-              <Button onClick={handleAddNew} className="bg-[#800020] hover:bg-[#600018] text-white h-10" size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Add Student</span><span className="sm:hidden">Add</span>
+              <Button
+                onClick={handleAddNew}
+                className="flex-1 sm:flex-none h-10 rounded-xl text-white border-0 active:scale-[0.98]"
+                size="sm"
+                style={{ background: MAROON_GRADIENT, boxShadow: '0 8px 18px -10px rgba(122,31,43,0.5)' }}
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                <span className="hidden sm:inline">Add Student</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-4 sm:p-6 pt-0">
-          {/* ── Search mode: flat list of matching students across all classes ── */}
+        <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+          {/* ── Search mode ── */}
           {isSearching ? (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {loadingSearch ? (
-                <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12" />)}</div>
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton
+                      key={i}
+                      className="h-14 rounded-xl"
+                      style={{ background: 'rgba(122,31,43,0.06)' }}
+                    />
+                  ))}
+                </div>
               ) : !searchResults || searchResults.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <Search className="w-10 h-10 mx-auto text-gray-200 mb-2" />
-                  <p className="text-sm">No students found for &ldquo;{searchTerm}&rdquo;</p>
+                <div className="text-center py-10">
+                  <Search className="w-10 h-10 mx-auto mb-2 text-[#7a1f2b]/15" />
+                  <p className="text-sm text-muted-foreground">No students found for &ldquo;{searchTerm}&rdquo;</p>
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-gray-400 mb-3">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchTerm}&rdquo;</p>
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-3 px-1">
+                    {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchTerm}&rdquo;
+                  </p>
                   {searchResults.map((student: any) => (
                     <button
                       key={student.id}
                       onClick={() => setViewingStudent(student)}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-100 hover:border-[#800020]/30 hover:bg-[#800020]/5 transition-all text-left group"
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-xl border border-[#7a1f2b]/10 hover:border-[#7a1f2b]/30 hover:bg-[#7a1f2b]/[0.03] active:scale-[0.99] transition-all text-left group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-[#800020]/10 flex items-center justify-center text-xs font-bold text-[#800020] shrink-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="h-10 w-10 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
+                          style={{ background: MAROON_GRADIENT, boxShadow: '0 6px 14px -8px rgba(122,31,43,0.5)' }}
+                        >
                           {student.profile?.first_name?.[0]}{student.profile?.last_name?.[0]}
                         </div>
-                        <div>
-                          <div className="font-medium text-sm text-gray-900 group-hover:text-[#800020] transition-colors">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm text-[#3a1b1f] group-hover:text-[#7a1f2b] transition-colors truncate">
                             {student.profile?.first_name} {student.profile?.last_name}
                           </div>
-                          <div className="text-xs text-gray-400">{student.profile?.reg_no} · {student.classInfo?.name || 'Unassigned'}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {student.profile?.reg_no} · {student.classInfo?.name || 'Unassigned'}
+                          </div>
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#800020] transition-colors shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-[#7a1f2b]/30 group-hover:text-[#7a1f2b] transition-colors shrink-0" />
                     </button>
                   ))}
                 </>
               )}
             </div>
           ) : loadingClasses ? (
-            <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12" />)}</div>
+            <div className="space-y-2.5">
+              {[1, 2, 3, 4].map(i => (
+                <Skeleton
+                  key={i}
+                  className="h-14 rounded-2xl"
+                  style={{ background: 'rgba(122,31,43,0.06)' }}
+                />
+              ))}
+            </div>
           ) : !classes || classes.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <UserPlus className="w-12 h-12 mx-auto text-gray-200 mb-3" />
-              <p className="font-medium">No classes found</p>
-              <p className="text-sm mt-1">Create classes first, then add students.</p>
+            <div className="text-center py-12">
+              <UserPlus className="w-12 h-12 mx-auto mb-3 text-[#7a1f2b]/15" />
+              <p className="font-semibold text-[#3a1b1f]">No classes found</p>
+              <p className="text-sm mt-1 text-muted-foreground">Create classes first, then add students.</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {(classes as any[]).map(cls => (
                 <ClassStrip
                   key={cls.id}
@@ -907,28 +1064,52 @@ export default function StudentsSection() {
 
       {/* ── Add / Edit Modal ── */}
       <Dialog open={showAddModal} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-4 sm:p-6">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-lg sm:text-xl">{editingStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-2 sm:py-4">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+          {/* Gradient header */}
+          <div
+            className="relative overflow-hidden shrink-0"
+            style={{ background: MAROON_GRADIENT }}
+          >
+            <div
+              className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)',
+              }}
+            />
+            <div className="relative px-5 py-4 flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+                {editingStudent ? <Pencil className="h-4 w-4 sm:h-5 sm:w-5 text-white" /> : <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-white" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">
+                  {editingStudent ? 'Update Record' : 'New Enrollment'}
+                </p>
+                <h3 className="text-white font-bold text-sm sm:text-base leading-tight">
+                  {editingStudent ? 'Edit Student' : 'Add New Student'}
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-4 sm:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-1">
               <div className="space-y-2">
-                <Label htmlFor="reg_no">Registration Number</Label>
-                <Input id="reg_no" value={formData.reg_no} onChange={e => handleInputChange('reg_no', e.target.value)} required className="h-10" />
+                <Label htmlFor="reg_no" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Registration Number</Label>
+                <Input id="reg_no" value={formData.reg_no} onChange={e => handleInputChange('reg_no', e.target.value)} required className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="first_name">First Name</Label>
-                <Input id="first_name" value={formData.first_name} onChange={e => handleInputChange('first_name', e.target.value)} required className="h-10" />
+                <Label htmlFor="first_name" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">First Name</Label>
+                <Input id="first_name" value={formData.first_name} onChange={e => handleInputChange('first_name', e.target.value)} required className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last_name">Last Name</Label>
-                <Input id="last_name" value={formData.last_name} onChange={e => handleInputChange('last_name', e.target.value)} required className="h-10" />
+                <Label htmlFor="last_name" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Last Name</Label>
+                <Input id="last_name" value={formData.last_name} onChange={e => handleInputChange('last_name', e.target.value)} required className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label>Gender</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Gender</Label>
                 <Select value={formData.gender} onValueChange={v => handleInputChange('gender', v)} required>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                  <SelectTrigger className="h-10 rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select gender" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Male">Male</SelectItem>
                     <SelectItem value="Female">Female</SelectItem>
@@ -937,18 +1118,18 @@ export default function StudentsSection() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Class</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Class</Label>
                 <Select value={formData.class_id} onValueChange={v => handleInputChange('class_id', v)} required>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectTrigger className="h-10 rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select class" /></SelectTrigger>
                   <SelectContent>
                     {(classes || []).map((cls: any) => <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Student Type</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Student Type</Label>
                 <Select value={formData.student_type} onValueChange={v => handleInputChange('student_type', v)}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10 rounded-xl border-[#7a1f2b]/15"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Day Scholar">Day Scholar</SelectItem>
                     <SelectItem value="Boarding">Boarding</SelectItem>
@@ -956,40 +1137,45 @@ export default function StudentsSection() {
                 </Select>
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="guardian_email">
+                <Label htmlFor="guardian_email" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">
                   Guardian Email {!editingStudent && <span className="text-red-500">*</span>}
                 </Label>
-                <Input id="guardian_email" type="email" value={formData.guardian_email} onChange={e => handleInputChange('guardian_email', e.target.value)} required={!editingStudent} placeholder="guardian@example.com" className="h-10" />
-                <p className="text-xs text-gray-500">Used for password recovery. Students can still login with registration number.</p>
+                <Input id="guardian_email" type="email" value={formData.guardian_email} onChange={e => handleInputChange('guardian_email', e.target.value)} required={!editingStudent} placeholder="guardian@example.com" className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
+                <p className="text-[11px] text-muted-foreground">Used for password recovery. Students can still login with registration number.</p>
               </div>
               {!editingStudent && (
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="password">Password (optional)</Label>
-                  <Input id="password" type="password" value={formData.password} onChange={e => handleInputChange('password', e.target.value)} placeholder="Set a password or leave blank" className="h-10" />
+                  <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Password (optional)</Label>
+                  <Input id="password" type="password" value={formData.password} onChange={e => handleInputChange('password', e.target.value)} placeholder="Set a password or leave blank" className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} className="h-10" />
+                <Label htmlFor="phone" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Phone</Label>
+                <Input id="phone" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date_of_birth">Date of Birth</Label>
-                <Input id="date_of_birth" type="date" value={formData.date_of_birth} onChange={e => handleInputChange('date_of_birth', e.target.value)} className="h-10" />
+                <Label htmlFor="date_of_birth" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Date of Birth</Label>
+                <Input id="date_of_birth" type="date" value={formData.date_of_birth} onChange={e => handleInputChange('date_of_birth', e.target.value)} className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guardian_name">Guardian Name</Label>
-                <Input id="guardian_name" value={formData.guardian_name} onChange={e => handleInputChange('guardian_name', e.target.value)} className="h-10" />
+                <Label htmlFor="guardian_name" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Guardian Name</Label>
+                <Input id="guardian_name" value={formData.guardian_name} onChange={e => handleInputChange('guardian_name', e.target.value)} className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guardian_phone">Guardian Phone</Label>
-                <Input id="guardian_phone" value={formData.guardian_phone} onChange={e => handleInputChange('guardian_phone', e.target.value)} className="h-10" />
+                <Label htmlFor="guardian_phone" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Guardian Phone</Label>
+                <Input id="guardian_phone" value={formData.guardian_phone} onChange={e => handleInputChange('guardian_phone', e.target.value)} className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
             </div>
-            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-              {formError && <div className="text-sm text-red-600 mr-auto w-full sm:w-auto">{formError}</div>}
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 mt-4 border-t border-[#7a1f2b]/10">
+              {formError && <div className="text-sm text-red-600 mr-auto w-full sm:w-auto flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" />{formError}</div>}
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} className="h-10 w-full sm:w-auto order-2 sm:order-1">Cancel</Button>
-                <Button type="submit" className="bg-[#800020] hover:bg-[#600018] text-white h-10 w-full sm:w-auto order-1 sm:order-2" disabled={isCreatingOrUpdating}>
+                <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} className="h-10 w-full sm:w-auto order-2 sm:order-1 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">Cancel</Button>
+                <Button
+                  type="submit"
+                  className="h-10 w-full sm:w-auto order-1 sm:order-2 rounded-xl text-white border-0 active:scale-[0.98]"
+                  disabled={isCreatingOrUpdating}
+                  style={{ background: MAROON_GRADIENT, boxShadow: '0 8px 18px -10px rgba(122,31,43,0.5)' }}
+                >
                   {isCreatingOrUpdating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   {editingStudent ? 'Update' : 'Create'} Student
                 </Button>
@@ -1005,7 +1191,6 @@ export default function StudentsSection() {
         onClose={() => setShowBulkModal(false)}
         classes={classes || []}
         onAllDone={() => {
-          // Invalidate the expanded class cache so new students appear
           if (expandedClassId) {
             queryClient.invalidateQueries({ queryKey: ['class-students-list', expandedClassId] });
           }
@@ -1015,27 +1200,45 @@ export default function StudentsSection() {
       {/* ── Student Detail Modal ── */}
       {viewingStudent && (
         <Dialog open={!!viewingStudent} onOpenChange={() => setViewingStudent(null)}>
-          <DialogContent className="max-w-md w-[95vw] p-0 overflow-hidden">
-            <div className="bg-[#800020] px-5 pt-5 pb-6 text-white">
-              <div className="flex items-start justify-between mb-4">
-                <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white">
+          <DialogContent className="max-w-md w-[95vw] p-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+            {/* Gradient hero */}
+            <div
+              className="relative overflow-hidden px-5 pt-5 pb-6 text-white"
+              style={{ background: MAROON_GRADIENT }}
+            >
+              <div
+                className="absolute -top-20 -right-16 w-64 h-64 rounded-full pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(255,255,255,0.16), transparent 70%)',
+                }}
+              />
+              <div
+                className="absolute -bottom-24 -left-20 w-72 h-72 rounded-full pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)',
+                }}
+              />
+              <div className="relative flex items-start justify-between mb-4">
+                <div className="h-14 w-14 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-xl font-bold text-white">
                   {viewingStudent.profile?.first_name?.[0]}{viewingStudent.profile?.last_name?.[0]}
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" className="h-8 px-3 text-white border border-white/30 hover:bg-white/20 text-xs gap-1.5" onClick={() => { setViewingStudent(null); handleEdit(viewingStudent); }}>
+                  <Button size="sm" variant="ghost" className="h-8 px-3 text-white border border-white/25 hover:bg-white/15 active:scale-95 text-xs gap-1.5 rounded-lg" onClick={() => { setViewingStudent(null); handleEdit(viewingStudent); }}>
                     <Pencil className="w-3.5 h-3.5" />Edit
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8 px-3 text-white border border-white/30 hover:bg-red-600/60 text-xs gap-1.5" disabled={isDeleting} onClick={() => { setViewingStudent(null); handleDelete(viewingStudent); }}>
+                  <Button size="sm" variant="ghost" className="h-8 px-3 text-white border border-white/25 hover:bg-red-500/30 active:scale-95 text-xs gap-1.5 rounded-lg" disabled={isDeleting} onClick={() => { setViewingStudent(null); handleDelete(viewingStudent); }}>
                     <Trash2 className="w-3.5 h-3.5" />Delete
                   </Button>
                 </div>
               </div>
-              <div>
+              <div className="relative">
                 <h2 className="text-lg font-bold leading-tight">{viewingStudent.profile?.first_name} {viewingStudent.profile?.last_name}</h2>
-                <p className="text-white/70 text-sm mt-0.5">{viewingStudent.profile?.reg_no}</p>
+                <p className="text-white/70 text-sm mt-0.5 font-mono">{viewingStudent.profile?.reg_no}</p>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-5 py-4 space-y-1 bg-white">
               {([
                 { label: 'Class',          value: viewingStudent.classInfo?.name || '—' },
                 { label: 'Gender',         value: viewingStudent.profile?.gender || '—' },
@@ -1046,9 +1249,9 @@ export default function StudentsSection() {
                 { label: 'Guardian Phone', value: viewingStudent.profile?.guardian_phone || '—' },
                 { label: 'Guardian Email', value: viewingStudent.profile?.guardian_email || '—' },
               ] as { label: string; value: string }[]).map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide w-32 shrink-0">{label}</span>
-                  <span className="text-sm text-gray-800 text-right">{value}</span>
+                <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#7a1f2b]/8 last:border-0">
+                  <span className="text-[11px] font-semibold text-[#7a1f2b]/60 uppercase tracking-wider w-32 shrink-0">{label}</span>
+                  <span className="text-sm text-[#3a1b1f] text-right truncate">{value}</span>
                 </div>
               ))}
             </div>

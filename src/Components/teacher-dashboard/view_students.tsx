@@ -1,43 +1,30 @@
-import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
-import { Badge } from "@/Components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/Components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
-import { Users, Phone, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogClose, DialogDescription,
+  DialogHeader, DialogTitle,
+} from "@/Components/ui/dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/Components/ui/table";
+import {
+  Users, Phone, ChevronLeft, X,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import StudentPerformanceDetailView from "./StudentPerformanceDetailView";
-import { PerformanceBadge } from "@/Components/PerformanceBadge";
 
-// ---------- Types ----------
+// ---------- Types (UNCHANGED) ----------
 interface TeacherClass {
   id: string;
   teacher_id: string;
   class_id: string;
   subject_id: string;
   created_at: string;
-  classes?: {
-    id: string;
-    name: string;
-    grade_level: string;
-    created_at: string;
-  } | {
-    id: string;
-    name: string;
-    grade_level: string;
-    created_at: string;
-  }[];
-  subjects?: {
-    id: string;
-    name: string;
-    code: string;
-    created_at: string;
-  } | {
-    id: string;
-    name: string;
-    code: string;
-    created_at: string;
-  }[];
+  classes?: { id: string; name: string; grade_level: string; created_at: string } |
+            { id: string; name: string; grade_level: string; created_at: string }[];
+  subjects?: { id: string; name: string; code: string; created_at: string } |
+             { id: string; name: string; code: string; created_at: string }[];
 }
 
 interface Student {
@@ -62,10 +49,16 @@ interface StudentPerformanceDetail {
   recentTrend: number;
 }
 
-// Helper to normalize relation fields
+// ---------- Design tokens ----------
+const MAROON = "#7a1f2b";
+const MAROON_GRADIENT = "linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)";
+const CARD_SHADOW = "0 6px 26px -18px rgba(122,31,43,0.22)";
+const CARD_SHADOW_HOVER = "0 10px 40px -18px rgba(122,31,43,0.35)";
+
+// ---------- Helpers (UNCHANGED) ----------
 const firstRel = <T,>(rel?: T | T[] | null): T | undefined => {
   if (!rel) return undefined;
-  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : rel as T;
+  return Array.isArray(rel) ? (rel.length > 0 ? rel[0] : undefined) : (rel as T);
 };
 
 interface ViewStudentsProps {
@@ -76,7 +69,7 @@ interface ViewStudentsProps {
   assessmentYear?: number;
 }
 
-// Custom hook for student performance detail
+// ---------- Custom hook for student performance detail (UNCHANGED logic) ----------
 const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: TeacherClass[], isActive: boolean) => {
   const [performanceDetail, setPerformanceDetail] = useState<StudentPerformanceDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -93,29 +86,18 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
         const { data: studentData, error: studentError } = await supabase
           .from("students")
           .select(`
-            id,
-            Reg_no,
-            first_name,
-            last_name,
-            created_at,
-            auth_id,
+            id, Reg_no, first_name, last_name, created_at, auth_id,
             profiles (*),
-            enrollments (
-              class_id,
-              classes (
-                name,
-                grade_level
-              )
-            )
+            enrollments ( class_id, classes ( name, grade_level ) )
           `)
           .eq("id", studentId)
           .single();
-          
+
         if (studentError) throw studentError;
 
         let studentClassId: string | undefined;
         let studentClassName = 'No Class';
-        
+
         if (studentData.enrollments && Array.isArray(studentData.enrollments)) {
           studentClassId = studentData.enrollments[0]?.class_id;
           const enrollment = studentData.enrollments[0];
@@ -151,29 +133,12 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
         const { data: assessmentResults, error: resultsError } = await supabase
           .from("assessment_results")
           .select(`
-            id,
-            score,
-            performance_level,
-            teacher_remarks,
-            is_absent,
-            assessment_date,
-            subject_id,
+            id, score, performance_level, teacher_remarks, is_absent, assessment_date, subject_id,
             assessments (
-              id,
-              title,
-              term,
-              year,
-              class_id,
-              max_marks,
-              category,
-              strand_id,
-              sub_strand_id,
-              strands (name, code),
-              sub_strands (name, code)
+              id, title, term, year, class_id, max_marks, category, strand_id, sub_strand_id,
+              strands (name, code), sub_strands (name, code)
             ),
-            subjects (
-              name
-            )
+            subjects ( name )
           `)
           .eq("student_id", studentId)
           .in("subject_id", subjectIds)
@@ -188,7 +153,7 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
           if (subjName) acc[tc.subject_id] = subjName;
           return acc;
         }, {} as Record<string, string>);
-        
+
         const assessments: any[] = (assessmentResults || [])
           .filter(ar => ar.assessments && ar.subjects && subjectMap[ar.subject_id])
           .map(ar => {
@@ -224,10 +189,7 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
           const average = subjectSummative.length > 0
             ? subjectSummative.reduce((sum, a) => sum + (a.percentage || 0), 0) / subjectSummative.length
             : 0;
-          return {
-            subject: subjectName || "Unknown",
-            average: parseFloat(average.toFixed(1))
-          };
+          return { subject: subjectName || "Unknown", average: parseFloat(average.toFixed(1)) };
         }).filter(sa => sa.average > 0);
 
         const overallAverage = summativeAssessments.length > 0
@@ -303,20 +265,92 @@ const useStudentPerformanceDetail = (studentId: string | null, teacherClasses: T
   return { performanceDetail, loading };
 };
 
-export default function ViewStudents({ teacherId, teacherClasses, isActive, academicYear, assessmentYear }: ViewStudentsProps) {
+// ---------- Section header (maroon gradient, optional Close / Back) ----------
+function SectionHeader({
+  icon: Icon,
+  title,
+  subtitle,
+  showClose = false,
+  onBack,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  subtitle?: string;
+  showClose?: boolean;
+  onBack?: () => void;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-t-2xl px-4 sm:px-5 py-3 shrink-0"
+      style={{ background: MAROON_GRADIENT }}
+    >
+      <div
+        className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)" }}
+      />
+      <div
+        className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)" }}
+      />
+      <div className="relative flex items-center gap-3">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="h-9 w-9 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/20 flex items-center justify-center transition-colors shrink-0"
+          >
+            <ChevronLeft className="h-5 w-5 text-white" />
+          </button>
+        ) : (
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight truncate">
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="text-white/70 text-[11px] leading-tight truncate mt-0.5">
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {showClose && (
+          <DialogClose asChild>
+            <button
+              type="button"
+              aria-label="Close"
+              className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors text-white shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </DialogClose>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main Component ----------
+export default function ViewStudents({
+  teacherId,
+  teacherClasses,
+  isActive,
+}: ViewStudentsProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  // Track which class circles are expanded (by class_id)
-  const [expandedClassIds, setExpandedClassIds] = useState<Set<string>>(new Set());
+  const [openClassId, setOpenClassId] = useState<string | null>(null);
 
   const { performanceDetail, loading: detailLoading } = useStudentPerformanceDetail(
-    selectedStudentId, 
-    teacherClasses, 
+    selectedStudentId,
+    teacherClasses,
     isActive && !!selectedStudentId
   );
 
-  // Build a deduplicated map of class_id -> class name from teacherClasses
+  // Build a deduplicated map of class_id -> class name from teacherClasses (UNCHANGED)
   const uniqueClasses: { class_id: string; name: string }[] = [];
   const seenClassIds = new Set<string>();
   for (const tc of teacherClasses) {
@@ -329,6 +363,7 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive, acad
     }
   }
 
+  // classMap kept for parity
   const classMap = teacherClasses.reduce((acc, tc) => {
     const classObj = firstRel(tc.classes);
     if (classObj) acc[tc.class_id] = classObj.name;
@@ -342,16 +377,13 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive, acad
       setLoading(true);
       try {
         const classIds = teacherClasses.map(tc => tc.class_id).filter(Boolean);
-        
+
         const { data: enrollments, error: enrollError } = await supabase
           .from("enrollments")
           .select(`
             student_id,
             class_id,
-            classes (
-              name,
-              grade_level
-            )
+            classes ( name, grade_level )
           `)
           .in("class_id", classIds);
 
@@ -366,12 +398,7 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive, acad
         const { data: studentsData, error: studentsError } = await supabase
           .from("students")
           .select(`
-            id,
-            Reg_no,
-            first_name,
-            last_name,
-            created_at,
-            auth_id,
+            id, Reg_no, first_name, last_name, created_at, auth_id,
             profiles (*)
           `)
           .in("id", studentIds);
@@ -395,19 +422,7 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive, acad
     fetchStudentsData();
   }, [isActive, teacherClasses, teacherId]);
 
-  const toggleClass = (classId: string) => {
-    setExpandedClassIds(prev => {
-      const next = new Set(prev);
-      if (next.has(classId)) {
-        next.delete(classId);
-      } else {
-        next.add(classId);
-      }
-      return next;
-    });
-  };
-
-  // Students grouped by class_id
+  // Students grouped by class_id (UNCHANGED)
   const studentsByClass = students.reduce((acc, student) => {
     const classId = student.enrollments?.[0]?.class_id;
     if (classId) {
@@ -417,210 +432,259 @@ export default function ViewStudents({ teacherId, teacherClasses, isActive, acad
     return acc;
   }, {} as Record<string, Student[]>);
 
+  const handleOpenClass = (classId: string) => {
+    setOpenClassId(classId);
+  };
+
+  const handleCloseAll = (open: boolean) => {
+    if (!open) {
+      setOpenClassId(null);
+      setSelectedStudentId(null);
+    }
+  };
+
+  const handleBackToRoster = () => {
+    setSelectedStudentId(null);
+  };
+
+  const openClass = uniqueClasses.find(c => c.class_id === openClassId);
+  const openClassStudents = openClassId ? studentsByClass[openClassId] || [] : [];
+
+  // ── Loading gate ──
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center py-12">
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-2"
+          style={{ borderColor: "rgba(122,31,43,0.15)", borderBottomColor: MAROON }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <Dialog open={!!selectedStudentId} onOpenChange={(open) => !open && setSelectedStudentId(null)}>
-        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
-          <DialogHeader className="space-y-1 sm:space-y-2">
-            <DialogTitle className="text-base sm:text-xl">Student Performance Analysis</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              {detailLoading 
-                ? "Loading student performance data..." 
-                : performanceDetail 
-                  ? `Analysis for ${performanceDetail.student.first_name} ${performanceDetail.student.last_name}`
-                  : "No performance data available"
-              }
-            </DialogDescription>
-          </DialogHeader>
-          
-          {detailLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : performanceDetail ? (
-            <StudentPerformanceDetailView performanceDetail={performanceDetail} />
+    /* Fixed-height root — no outer page scroll */
+    <div
+      className="flex flex-col overflow-hidden overscroll-contain gap-3 sm:gap-4"
+      style={{ height: "calc(100dvh - 290px - env(safe-area-inset-bottom))", minHeight: 300 }}
+    >
+
+      {/* ════════ CLASS ROSTER DIALOG (also hosts student performance) ════════ */}
+      <Dialog open={!!openClassId} onOpenChange={handleCloseAll}>
+        <DialogContent
+          className="max-w-[95vw] sm:max-w-4xl h-[85vh] sm:h-[80vh] p-0 rounded-2xl border-[#7a1f2b]/15 overflow-hidden flex flex-col gap-0 [&>button]:hidden"
+        >
+          {selectedStudentId ? (
+            /* ── PERFORMANCE VIEW ── */
+            <>
+              <SectionHeader
+                icon={Users}
+                title={
+                  detailLoading
+                    ? "Loading…"
+                    : performanceDetail
+                    ? `${performanceDetail.student.first_name} ${performanceDetail.student.last_name}`
+                    : "Student Performance"
+                }
+                subtitle={
+                  detailLoading
+                    ? "Fetching performance data"
+                    : performanceDetail
+                    ? `${performanceDetail.student.class} · ${performanceDetail.student.Reg_no}`
+                    : "No data"
+                }
+                onBack={handleBackToRoster}
+                showClose
+              />
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5">
+                {detailLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div
+                      className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-2"
+                      style={{ borderColor: "rgba(122,31,43,0.15)", borderBottomColor: MAROON }}
+                    />
+                  </div>
+                ) : performanceDetail ? (
+                  <StudentPerformanceDetailView performanceDetail={performanceDetail} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    No performance data available for this student
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
-              No performance data available for this student
-            </div>
+            /* ── ROSTER VIEW ── */
+            <>
+              <SectionHeader
+                icon={Users}
+                title={openClass?.name ?? "Class"}
+                subtitle={`${openClassStudents.length} ${openClassStudents.length === 1 ? "student" : "students"} · tap a student to view performance`}
+                showClose
+              />
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5">
+                {openClassStudents.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users className="h-10 w-10 mx-auto mb-3" style={{ color: "rgba(122,31,43,0.2)" }} />
+                    <p className="text-sm text-muted-foreground">
+                      No students enrolled in this class yet.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile: card list */}
+                    <div className="sm:hidden space-y-2">
+                      {openClassStudents.map((student) => (
+                        <button
+                          type="button"
+                          key={student.id}
+                          onClick={() => setSelectedStudentId(student.id)}
+                          className="w-full text-left flex items-center justify-between gap-3 rounded-xl border border-[#7a1f2b]/10 bg-white px-3 py-2.5 active:bg-[#7a1f2b]/5 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm text-[#3a1b1f] truncate">
+                              {student.first_name} {student.last_name}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <code className="text-[10px] bg-[#7a1f2b]/8 text-[#7a1f2b] border border-[#7a1f2b]/15 px-1.5 py-0.5 rounded font-medium">
+                                {student.Reg_no}
+                              </code>
+                              {student.profiles?.[0]?.guardian_phone && (
+                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Phone className="h-3 w-3 flex-shrink-0" />
+                                  {student.profiles[0].guardian_phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0"
+                            style={{ background: "rgba(122,31,43,0.08)", color: MAROON }}
+                          >
+                            View
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Desktop: table */}
+                    <div className="hidden sm:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-[#7a1f2b]/10">
+                            <TableHead className="py-3 px-4 text-xs text-[#7a1f2b]/70 font-semibold uppercase tracking-wider">Student</TableHead>
+                            <TableHead className="py-3 px-4 text-xs text-[#7a1f2b]/70 font-semibold uppercase tracking-wider">Reg No</TableHead>
+                            <TableHead className="py-3 px-4 text-xs text-[#7a1f2b]/70 font-semibold uppercase tracking-wider">Guardian</TableHead>
+                            <TableHead className="py-3 px-4 text-xs text-[#7a1f2b]/70 font-semibold uppercase tracking-wider">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {openClassStudents.map((student) => (
+                            <TableRow
+                              key={student.id}
+                              className="hover:bg-[#7a1f2b]/5 cursor-pointer border-[#7a1f2b]/5"
+                              onClick={() => setSelectedStudentId(student.id)}
+                            >
+                              <TableCell className="py-3 px-4">
+                                <div className="font-medium text-sm text-[#3a1b1f]">
+                                  {student.first_name} {student.last_name}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3 px-4">
+                                <code className="text-xs bg-[#7a1f2b]/8 text-[#7a1f2b] border border-[#7a1f2b]/15 px-2 py-1 rounded font-medium">
+                                  {student.Reg_no}
+                                </code>
+                              </TableCell>
+                              <TableCell className="py-3 px-4">
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Phone className="h-4 w-4" />
+                                  <span>{student.profiles?.[0]?.guardian_phone ?? 'No contact'}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3 px-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => { e.stopPropagation(); setSelectedStudentId(student.id); }}
+                                  className="h-8 px-3 text-sm rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
+                                >
+                                  View
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl sm:text-2xl font-bold">Students</h2>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <Badge variant="secondary" className="text-xs sm:text-sm">{students.length} Students</Badge>
+      {/* ════════ HEADER ROW — count pill only ════════ */}
+      <div className="shrink-0 flex items-center justify-end gap-3">
+        <div
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold"
+          style={{ background: "rgba(122,31,43,0.08)", color: MAROON }}
+        >
+          <Users className="h-3.5 w-3.5" />
+          {students.length} {students.length === 1 ? "Student" : "Students"}
         </div>
       </div>
 
-      {/* Class Circles */}
-      {uniqueClasses.length > 0 && (
-        <div className="flex flex-wrap gap-4 sm:gap-6">
-          {uniqueClasses.map(({ class_id, name }) => {
-            const count = (studentsByClass[class_id] || []).length;
-            const isExpanded = expandedClassIds.has(class_id);
-            return (
-              <button
-                key={class_id}
-                onClick={() => toggleClass(class_id)}
-                className="flex flex-col items-center gap-1.5 group focus:outline-none"
-                aria-expanded={isExpanded}
-              >
-                <div
-                  className={`
-                    w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 flex flex-col items-center justify-center
-                    transition-all duration-200 shadow-sm
-                    ${isExpanded
-                      ? "border-primary bg-primary text-primary-foreground shadow-md scale-105"
-                      : "border-primary/40 bg-primary/5 text-foreground group-hover:border-primary group-hover:bg-primary/10"
-                    }
-                  `}
+      {/* ════════ CLASS CIRCLES (main body, scrolls internally if needed) ════════ */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        {uniqueClasses.length === 0 ? (
+          <Card
+            className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0"
+            style={{ boxShadow: CARD_SHADOW }}
+          >
+            <CardContent className="text-center py-10 sm:py-12 px-4">
+              <Users className="h-10 w-10 sm:h-14 sm:w-14 mx-auto mb-3 sm:mb-4" style={{ color: "rgba(122,31,43,0.2)" }} />
+              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2 text-[#3a1b1f]">
+                No Classes Found
+              </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                No classes assigned to you yet.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex flex-wrap gap-3 sm:gap-5 pb-1">
+            {uniqueClasses.map(({ class_id, name }) => {
+              const count = (studentsByClass[class_id] || []).length;
+              return (
+                <button
+                  key={class_id}
+                  onClick={() => handleOpenClass(class_id)}
+                  className="group flex flex-col items-center gap-1.5 focus:outline-none transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.97]"
                 >
-                  <span className="text-2xl sm:text-3xl font-bold leading-none">{count}</span>
-                  <span className="text-[10px] sm:text-xs mt-0.5 opacity-80">students</span>
-                </div>
-                <span
-                  className={`
-                    text-xs sm:text-sm font-semibold underline underline-offset-2 text-center max-w-[80px] sm:max-w-[96px] leading-tight
-                    ${isExpanded ? "text-primary" : "text-foreground group-hover:text-primary"}
-                  `}
-                >
-                  {name}
-                </span>
-                {isExpanded
-                  ? <ChevronUp className="h-3.5 w-3.5 text-primary" />
-                  : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
-                }
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Expanded class student lists */}
-      {uniqueClasses
-        .filter(({ class_id }) => expandedClassIds.has(class_id))
-        .map(({ class_id, name }) => {
-          const classStudents = studentsByClass[class_id] || [];
-          return (
-            <Card key={class_id} className="border-primary/20">
-              <CardHeader className="p-4 sm:p-5 pb-2">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  {name}
-                  <Badge variant="secondary" className="ml-1 text-xs">{classStudents.length} students</Badge>
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
-                  Tap a student to view their detailed performance analysis
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-5 pt-2">
-                {/* Mobile: stacked cards. Desktop: table */}
-                <div className="sm:hidden space-y-2">
-                  {classStudents.map((student) => (
-                    <div
-                      key={student.id}
-                      onClick={() => setSelectedStudentId(student.id)}
-                      className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 active:bg-muted cursor-pointer"
-                    >
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="font-medium text-sm truncate">
-                          {student.first_name} {student.last_name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                            {student.Reg_no}
-                          </code>
-                          {student.profiles?.[0]?.guardian_phone && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Phone className="h-3 w-3 flex-shrink-0" />
-                              {student.profiles[0].guardian_phone}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setSelectedStudentId(student.id); }}
-                        className="h-7 text-xs px-2 flex-shrink-0"
-                      >
-                        View
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Desktop: full table */}
-                <div className="hidden sm:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-3 px-4 text-xs">Student</TableHead>
-                        <TableHead className="py-3 px-4 text-xs">Reg No</TableHead>
-                        <TableHead className="py-3 px-4 text-xs">Guardian</TableHead>
-                        <TableHead className="py-3 px-4 text-xs">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {classStudents.map((student) => (
-                        <TableRow key={student.id} className="hover:bg-muted/50">
-                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                            <div className="font-medium text-sm">{student.first_name} {student.last_name}</div>
-                          </TableCell>
-                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                            <code className="text-xs bg-muted px-2 py-1 rounded">{student.Reg_no}</code>
-                          </TableCell>
-                          <TableCell className="py-3 px-4 cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
-                            <div className="flex items-center gap-1 text-sm">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
-                              <span>{student.profiles?.[0]?.guardian_phone ?? 'No contact'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-3 px-4">
-                            <Button variant="outline" size="sm" onClick={() => setSelectedStudentId(student.id)} className="h-8 px-3 text-sm">
-                              View
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {classStudents.length === 0 && (
-                  <div className="text-center py-6 px-4">
-                    <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-xs sm:text-sm text-muted-foreground">No students enrolled in this class yet.</p>
+                  <div
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-full flex flex-col items-center justify-center text-white transition-all duration-200 group-hover:shadow-lg"
+                    style={{
+                      background: MAROON_GRADIENT,
+                      boxShadow: CARD_SHADOW,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER)}
+                    onMouseLeave={(e) => (e.currentTarget.style.boxShadow = CARD_SHADOW)}
+                  >
+                    <span className="text-2xl sm:text-3xl font-bold leading-none">{count}</span>
+                    <span className="text-[10px] sm:text-xs mt-0.5 opacity-80">
+                      {count === 1 ? "student" : "students"}
+                    </span>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-
-      {/* Empty state */}
-      {students.length === 0 && !loading && (
-        <Card>
-          <CardContent className="text-center py-10 sm:py-12 px-4">
-            <Users className="h-10 w-10 sm:h-14 sm:w-14 text-muted-foreground mx-auto mb-3 sm:mb-4" />
-            <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Students Found</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              There are no students enrolled in your classes yet.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+                  <span className="text-xs sm:text-sm font-semibold text-center max-w-[88px] sm:max-w-[104px] leading-tight text-[#3a1b1f] group-hover:text-[#7a1f2b] transition-colors">
+                    {name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

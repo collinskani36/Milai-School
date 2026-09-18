@@ -1,13 +1,21 @@
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Card, CardContent } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
 import { Label } from "@/Components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/ui/table";
 import { Badge } from "@/Components/ui/badge";
-import { AlertTriangle, CheckCircle, Save, Loader2, BookOpen, ClipboardList, Plus, ArrowLeft, History, Pencil } from "lucide-react";
+import {
+  AlertTriangle, CheckCircle, Save, Loader2, BookOpen, ClipboardList,
+  Plus, ArrowLeft, History, Pencil,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const MAROON = "#7a1f2b";
+const MAROON_GRADIENT = "linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)";
+const CARD_SHADOW = "0 6px 26px -18px rgba(122,31,43,0.22)";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +61,7 @@ type Mode = "summative" | "formative" | "history";
 interface SummativeEntry { score: string; performance_level: PerformanceLevel | null; teacher_remarks: string; is_absent: boolean; date: string; }
 interface FormativeEntry { performance_level: PerformanceLevel | null; teacher_comment: string; is_absent: boolean; }
 
-// ─── Constants & helpers ──────────────────────────────────────────────────────
+// ─── Constants & helpers (UNCHANGED) ──────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_TERM = (() => { const m = new Date().getMonth()+1; return m<=4?1:m<=8?2:3; })();
@@ -65,6 +73,44 @@ const perfLevel = (score: number, max: number): PerformanceLevel => {
   return p>=75?"EE":p>=50?"ME":p>=25?"AE":"BE";
 };
 
+// ─── Section header (maroon gradient) ─────────────────────────────────────────
+function SectionHeader({
+  icon: Icon, title, subtitle,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-t-2xl px-4 sm:px-5 py-3.5 shrink-0"
+      style={{ background: MAROON_GRADIENT }}
+    >
+      <div
+        className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)" }}
+      />
+      <div
+        className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)" }}
+      />
+      <div className="relative flex items-center gap-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight truncate">
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="text-white/70 text-[11px] leading-tight truncate mt-0.5">{subtitle}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── UI components ────────────────────────────────────────────────────────────
 
 const LEVEL_STYLES: Record<PerformanceLevel,string> = {
@@ -75,7 +121,7 @@ const LEVEL_STYLES: Record<PerformanceLevel,string> = {
 };
 
 function PerfBadge({ level }: { level: PerformanceLevel }) {
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold ${LEVEL_STYLES[level]}`}>{level}</span>;
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-semibold ${LEVEL_STYLES[level]}`}>{level}</span>;
 }
 
 function LevelToggle({ value, onChange, disabled }: { value: PerformanceLevel|null; onChange:(l:PerformanceLevel)=>void; disabled:boolean }) {
@@ -83,7 +129,11 @@ function LevelToggle({ value, onChange, disabled }: { value: PerformanceLevel|nu
     <div className="flex gap-1">
       {LEVELS.map(l => (
         <button key={l} type="button" onClick={()=>onChange(l)} disabled={disabled}
-          className={`px-2 py-1 rounded border text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${value===l?`${LEVEL_STYLES[l]} shadow-sm`:"bg-white border-gray-200 text-gray-400 hover:border-gray-400"}`}>
+          className={`px-2 py-1 rounded-lg border text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            value===l
+              ? `${LEVEL_STYLES[l]} shadow-sm`
+              : "bg-white border-[#7a1f2b]/15 text-[#7a1f2b]/40 hover:border-[#7a1f2b]/40 hover:text-[#7a1f2b]/70"
+          }`}>
           {l}
         </button>
       ))}
@@ -120,17 +170,21 @@ function StrandSelect({ subjectId, value, onChange, disabled }: { subjectId:stri
   return (
     <div className="space-y-1.5">
       <Select value={value} onValueChange={v=>{ if(v==="__new__"){setShowNew(true);return;} onChange(v,v==="__none__"?"":(strands.find(s=>s.id===v)?.name??"")); }} disabled={disabled||loading}>
-        <SelectTrigger className="h-9"><SelectValue placeholder={loading?"Loading…":"Select strand (optional)"}/></SelectTrigger>
+        <SelectTrigger className="h-9 rounded-xl border-[#7a1f2b]/15">
+          <SelectValue placeholder={loading?"Loading…":"Select strand (optional)"}/>
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="__none__">— No strand —</SelectItem>
           {strands.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          <SelectItem value="__new__" className="text-teal-600 font-medium"><span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new strand…</span></SelectItem>
+          <SelectItem value="__new__" className="text-[#7a1f2b] font-medium">
+            <span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new strand…</span>
+          </SelectItem>
         </SelectContent>
       </Select>
       {showNew && (
         <div className="flex gap-2">
-          <Input placeholder="New strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm" onKeyDown={e=>e.key==="Enter"&&create()}/>
-          <Button size="sm" className="h-8 bg-teal-600 hover:bg-teal-700 shrink-0" onClick={create} disabled={creating||!newName.trim()}>
+          <Input placeholder="New strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm rounded-lg border-[#7a1f2b]/15" onKeyDown={e=>e.key==="Enter"&&create()}/>
+          <Button size="sm" className="h-8 shrink-0 text-white hover:opacity-90 rounded-lg" style={{background: MAROON_GRADIENT}} onClick={create} disabled={creating||!newName.trim()}>
             {creating?<Loader2 className="h-3 w-3 animate-spin"/>:"Add"}
           </Button>
           <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={()=>{setShowNew(false);setNewName("");}}>✕</Button>
@@ -172,17 +226,21 @@ function SubStrandSelect({ strandId, value, onChange, disabled }: { strandId:str
   return (
     <div className="space-y-1.5">
       <Select value={value} onValueChange={v=>{ if(v==="__new__"){setShowNew(true);return;} onChange(v,v==="__none__"?"":(subs.find(s=>s.id===v)?.name??"")); }} disabled={disabled||loading}>
-        <SelectTrigger className="h-9"><SelectValue placeholder={loading?"Loading…":"Select sub-strand (optional)"}/></SelectTrigger>
+        <SelectTrigger className="h-9 rounded-xl border-[#7a1f2b]/15">
+          <SelectValue placeholder={loading?"Loading…":"Select sub-strand (optional)"}/>
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="__none__">— No sub-strand —</SelectItem>
           {subs.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          <SelectItem value="__new__" className="text-teal-600 font-medium"><span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new sub-strand…</span></SelectItem>
+          <SelectItem value="__new__" className="text-[#7a1f2b] font-medium">
+            <span className="flex items-center gap-1"><Plus className="h-3 w-3"/>Add new sub-strand…</span>
+          </SelectItem>
         </SelectContent>
       </Select>
       {showNew && (
         <div className="flex gap-2">
-          <Input placeholder="New sub-strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm" onKeyDown={e=>e.key==="Enter"&&create()}/>
-          <Button size="sm" className="h-8 bg-teal-600 hover:bg-teal-700 shrink-0" onClick={create} disabled={creating||!newName.trim()}>
+          <Input placeholder="New sub-strand name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-8 text-sm rounded-lg border-[#7a1f2b]/15" onKeyDown={e=>e.key==="Enter"&&create()}/>
+          <Button size="sm" className="h-8 shrink-0 text-white hover:opacity-90 rounded-lg" style={{background: MAROON_GRADIENT}} onClick={create} disabled={creating||!newName.trim()}>
             {creating?<Loader2 className="h-3 w-3 animate-spin"/>:"Add"}
           </Button>
           <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={()=>{setShowNew(false);setNewName("");}}>✕</Button>
@@ -194,19 +252,19 @@ function SubStrandSelect({ strandId, value, onChange, disabled }: { strandId:str
 }
 
 const ScoreInput = memo(({value,studentId,maxMarks,disabled,onChange}:{value:string;studentId:string;maxMarks:number;disabled:boolean;onChange:(id:string,v:string)=>void}) => (
-  <Input type="number" step="0.01" min="0" max={maxMarks} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-24" disabled={disabled} placeholder="0"/>
+  <Input type="number" step="0.01" min="0" max={maxMarks} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-24 rounded-lg border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" disabled={disabled} placeholder="0"/>
 ));
 ScoreInput.displayName = "ScoreInput";
 
 const TextInput = memo(({value,studentId,placeholder,disabled,onChange}:{value:string;studentId:string;placeholder:string;disabled:boolean;onChange:(id:string,v:string)=>void}) => (
-  <Input type="text" placeholder={placeholder} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-full text-sm" disabled={disabled}/>
+  <Input type="text" placeholder={placeholder} value={value} onChange={e=>onChange(studentId,e.target.value)} className="w-full text-sm rounded-lg border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" disabled={disabled}/>
 ));
 TextInput.displayName = "TextInput";
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmentYear, currentTerm }:
-  { teacherId:string; teacherClasses:TeacherClass[]; assessmentYear?:number; currentTerm?:number }) {
+export default function TeacherMarksEntry({ teacherId, teacherClasses, academicYear, assessmentYear, currentTerm }:
+  { teacherId:string; teacherClasses:TeacherClass[]; academicYear?:string; assessmentYear?:number; currentTerm?:number }) {
 
   const [mode, setMode] = useState<Mode>("summative");
 
@@ -415,7 +473,7 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
             class_id:fa.class_id, subject_id:fa.subject_id, subject_name:subjectNameMap.get(fa.subject_id)??fa.subject_id,
             strand_name:strand?.name??null, sub_strand_name:sub?.name??null,
             result_count:countMap.get(fa.id)??0, latest_date:fa.activity_date, status:"published",
-            formativeActivity:fa as FormativeActivity });
+            formativeActivity:fa as unknown as FormativeActivity });
         });
       }
 
@@ -530,7 +588,6 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
       if (!records.length) { setError("Select EE/ME/AE/BE for at least one student."); setSaving(false); return; }
       const {error:err} = await supabase.from("formative_results").upsert(records,{onConflict:"formative_activity_id,student_id",ignoreDuplicates:false});
       if (err) throw err;
-      // Reset for new activity
       setActiveActivity(null); setStudents([]); setFormativeEntries({});
       setFTitle(""); setFDesc(""); setFStrandId("__none__"); setFStrandName(""); setFSubStrandId("__none__"); setFSubStrandName(""); setFDate(today());
       setSuccess(`${records.length} result(s) saved and published.`);
@@ -547,42 +604,71 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
   const strandName    = firstRel(activeActivity?.strands as any)?.name;
   const subStrandName = firstRel(activeActivity?.sub_strands as any)?.name;
 
+  const modes: { m: Mode; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+    { m: "summative", label: "Enter Exam Marks",      Icon: ClipboardList },
+    { m: "formative", label: "Record Class Activity", Icon: Plus },
+    { m: "history",   label: "View & Edit History",   Icon: History },
+  ];
+
+  const currentModeMeta = modes.find(x => x.m === mode)!;
+  const ModeIcon = currentModeMeta.Icon;
+
   return (
     <div className="space-y-4">
-      {/* Mode switcher */}
-      <div className="flex flex-wrap gap-2">
-        {([
-          {m:"summative" as Mode, label:"Enter Exam Marks",     Icon:ClipboardList, cls:"bg-purple-600 hover:bg-purple-700"},
-          {m:"formative" as Mode, label:"Record Class Activity",Icon:Plus,          cls:"bg-teal-600 hover:bg-teal-700"},
-          {m:"history"   as Mode, label:"View & Edit History",  Icon:History,       cls:"bg-orange-600 hover:bg-orange-700"},
-        ]).map(({m,label,Icon,cls})=>(
-          <Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>switchMode(m)} className={mode===m?cls:""}>
-            <Icon className="h-4 w-4 mr-2"/>{label}
-          </Button>
+
+      {/* Mode switcher — maroon track pill toggle */}
+      <div className="inline-flex items-center rounded-full bg-[#7a1f2b]/8 p-1 border border-[#7a1f2b]/10 w-full sm:w-auto overflow-x-auto">
+        {modes.map(({ m, label, Icon }) => (
+          <button
+            key={m}
+            onClick={() => switchMode(m)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+              mode === m
+                ? "bg-white text-[#7a1f2b] shadow-[0_2px_8px_-2px_rgba(122,31,43,0.3)]"
+                : "text-[#7a1f2b]/70 hover:text-[#7a1f2b]"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
         ))}
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {mode==="summative"&&<><ClipboardList className="h-5 w-5 text-purple-600"/>Enter Exam Marks</>}
-            {mode==="formative"&&<><Plus className="h-5 w-5 text-teal-600"/>Record Class Activity</>}
-            {mode==="history"  &&<><History className="h-5 w-5 text-orange-600"/>View & Edit History</>}
-          </CardTitle>
-        </CardHeader>
+      <Card
+        className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden"
+        style={{ boxShadow: CARD_SHADOW }}
+      >
+        <SectionHeader
+          icon={ModeIcon}
+          title={
+            mode === "summative" ? "Enter Exam Marks" :
+            mode === "formative" ? "Record Class Activity" :
+            "View & Edit History"
+          }
+          subtitle={
+            mode === "summative"
+              ? `Term ${currentTerm ?? CURRENT_TERM} · ${academicYear ?? assessmentYear ?? CURRENT_YEAR}`
+              : mode === "formative"
+              ? "Record an activity — publishes immediately"
+              : "Edit past records across terms"
+          }
+        />
 
-        <CardContent className="space-y-5">
+        <CardContent className="p-4 sm:p-5 space-y-5">
 
           {/* ── SUMMATIVE SELECTORS ── */}
           {mode==="summative"&&!editingItem&&(
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Assessment{currentTerm&&<span className="ml-2 text-xs text-muted-foreground">— Term {currentTerm} only</span>}</Label>
+                <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">
+                  Assessment
+                  {currentTerm && <span className="ml-2 text-[10px] normal-case tracking-normal text-muted-foreground font-normal">— Term {currentTerm} only</span>}
+                </Label>
                 <Select value={selectedAssessmentId} onValueChange={setSelectedAssessmentId}>
-                  <SelectTrigger><SelectValue placeholder="Select an assessment"/></SelectTrigger>
+                  <SelectTrigger className="rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select an assessment"/></SelectTrigger>
                   <SelectContent>
                     {loadingAssessments
-                      ? <div className="flex items-center justify-center p-3"><Loader2 className="h-4 w-4 animate-spin"/></div>
+                      ? <div className="flex items-center justify-center p-3"><Loader2 className="h-4 w-4 animate-spin" style={{color: MAROON}}/></div>
                       : summativeList.length===0
                         ? <div className="p-3 text-sm text-muted-foreground">No exams for Term {currentTerm??CURRENT_TERM}. Use History to edit past terms.</div>
                         : summativeList.map(a=>(
@@ -595,9 +681,9 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
               </div>
               {selectedAssessment&&(
                 <div className="space-y-1.5">
-                  <Label>Your Subject</Label>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Your Subject</Label>
                   <Select value={selectedSubjectId} onValueChange={v=>{setSelectedSubjectId(v);setError(null);setSuccess(null);}}>
-                    <SelectTrigger><SelectValue placeholder="Select your subject"/></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select your subject"/></SelectTrigger>
                     <SelectContent>
                       {availableSubjects.map(tc=>{ const s=firstRel(tc.subjects); return <SelectItem key={tc.subject_id} value={tc.subject_id}>{s?.name??tc.subject_id}</SelectItem>; })}
                     </SelectContent>
@@ -610,23 +696,27 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
           {/* ── FORMATIVE CREATION FORM ── */}
           {mode==="formative"&&!activeActivity&&(
             <div className="space-y-4">
-              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              {success&&(
+                <div className="bg-green-50 text-green-700 border border-green-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0"/>{success}
+                </div>
+              )}
               <p className="text-sm text-muted-foreground">Record a new class activity. Results are saved to formative records and publish immediately.</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Class *</Label>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Class *</Label>
                   <Select value={fClassId} onValueChange={v=>{setFClassId(v);setFSubjectId("");}}>
-                    <SelectTrigger><SelectValue placeholder="Select class"/></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select class"/></SelectTrigger>
                     <SelectContent>
                       {uniqueClasses.map(tc=>{ const c=firstRel(tc.classes); return <SelectItem key={tc.class_id} value={tc.class_id}>{c?.name??tc.class_id}{c?.grade_level?` (Grade ${c.grade_level})`:""}</SelectItem>; })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Subject *</Label>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Subject *</Label>
                   <Select value={fSubjectId} onValueChange={setFSubjectId} disabled={!fClassId}>
-                    <SelectTrigger><SelectValue placeholder="Select subject"/></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-[#7a1f2b]/15"><SelectValue placeholder="Select subject"/></SelectTrigger>
                     <SelectContent>
                       {fSubjects.length===0
                         ? <div className="p-3 text-sm text-muted-foreground">Select a class first</div>
@@ -637,26 +727,32 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
               </div>
 
               <div className="space-y-1.5">
-                <Label>Activity Title *</Label>
-                <Input placeholder="e.g. Week 5 Fractions Activity" value={fTitle} onChange={e=>setFTitle(e.target.value)}/>
+                <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Activity Title *</Label>
+                <Input placeholder="e.g. Week 5 Fractions Activity" value={fTitle} onChange={e=>setFTitle(e.target.value)} className="rounded-xl border-[#7a1f2b]/15"/>
               </div>
 
               <div className="space-y-1.5">
-                <Label>Description / Comment <span className="text-xs text-muted-foreground">(optional)</span></Label>
-                <Input placeholder="e.g. Group work on place value exercises" value={fDesc} onChange={e=>setFDesc(e.target.value)}/>
+                <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">
+                  Description / Comment <span className="text-[10px] normal-case tracking-normal text-muted-foreground font-normal ml-1">(optional)</span>
+                </Label>
+                <Input placeholder="e.g. Group work on place value exercises" value={fDesc} onChange={e=>setFDesc(e.target.value)} className="rounded-xl border-[#7a1f2b]/15"/>
               </div>
 
               {fSubjectId&&(
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5 text-teal-600"/>Strand <span className="text-xs text-muted-foreground ml-1">(optional)</span></Label>
+                    <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5"/> Strand <span className="text-[10px] normal-case tracking-normal text-muted-foreground font-normal">(optional)</span>
+                    </Label>
                     <StrandSelect subjectId={fSubjectId} value={fStrandId}
                       onChange={(id,name)=>{setFStrandId(id);setFStrandName(name);setFSubStrandId("__none__");setFSubStrandName("");}}
                       disabled={creating}/>
                   </div>
                   {fStrandId!=="__none__"&&(
                     <div className="space-y-1.5">
-                      <Label>Sub-strand <span className="text-xs text-muted-foreground ml-1">(optional)</span></Label>
+                      <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">
+                        Sub-strand <span className="text-[10px] normal-case tracking-normal text-muted-foreground font-normal ml-1">(optional)</span>
+                      </Label>
                       <SubStrandSelect strandId={fStrandId} value={fSubStrandId}
                         onChange={(id,name)=>{setFSubStrandId(id);setFSubStrandName(name);}}
                         disabled={creating}/>
@@ -667,9 +763,9 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Term *</Label>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Term *</Label>
                   <Select value={fTerm} onValueChange={setFTerm}>
-                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-[#7a1f2b]/15"><SelectValue/></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Term 1</SelectItem>
                       <SelectItem value="2">Term 2</SelectItem>
@@ -678,18 +774,27 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Year *</Label>
-                  <Input type="number" value={fYear} onChange={e=>setFYear(e.target.value)} min="2020" max="2100"/>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Year *</Label>
+                  <Input type="number" value={fYear} onChange={e=>setFYear(e.target.value)} min="2020" max="2100" className="rounded-xl border-[#7a1f2b]/15"/>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Date *</Label>
-                  <Input type="date" value={fDate} onChange={e=>setFDate(e.target.value)}/>
+                  <Label className="text-xs uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Date *</Label>
+                  <Input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} className="rounded-xl border-[#7a1f2b]/15"/>
                 </div>
               </div>
 
-              {createErr&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{createErr}</div>}
+              {createErr&&(
+                <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0"/>{createErr}
+                </div>
+              )}
 
-              <Button onClick={handleCreateFormative} disabled={creating||!fClassId||!fSubjectId||!fTitle.trim()||!fDate} className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+              <Button
+                onClick={handleCreateFormative}
+                disabled={creating||!fClassId||!fSubjectId||!fTitle.trim()||!fDate}
+                className="w-full sm:w-auto text-white hover:opacity-90 rounded-xl font-semibold"
+                style={{background: MAROON_GRADIENT}}
+              >
                 {creating?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Creating…</>:<><Plus className="mr-2 h-4 w-4"/>Create & Enter Marks</>}
               </Button>
             </div>
@@ -699,26 +804,42 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
           {mode==="history"&&!editingItem&&(
             <div className="space-y-4">
               <div className="flex gap-2 flex-wrap items-center">
-                {(["all","summative","formative"] as const).map(f=>(
-                  <button key={f} onClick={()=>setHistFilter(f)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${histFilter===f?"bg-orange-600 text-white border-orange-600":"border-gray-200 text-muted-foreground hover:border-gray-400"}`}>
-                    {f==="all"?"All":f.charAt(0).toUpperCase()+f.slice(1)}
-                  </button>
-                ))}
+                <div className="inline-flex items-center rounded-full bg-[#7a1f2b]/8 p-1 border border-[#7a1f2b]/10">
+                  {(["all","summative","formative"] as const).map(f=>(
+                    <button key={f} onClick={()=>setHistFilter(f)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        histFilter===f
+                          ? "bg-white text-[#7a1f2b] shadow-[0_2px_8px_-2px_rgba(122,31,43,0.3)]"
+                          : "text-[#7a1f2b]/70 hover:text-[#7a1f2b]"
+                      }`}>
+                      {f==="all"?"All":f.charAt(0).toUpperCase()+f.slice(1)}
+                    </button>
+                  ))}
+                </div>
                 <span className="text-xs text-muted-foreground ml-1">{filteredHistory.length} record{filteredHistory.length!==1?"s":""}</span>
               </div>
               {loadingHistory
-                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" style={{color: MAROON}}/></div>
                 : filteredHistory.length===0
-                  ? <div className="text-center py-10 text-muted-foreground text-sm"><History className="h-10 w-10 mx-auto mb-2 opacity-30"/>No records found yet.</div>
+                  ? <div className="text-center py-10 text-muted-foreground text-sm">
+                      <History className="h-10 w-10 mx-auto mb-2" style={{color: "rgba(122,31,43,0.2)"}}/>No records found yet.
+                    </div>
                   : <div className="space-y-2">
                     {filteredHistory.map((item,idx)=>(
-                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border bg-card gap-3">
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[#7a1f2b]/10 hover:border-[#7a1f2b]/25 bg-white gap-3 transition-colors">
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-sm">{item.title}</span>
-                            <Badge variant="outline" className={item.type==="formative"?"bg-teal-50 text-teal-700 border-teal-200 text-xs":"bg-purple-50 text-purple-700 border-purple-200 text-xs"}>{item.type}</Badge>
-                            <Badge variant="outline" className={item.status==="published"?"bg-green-50 text-green-700 border-green-200 text-xs":"bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"}>{item.status}</Badge>
+                            <span className="font-medium text-sm text-[#3a1b1f]">{item.title}</span>
+                            <Badge variant="outline" className="text-[10px] font-semibold bg-[#7a1f2b]/8 text-[#7a1f2b] border-[#7a1f2b]/15 rounded-full uppercase tracking-wider">
+                              {item.type}
+                            </Badge>
+                            <Badge variant="outline" className={
+                              item.status==="published"
+                                ? "bg-green-50 text-green-700 border-green-200 text-[10px] font-semibold rounded-full uppercase tracking-wider"
+                                : "bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-semibold rounded-full uppercase tracking-wider"
+                            }>
+                              {item.status}
+                            </Badge>
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             <span>{classNameMap.get(item.class_id)??item.class_id}</span><span>•</span>
@@ -727,9 +848,20 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
                             <span>{item.result_count} student{item.result_count!==1?"s":""}</span>
                             {item.latest_date&&<><span>•</span><span>{new Date(item.latest_date).toLocaleDateString()}</span></>}
                           </div>
-                          {item.strand_name&&<div className="text-xs text-muted-foreground flex items-center gap-1"><BookOpen className="h-3 w-3"/>{item.strand_name}{item.sub_strand_name&&` › ${item.sub_strand_name}`}</div>}
+                          {item.strand_name&&(
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <BookOpen className="h-3 w-3"/>{item.strand_name}{item.sub_strand_name&&` › ${item.sub_strand_name}`}
+                            </div>
+                          )}
                         </div>
-                        <Button size="sm" variant="outline" onClick={()=>handleEditItem(item)} className="h-8 shrink-0 gap-1"><Pencil className="h-3 w-3"/>Edit</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={()=>handleEditItem(item)}
+                          className="h-8 shrink-0 gap-1 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
+                        >
+                          <Pencil className="h-3 w-3"/>Edit
+                        </Button>
                       </div>
                     ))}
                   </div>}
@@ -739,48 +871,64 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
           {/* ── SUMMATIVE TABLE ── */}
           {showSummaryTable&&selectedAssessment&&(
             <>
-              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
-                {editingItem&&<button onClick={handleBackToHistory} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3"/>Back to history</button>}
-                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">summative</Badge>
-                <span className="text-muted-foreground">Max: <strong className="text-foreground">{selectedAssessment.max_marks}</strong></span>
-                <span className="font-medium">{selectedAssessment.title}</span>
-                <span className="text-xs text-muted-foreground">Subject: <strong className="text-foreground">{subjectNameMap.get(selectedSubjectId)}</strong></span>
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-[#7a1f2b]/5 border border-[#7a1f2b]/10 text-sm">
+                {editingItem&&(
+                  <button onClick={handleBackToHistory} className="flex items-center gap-1 text-xs text-[#7a1f2b] font-medium hover:underline">
+                    <ArrowLeft className="h-3 w-3"/>Back to history
+                  </button>
+                )}
+                <Badge variant="outline" className="text-[10px] font-semibold bg-[#7a1f2b]/8 text-[#7a1f2b] border-[#7a1f2b]/15 rounded-full uppercase tracking-wider">summative</Badge>
+                <span className="text-muted-foreground">Max: <strong className="text-[#3a1b1f]">{selectedAssessment.max_marks}</strong></span>
+                <span className="font-semibold text-[#3a1b1f]">{selectedAssessment.title}</span>
+                <span className="text-xs text-muted-foreground">Subject: <strong className="text-[#3a1b1f]">{subjectNameMap.get(selectedSubjectId)}</strong></span>
               </div>
-              {error&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{error}</div>}
-              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              {error&&(
+                <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0"/>{error}
+                </div>
+              )}
+              {success&&(
+                <div className="bg-green-50 text-green-700 border border-green-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0"/>{success}
+                </div>
+              )}
               {loadingData
-                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" style={{color: MAROON}}/></div>
                 : students.length===0
                   ? <div className="text-center py-10 text-muted-foreground text-sm">No students enrolled.</div>
                   : <>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto rounded-xl border border-[#7a1f2b]/10">
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[90px]">Reg No</TableHead><TableHead>Name</TableHead>
-                            <TableHead className="w-[70px] text-center">Absent</TableHead>
-                            <TableHead>Score (/ {selectedAssessment.max_marks})</TableHead>
-                            <TableHead className="w-[180px]">Remarks</TableHead>
-                            <TableHead className="w-[140px]">Date</TableHead>
+                          <TableRow className="border-[#7a1f2b]/10 bg-[#7a1f2b]/[0.03]">
+                            <TableHead className="w-[90px] text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Reg No</TableHead>
+                            <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Name</TableHead>
+                            <TableHead className="w-[70px] text-center text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Absent</TableHead>
+                            <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Score (/ {selectedAssessment.max_marks})</TableHead>
+                            <TableHead className="w-[180px] text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Remarks</TableHead>
+                            <TableHead className="w-[140px] text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Date</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {students.map(s=>{
                             const e=summativeEntries[s.id]??{score:"",performance_level:null,teacher_remarks:"",is_absent:false,date:selectedAssessment.assessment_date||today()};
                             return (
-                              <TableRow key={s.id} className={e.is_absent?"opacity-50":""}>
+                              <TableRow key={s.id} className={`border-[#7a1f2b]/5 hover:bg-[#7a1f2b]/[0.02] ${e.is_absent?"opacity-50":""}`}>
                                 <TableCell className="font-mono text-xs">{s.Reg_no}</TableCell>
-                                <TableCell className="font-medium">{s.first_name} {s.last_name}</TableCell>
-                                <TableCell className="text-center"><input type="checkbox" checked={e.is_absent} onChange={()=>handleSAbsentToggle(s.id)} className="h-4 w-4 accent-orange-600"/></TableCell>
+                                <TableCell className="font-medium text-[#3a1b1f]">{s.first_name} {s.last_name}</TableCell>
+                                <TableCell className="text-center">
+                                  <input type="checkbox" checked={e.is_absent} onChange={()=>handleSAbsentToggle(s.id)} className="h-4 w-4 rounded accent-[#7a1f2b]"/>
+                                </TableCell>
                                 <TableCell>
-                                  {e.is_absent?<span className="text-xs italic text-muted-foreground">Absent</span>
-                                    :<div className="flex items-center gap-2">
-                                      <ScoreInput value={e.score} studentId={s.id} maxMarks={selectedAssessment.max_marks} disabled={false} onChange={handleScoreChange}/>
-                                      {e.performance_level&&<PerfBadge level={e.performance_level}/>}
-                                    </div>}
+                                  {e.is_absent
+                                    ? <span className="text-xs italic text-muted-foreground">Absent</span>
+                                    : <div className="flex items-center gap-2">
+                                        <ScoreInput value={e.score} studentId={s.id} maxMarks={selectedAssessment.max_marks} disabled={false} onChange={handleScoreChange}/>
+                                        {e.performance_level&&<PerfBadge level={e.performance_level}/>}
+                                      </div>}
                                 </TableCell>
                                 <TableCell><TextInput value={e.teacher_remarks} studentId={s.id} placeholder="Optional remark" disabled={false} onChange={handleSRemarksChange}/></TableCell>
-                                <TableCell><Input type="date" value={e.date} onChange={ev=>handleSDateChange(s.id,ev.target.value)} className="w-36"/></TableCell>
+                                <TableCell><Input type="date" value={e.date} onChange={ev=>handleSDateChange(s.id,ev.target.value)} className="w-36 rounded-lg border-[#7a1f2b]/15"/></TableCell>
                               </TableRow>
                             );
                           })}
@@ -789,7 +937,12 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
                     </div>
                     <div className="flex items-center justify-between pt-2">
                       <span className="text-sm text-muted-foreground">{sFilledCount} / {students.length} entries ready</span>
-                      <Button onClick={saveSummative} disabled={saving||sFilledCount===0} className="bg-green-600 hover:bg-green-700">
+                      <Button
+                        onClick={saveSummative}
+                        disabled={saving||sFilledCount===0}
+                        className="text-white hover:opacity-90 rounded-xl font-semibold"
+                        style={{background: MAROON_GRADIENT}}
+                      >
                         {saving?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Saving…</>:<><Save className="mr-2 h-4 w-4"/>Save Draft</>}
                       </Button>
                     </div>
@@ -800,45 +953,65 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
           {/* ── FORMATIVE TABLE ── */}
           {showFormativeTable&&activeActivity&&(
             <>
-              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
-                <button onClick={editingItem?handleBackToHistory:()=>{setActiveActivity(null);setStudents([]);setFormativeEntries({});setSuccess(null);}}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-[#7a1f2b]/5 border border-[#7a1f2b]/10 text-sm">
+                <button
+                  onClick={editingItem?handleBackToHistory:()=>{setActiveActivity(null);setStudents([]);setFormativeEntries({});setSuccess(null);}}
+                  className="flex items-center gap-1 text-xs text-[#7a1f2b] font-medium hover:underline"
+                >
                   <ArrowLeft className="h-3 w-3"/>{editingItem?"Back to history":"New activity"}
                 </button>
-                <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">formative</Badge>
-                <span className="font-medium">{activeActivity.title}</span>
-                <span className="text-xs text-muted-foreground">Subject: <strong className="text-foreground">{subjectNameMap.get(activeActivity.subject_id)}</strong></span>
-                {strandName&&<span className="flex items-center gap-1 text-muted-foreground"><BookOpen className="h-3.5 w-3.5"/><strong className="text-foreground">{strandName}</strong>{subStrandName&&<> › <strong className="text-foreground">{subStrandName}</strong></>}</span>}
-                <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded px-2 py-0.5">Publishes immediately</span>
+                <Badge variant="outline" className="text-[10px] font-semibold bg-[#7a1f2b]/8 text-[#7a1f2b] border-[#7a1f2b]/15 rounded-full uppercase tracking-wider">formative</Badge>
+                <span className="font-semibold text-[#3a1b1f]">{activeActivity.title}</span>
+                <span className="text-xs text-muted-foreground">Subject: <strong className="text-[#3a1b1f]">{subjectNameMap.get(activeActivity.subject_id)}</strong></span>
+                {strandName&&(
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5"/><strong className="text-[#3a1b1f]">{strandName}</strong>{subStrandName&&<> › <strong className="text-[#3a1b1f]">{subStrandName}</strong></>}
+                  </span>
+                )}
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#7a1f2b]/8 border border-[#7a1f2b]/15" style={{color: MAROON}}>
+                  Publishes immediately
+                </span>
               </div>
-              {error&&<div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 shrink-0"/>{error}</div>}
-              {success&&<div className="bg-green-50 text-green-800 p-3 rounded-lg flex items-center gap-2 text-sm"><CheckCircle className="h-4 w-4 shrink-0"/>{success}</div>}
+              {error&&(
+                <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0"/>{error}
+                </div>
+              )}
+              {success&&(
+                <div className="bg-green-50 text-green-700 border border-green-200 p-3 rounded-xl flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0"/>{success}
+                </div>
+              )}
               {loadingData
-                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>
+                ? <div className="flex items-center justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" style={{color: MAROON}}/></div>
                 : students.length===0
                   ? <div className="text-center py-10 text-muted-foreground text-sm">No students enrolled.</div>
                   : <>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto rounded-xl border border-[#7a1f2b]/10">
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[90px]">Reg No</TableHead><TableHead>Name</TableHead>
-                            <TableHead className="w-[70px] text-center">Absent</TableHead>
-                            <TableHead>Performance Level</TableHead>
-                            <TableHead className="w-[220px]">Comment</TableHead>
+                          <TableRow className="border-[#7a1f2b]/10 bg-[#7a1f2b]/[0.03]">
+                            <TableHead className="w-[90px] text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Reg No</TableHead>
+                            <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Name</TableHead>
+                            <TableHead className="w-[70px] text-center text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Absent</TableHead>
+                            <TableHead className="text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Performance Level</TableHead>
+                            <TableHead className="w-[220px] text-[10px] uppercase tracking-wider text-[#7a1f2b]/70 font-semibold">Comment</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {students.map(s=>{
                             const e=formativeEntries[s.id]??{performance_level:null,teacher_comment:"",is_absent:false};
                             return (
-                              <TableRow key={s.id} className={e.is_absent?"opacity-50":""}>
+                              <TableRow key={s.id} className={`border-[#7a1f2b]/5 hover:bg-[#7a1f2b]/[0.02] ${e.is_absent?"opacity-50":""}`}>
                                 <TableCell className="font-mono text-xs">{s.Reg_no}</TableCell>
-                                <TableCell className="font-medium">{s.first_name} {s.last_name}</TableCell>
-                                <TableCell className="text-center"><input type="checkbox" checked={e.is_absent} onChange={()=>handleFAbsentToggle(s.id)} className="h-4 w-4 accent-orange-600"/></TableCell>
+                                <TableCell className="font-medium text-[#3a1b1f]">{s.first_name} {s.last_name}</TableCell>
+                                <TableCell className="text-center">
+                                  <input type="checkbox" checked={e.is_absent} onChange={()=>handleFAbsentToggle(s.id)} className="h-4 w-4 rounded accent-[#7a1f2b]"/>
+                                </TableCell>
                                 <TableCell>
-                                  {e.is_absent?<span className="text-xs italic text-muted-foreground">Absent</span>
-                                    :<LevelToggle value={e.performance_level} onChange={l=>handleFLevelChange(s.id,l)} disabled={false}/>}
+                                  {e.is_absent
+                                    ? <span className="text-xs italic text-muted-foreground">Absent</span>
+                                    : <LevelToggle value={e.performance_level} onChange={l=>handleFLevelChange(s.id,l)} disabled={false}/>}
                                 </TableCell>
                                 <TableCell><TextInput value={e.teacher_comment} studentId={s.id} placeholder="Comment on this student" disabled={false} onChange={handleFCommentChange}/></TableCell>
                               </TableRow>
@@ -847,9 +1020,17 @@ export default function TeacherMarksEntry({ teacherId, teacherClasses, assessmen
                         </TableBody>
                       </Table>
                     </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-sm text-muted-foreground">{fFilledCount} / {students.length} entries ready <span className="text-xs text-teal-600 ml-1">• publishes immediately</span></span>
-                      <Button onClick={saveFormative} disabled={saving||fFilledCount===0} className="bg-teal-600 hover:bg-teal-700">
+                    <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
+                      <span className="text-sm text-muted-foreground">
+                        {fFilledCount} / {students.length} entries ready
+                        <span className="text-xs text-[#7a1f2b] ml-1 font-medium">• publishes immediately</span>
+                      </span>
+                      <Button
+                        onClick={saveFormative}
+                        disabled={saving||fFilledCount===0}
+                        className="text-white hover:opacity-90 rounded-xl font-semibold"
+                        style={{background: MAROON_GRADIENT}}
+                      >
                         {saving?<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Saving…</>:<><CheckCircle className="mr-2 h-4 w-4"/>Save & Publish</>}
                       </Button>
                     </div>

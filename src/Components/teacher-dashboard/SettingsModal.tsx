@@ -1,10 +1,22 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/card";
+import {
+  Card, CardContent, CardHeader, CardTitle, CardDescription,
+} from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/Components/ui/dialog";
-import { Edit, Save, Eye, EyeOff } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/Components/ui/dialog";
+import {
+  Edit, Save, Eye, EyeOff, User, Shield, Settings as SettingsIcon,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+
+// ─── Design tokens (mirrors TeacherDashboard) ────────────────────────────────
+const MAROON = "#7a1f2b";
+const MAROON_GRADIENT =
+  "linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)";
+const CARD_SHADOW = "0 6px 26px -18px rgba(122,31,43,0.22)";
 
 interface Teacher {
   id: string;
@@ -25,7 +37,9 @@ interface SettingsModalProps {
   onProfileUpdate: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose, onProfileUpdate }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({
+  profile, isOpen, onClose, onProfileUpdate,
+}) => {
   const [activeTab, setActiveTab] = useState<"profile" | "password">("profile");
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
@@ -40,7 +54,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
-  // Initialize state when profile changes
   useEffect(() => {
     if (profile) {
       setPhone(profile.phone || "");
@@ -73,19 +86,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
       setMessage({ type: "error", text: "Phone number cannot be empty" });
       return;
     }
-
     setLoading(true);
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
-      
       const { error: updateError } = await supabase
         .from('teachers')
         .update({ phone: phone.trim() })
         .eq('auth_id', user.id);
-      
       if (updateError) throw updateError;
-      
       setMessage({ type: "success", text: "Phone number updated successfully" });
       setIsEditingPhone(false);
       onProfileUpdate();
@@ -103,7 +112,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
       setMessage({ type: "error", text: "Please enter a valid email address" });
       return;
     }
-
     setLoading(true);
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -113,23 +121,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
         setIsEditingEmail(false);
         return;
       }
-
       const { error: authError } = await supabase.auth.updateUser({ email: email.trim() });
       if (authError) throw authError;
-
       const { error: tableError } = await supabase
         .from('teachers')
         .update({ email: email.trim() })
         .eq('auth_id', user.id);
       if (tableError) throw tableError;
-
       setMessage({
         type: "success",
-        text: "Email updated! Verification links sent to your old and new email."
+        text: "Email updated! Verification links sent to your old and new email.",
       });
       setIsEditingEmail(false);
       if (onProfileUpdate) onProfileUpdate();
-
     } catch (error: any) {
       console.error("Error updating email:", error);
       setMessage({ type: "error", text: error.message || "Failed to update email" });
@@ -143,25 +147,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
       setMessage({ type: "error", text: "Please fill in all password fields" });
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setMessage({ type: "error", text: "New passwords do not match" });
       return;
     }
-
     if (newPassword.length < 6) {
       setMessage({ type: "error", text: "Password must be at least 6 characters long" });
       return;
     }
-
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-
       setMessage({ type: "success", text: "Password updated successfully" });
       setCurrentPassword("");
       setNewPassword("");
@@ -174,104 +171,154 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
     }
   };
 
-  // Don't render if profile is not available
-  if (!profile) {
-    return null;
-  }
+  if (!profile) return null;
+
+  // ─── Themed input / label helpers ────────────────────────────────────────
+  const labelCls =
+    "text-[10px] uppercase tracking-[0.15em] font-semibold text-[#7a1f2b]/60";
+  const inputCls =
+    "mt-1 h-10 text-sm rounded-xl border-[#7a1f2b]/15 " +
+    "focus-visible:ring-2 focus-visible:ring-[#7a1f2b]/30 focus-visible:border-[#7a1f2b]/40 " +
+    "disabled:bg-[#7a1f2b]/[0.03] disabled:text-[#3a1b1f]/70 disabled:opacity-100";
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[95vw] sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader className="space-y-1 sm:space-y-2">
-          <DialogTitle className="text-lg sm:text-xl">Teacher Settings</DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm">
-            Manage your profile information and security settings
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex space-x-2 sm:space-x-4 border-b overflow-x-auto">
-          <button
-            className={`py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-              activeTab === "profile"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("profile")}
-          >
-            Profile Information
-          </button>
-          <button
-            className={`py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-              activeTab === "password"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("password")}
-          >
-            Update Password
-          </button>
+      <DialogContent
+        className="max-w-[95vw] sm:max-w-[600px] max-h-[92vh] overflow-y-auto p-0 gap-0 rounded-2xl border-[#7a1f2b]/15"
+        style={{ boxShadow: "0 24px 60px -30px rgba(122,31,43,0.45)" }}
+      >
+        {/* ── Themed header strip ── */}
+        <div
+          className="relative overflow-hidden px-4 sm:px-6 py-4 rounded-t-2xl"
+          style={{ background: MAROON_GRADIENT }}
+        >
+          <div
+            className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)" }}
+          />
+          <div
+            className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)" }}
+          />
+          <DialogHeader className="relative space-y-0 text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+                <SettingsIcon className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">
+                  Account
+                </p>
+                <DialogTitle className="text-white font-bold text-base sm:text-lg leading-tight">
+                  Teacher Settings
+                </DialogTitle>
+                <DialogDescription className="text-white/70 text-[11px] sm:text-xs mt-0.5 leading-snug">
+                  Manage your profile information and security settings
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
         </div>
 
+        {/* ── Tab chips (segmented maroon pills) ── */}
+        <div className="px-4 sm:px-6 pt-3 pb-2">
+          <div className="inline-flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all whitespace-nowrap leading-none border ${
+                activeTab === "profile"
+                  ? "bg-[#7a1f2b] text-white border-[#7a1f2b] shadow-[0_2px_6px_-2px_rgba(122,31,43,0.5)]"
+                  : "bg-white text-[#7a1f2b]/70 border-[#7a1f2b]/15 hover:text-[#7a1f2b] hover:border-[#7a1f2b]/30"
+              }`}
+            >
+              <User className="inline h-3 w-3 mr-1 -mt-0.5" />
+              Profile
+            </button>
+            <button
+              onClick={() => setActiveTab("password")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all whitespace-nowrap leading-none border ${
+                activeTab === "password"
+                  ? "bg-[#7a1f2b] text-white border-[#7a1f2b] shadow-[0_2px_6px_-2px_rgba(122,31,43,0.5)]"
+                  : "bg-white text-[#7a1f2b]/70 border-[#7a1f2b]/15 hover:text-[#7a1f2b] hover:border-[#7a1f2b]/30"
+              }`}
+            >
+              <Shield className="inline h-3 w-3 mr-1 -mt-0.5" />
+              Password
+            </button>
+          </div>
+        </div>
+
+        {/* ── Message banner ── */}
         {message && (
-          <div
-            className={`p-3 rounded-md text-xs sm:text-sm ${
-              message.type === "success"
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : message.type === "error"
-                ? "bg-red-50 text-red-800 border border-red-200"
-                : "bg-blue-50 text-blue-800 border border-blue-200"
-            }`}
-          >
-            {message.text}
+          <div className="px-4 sm:px-6 pt-1">
+            <div
+              className={`p-2.5 sm:p-3 rounded-xl text-xs sm:text-sm border ${
+                message.type === "success"
+                  ? "bg-green-50 text-green-800 border-green-200"
+                  : message.type === "error"
+                  ? "bg-red-50 text-red-800 border-red-200"
+                  : "bg-[#7a1f2b]/[0.05] text-[#7a1f2b] border-[#7a1f2b]/15"
+              }`}
+            >
+              {message.text}
+            </div>
           </div>
         )}
 
+        {/* ── PROFILE TAB ── */}
         {activeTab === "profile" && (
-          <div className="space-y-4 sm:space-y-6 py-3 sm:py-4">
-            <Card>
-              <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="text-base sm:text-lg">Personal Information</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+            <Card
+              className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <CardHeader className="p-4 sm:p-5 pb-3">
+                <CardTitle className="text-sm sm:text-base text-[#3a1b1f]">
+                  Personal Information
+                </CardTitle>
+                <CardDescription className="text-[11px] sm:text-xs">
                   Your basic profile information
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6 pt-0 space-y-3 sm:space-y-4">
+              <CardContent className="p-4 sm:p-5 pt-0 space-y-3 sm:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="text-xs sm:text-sm font-medium text-muted-foreground">First Name</label>
-                    <Input value={profile.first_name} disabled className="mt-1 h-9 sm:h-10 text-xs sm:text-sm" />
+                    <label className={labelCls}>First Name</label>
+                    <Input value={profile.first_name} disabled className={inputCls} />
                   </div>
                   <div>
-                    <label className="text-xs sm:text-sm font-medium text-muted-foreground">Last Name</label>
-                    <Input value={profile.last_name} disabled className="mt-1 h-9 sm:h-10 text-xs sm:text-sm" />
+                    <label className={labelCls}>Last Name</label>
+                    <Input value={profile.last_name} disabled className={inputCls} />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs sm:text-sm font-medium text-muted-foreground">Teacher Code</label>
-                    <Input value={profile.teacher_code} disabled className="mt-1 h-9 sm:h-10 text-xs sm:text-sm" />
+                  <label className={labelCls}>Teacher Code</label>
+                  <Input value={profile.teacher_code} disabled className={inputCls} />
                 </div>
 
+                {/* Email */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs sm:text-sm font-medium text-muted-foreground">Email Address</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={labelCls}>Email Address</label>
                     {!isEditingEmail ? (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setIsEditingEmail(true)}
-                        className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                        className="h-7 px-2 text-[11px] rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
                       >
                         <Edit className="h-3 w-3 mr-1" />
                         Edit
                       </Button>
                     ) : (
-                      <div className="flex space-x-1 sm:space-x-2">
+                      <div className="flex gap-1.5">
                         <Button
                           size="sm"
                           onClick={(e) => updateEmail(e)}
                           disabled={loading}
-                          className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                          className="h-7 px-2 text-[11px] rounded-lg text-white"
+                          style={{ background: MAROON_GRADIENT }}
                         >
                           <Save className="h-3 w-3 mr-1" />
                           Save
@@ -283,7 +330,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                             setIsEditingEmail(false);
                             setEmail(profile.email || "");
                           }}
-                          className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                          className="h-7 px-2 text-[11px] rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
                         >
                           Cancel
                         </Button>
@@ -296,33 +343,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Enter your email address"
-                      className="h-9 sm:h-10 text-xs sm:text-sm"
+                      className={inputCls}
                     />
                   ) : (
-                    <Input value={profile.email || "Not set"} disabled className="h-9 sm:h-10 text-xs sm:text-sm" />
+                    <Input value={profile.email || "Not set"} disabled className={inputCls} />
                   )}
                 </div>
 
+                {/* Phone */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs sm:text-sm font-medium text-muted-foreground">Phone Number</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={labelCls}>Phone Number</label>
                     {!isEditingPhone ? (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setIsEditingPhone(true)}
-                        className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                        className="h-7 px-2 text-[11px] rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
                       >
                         <Edit className="h-3 w-3 mr-1" />
                         Edit
                       </Button>
                     ) : (
-                      <div className="flex space-x-1 sm:space-x-2">
+                      <div className="flex gap-1.5">
                         <Button
                           size="sm"
                           onClick={(e) => updatePhone(e)}
                           disabled={loading}
-                          className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                          className="h-7 px-2 text-[11px] rounded-lg text-white"
+                          style={{ background: MAROON_GRADIENT }}
                         >
                           <Save className="h-3 w-3 mr-1" />
                           Save
@@ -334,7 +383,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                             setIsEditingPhone(false);
                             setPhone(profile.phone || "");
                           }}
-                          className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                          className="h-7 px-2 text-[11px] rounded-lg border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b]"
                         >
                           Cancel
                         </Button>
@@ -347,151 +396,106 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="Enter your phone number"
-                      className="h-9 sm:h-10 text-xs sm:text-sm"
+                      className={inputCls}
                     />
                   ) : (
-                    <Input value={profile.phone || "Not set"} disabled className="h-9 sm:h-10 text-xs sm:text-sm" />
+                    <Input value={profile.phone || "Not set"} disabled className={inputCls} />
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="text-base sm:text-lg">Account Information</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
+            <Card
+              className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <CardHeader className="p-4 sm:p-5 pb-3">
+                <CardTitle className="text-sm sm:text-base text-[#3a1b1f]">
+                  Account Information
+                </CardTitle>
+                <CardDescription className="text-[11px] sm:text-xs">
                   Your account details and membership
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6 pt-0 space-y-2 sm:space-y-3">
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-xs sm:text-sm text-muted-foreground">Account Type</span>
-                  <span className="text-xs sm:text-sm font-medium">
-                    {profile.is_admin ? "Administrator" : "Teacher"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-xs sm:text-sm text-muted-foreground">Member Since</span>
-                  <span className="text-xs sm:text-sm font-medium">
-                    {new Date(profile.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-xs sm:text-sm text-muted-foreground">User ID</span>
-                  <span className="text-xs sm:text-sm font-medium font-mono">
-                    {profile.first_name}.{profile.last_name}
-                  </span>
-                </div>
+              <CardContent className="p-4 sm:p-5 pt-0 space-y-2">
+                {[
+                  { label: "Account Type", value: profile.is_admin ? "Administrator" : "Teacher" },
+                  { label: "Member Since", value: new Date(profile.created_at).toLocaleDateString() },
+                  { label: "User ID", value: `${profile.first_name}.${profile.last_name}`, mono: true },
+                ].map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex justify-between items-center py-2 border-b border-[#7a1f2b]/5 last:border-0"
+                  >
+                    <span className="text-[11px] sm:text-xs text-muted-foreground">{row.label}</span>
+                    <span className={`text-[11px] sm:text-xs font-semibold text-[#3a1b1f] ${row.mono ? "font-mono" : ""}`}>
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
         )}
 
+        {/* ── PASSWORD TAB ── */}
         {activeTab === "password" && (
-          <div className="space-y-4 sm:space-y-6 py-3 sm:py-4">
-            <Card>
-              <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="text-base sm:text-lg">Update Password</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+            <Card
+              className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <CardHeader className="p-4 sm:p-5 pb-3">
+                <CardTitle className="text-sm sm:text-base text-[#3a1b1f]">
+                  Update Password
+                </CardTitle>
+                <CardDescription className="text-[11px] sm:text-xs">
                   Change your password to keep your account secure
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6 pt-0 space-y-3 sm:space-y-4">
-                <div>
-                  <label className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 block">
-                    Current Password
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type={showCurrentPassword ? "text" : "password"}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your current password"
-                      className="h-9 sm:h-10 text-xs sm:text-sm pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-2 sm:px-3 hover:bg-transparent"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    >
-                      {showCurrentPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
+              <CardContent className="p-4 sm:p-5 pt-0 space-y-3 sm:space-y-4">
+                {([
+                  { label: "Current Password", value: currentPassword, setter: setCurrentPassword, show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword), ph: "Enter your current password" },
+                  { label: "New Password", value: newPassword, setter: setNewPassword, show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword), ph: "Enter your new password" },
+                  { label: "Confirm New Password", value: confirmPassword, setter: setConfirmPassword, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword), ph: "Confirm your new password" },
+                ] as const).map((f) => (
+                  <div key={f.label}>
+                    <label className={`${labelCls} block mb-1.5`}>{f.label}</label>
+                    <div className="relative">
+                      <Input
+                        type={f.show ? "text" : "password"}
+                        value={f.value}
+                        onChange={(e) => f.setter(e.target.value)}
+                        placeholder={f.ph}
+                        className={`${inputCls} mt-0 pr-10`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-2.5 hover:bg-transparent text-[#7a1f2b]/60 hover:text-[#7a1f2b]"
+                        onClick={f.toggle}
+                      >
+                        {f.show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 block">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type={showNewPassword ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter your new password"
-                      className="h-9 sm:h-10 text-xs sm:text-sm pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-2 sm:px-3 hover:bg-transparent"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                    >
-                      {showNewPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 block">
-                    Confirm New Password
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm your new password"
-                      className="h-9 sm:h-10 text-xs sm:text-sm pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-2 sm:px-3 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                ))}
 
                 <Button
                   onClick={updatePassword}
                   disabled={loading}
-                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
+                  className="w-full h-10 text-xs sm:text-sm font-semibold rounded-xl text-white border-0"
+                  style={{ background: MAROON_GRADIENT, boxShadow: "0 8px 20px -10px rgba(122,31,43,0.55)" }}
                 >
                   {loading ? "Updating Password..." : "Update Password"}
                 </Button>
 
-                <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                  <h4 className="text-xs sm:text-sm font-medium text-blue-800 mb-1">Password Requirements</h4>
-                  <ul className="text-xs text-blue-700 space-y-0.5">
+                <div className="bg-[#7a1f2b]/[0.05] p-3 rounded-xl border border-[#7a1f2b]/15">
+                  <h4 className="text-[11px] sm:text-xs font-semibold text-[#7a1f2b] mb-1.5 uppercase tracking-wide">
+                    Password Requirements
+                  </h4>
+                  <ul className="text-[11px] sm:text-xs text-[#3a1b1f]/80 space-y-0.5">
                     <li>• At least 6 characters long</li>
                     <li>• Include uppercase and lowercase letters</li>
                     <li>• Include numbers and special characters for better security</li>
@@ -501,6 +505,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, isOpen, onClose,
             </Card>
           </div>
         )}
+
+        {/* ── Safe bottom padding on mobile ── */}
+        <div className="h-2 sm:h-3" />
       </DialogContent>
     </Dialog>
   );

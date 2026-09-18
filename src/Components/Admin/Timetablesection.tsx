@@ -1,17 +1,28 @@
+// src/Components/Admin/TimetableSection.tsx
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
+import { Card, CardContent } from '@/Components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
-import { Badge } from '@/Components/ui/badge';
 import { Label } from '@/Components/ui/label';
 import {
   Calendar, Save, Eye, Pencil, BookOpen, Clock,
-  ChevronDown, Check, AlertTriangle, Users,
+  Check, AlertTriangle, Users,
 } from 'lucide-react';
+
+// ─── Design tokens (mirrors Teacher / Student / Admin sections) ──────────────
+const MAROON = '#7a1f2b';
+const MAROON_GRADIENT = 'linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)';
+const CARD_SHADOW = '0 6px 26px -18px rgba(122,31,43,0.22)';
+const CARD_SHADOW_HOVER = '0 10px 40px -18px rgba(122,31,43,0.35)';
+const GRADIENT_BTN_STYLE: React.CSSProperties = {
+  background: MAROON_GRADIENT,
+  boxShadow: '0 8px 18px -10px rgba(122,31,43,0.5)',
+};
+const TABLE_HEAD_STYLE: React.CSSProperties = { background: MAROON_GRADIENT };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -73,6 +84,36 @@ function emptyTimetable(): TimetableData {
   return { weekday, weekend };
 }
 
+// ─── Shared SectionHeader ─────────────────────────────────────────────────────
+function SectionHeader({
+  icon: Icon, microLabel, title, description,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  microLabel: string; title: string; description?: string;
+}) {
+  return (
+    <div className="relative overflow-hidden px-4 sm:px-5 py-3.5" style={{ background: MAROON_GRADIENT }}>
+      <div className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
+      <div className="absolute -bottom-20 -left-10 w-40 h-40 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)' }} />
+      <div className="relative flex items-start gap-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">{microLabel}</p>
+          <h3 className="text-white font-bold text-sm sm:text-base leading-tight">{title}</h3>
+          {description && (
+            <p className="text-white/70 text-[11px] sm:text-xs mt-0.5 leading-snug">{description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cell Editor ──────────────────────────────────────────────────────────────
 interface CellEditorProps {
   value:    WeekdayCell | null;
   options:  { subjectId: string; subjectName: string; subjectCode: string; teacherId: string; teacherName: string }[];
@@ -87,35 +128,39 @@ function CellEditor({ value, options, onChange }: CellEditorProps) {
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`w-full text-left px-2 py-1.5 rounded text-xs border transition-all min-h-[48px] leading-tight
+        className={`w-full text-left px-2 py-1.5 rounded-lg text-xs border transition-all min-h-[48px] leading-tight active:scale-[0.98]
           ${value
-            ? 'bg-green-50 border-green-200 text-green-900 hover:bg-green-100'
-            : 'bg-gray-50 border-dashed border-gray-200 text-gray-400 hover:border-green-300 hover:bg-green-50/40'
+            ? 'border-[#7a1f2b]/25 hover:border-[#7a1f2b]/40'
+            : 'bg-[#fdfbfb] border-dashed border-[#7a1f2b]/20 text-muted-foreground hover:border-[#7a1f2b]/40 hover:bg-[#7a1f2b]/[0.04]'
           }`}
+        style={value ? { background: 'rgba(122,31,43,0.06)' } : undefined}
       >
         {value ? (
           <div>
-            <div className="font-semibold text-green-800">{value.subjectCode}</div>
-            <div className="text-green-600 truncate">{value.teacherName.split(' ').slice(-1)[0]}</div>
+            <div className="font-semibold text-[#7a1f2b]">{value.subjectCode}</div>
+            <div className="text-[#7a1f2b]/70 truncate">{value.teacherName.split(' ').slice(-1)[0]}</div>
           </div>
         ) : (
           <span className="flex items-center gap-1">
-            <span className="text-gray-300 text-lg leading-none">+</span> assign
+            <span className="text-[#7a1f2b]/40 text-lg leading-none">+</span> assign
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+        <div
+          className="absolute z-50 top-full left-0 mt-1 w-56 bg-white border border-[#7a1f2b]/15 rounded-xl overflow-hidden"
+          style={{ boxShadow: '0 18px 40px -18px rgba(122,31,43,0.35)' }}
+        >
           <div className="max-h-48 overflow-y-auto">
             <button
               onClick={() => { onChange(null); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 border-b flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-[#7a1f2b]/[0.04] border-b border-[#7a1f2b]/10 flex items-center gap-2"
             >
-              <span className="text-red-300">✕</span> Clear
+              <span className="text-red-400">✕</span> Clear
             </button>
             {options.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-gray-400 italic">
+              <div className="px-3 py-3 text-xs text-muted-foreground italic">
                 No teacher assignments found for this class. Assign teachers first in the Teachers section.
               </div>
             ) : (
@@ -126,14 +171,14 @@ function CellEditor({ value, options, onChange }: CellEditorProps) {
                   <button
                     key={key}
                     onClick={() => { onChange(opt); setOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-green-50 flex items-center justify-between gap-2
-                      ${isSelected ? 'bg-green-50 text-green-800 font-semibold' : 'text-gray-700'}`}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-[#7a1f2b]/[0.04] flex items-center justify-between gap-2 transition-colors
+                      ${isSelected ? 'bg-[#7a1f2b]/[0.06] text-[#7a1f2b] font-semibold' : 'text-[#3a1b1f]'}`}
                   >
-                    <div>
-                      <div className="font-medium">{opt.subjectName}</div>
-                      <div className="text-gray-400">{opt.teacherName}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{opt.subjectName}</div>
+                      <div className="text-muted-foreground truncate">{opt.teacherName}</div>
                     </div>
-                    {isSelected && <Check className="w-3 h-3 text-green-600 shrink-0" />}
+                    {isSelected && <Check className="w-3 h-3 text-[#7a1f2b] shrink-0" />}
                   </button>
                 );
               })
@@ -145,6 +190,7 @@ function CellEditor({ value, options, onChange }: CellEditorProps) {
   );
 }
 
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function TimetableSection() {
   const queryClient = useQueryClient();
 
@@ -225,9 +271,8 @@ export default function TimetableSection() {
   });
 
   // ── FIX: onSuccess was removed in React Query v5 — use useEffect instead ──
-  // This watches savedTimetable and populates the grid whenever it changes.
   React.useEffect(() => {
-    if (loadingSaved) return; // wait until the query finishes
+    if (loadingSaved) return;
     if (savedTimetable?.timetable_data) {
       const empty = emptyTimetable();
       setTimetable({
@@ -235,7 +280,6 @@ export default function TimetableSection() {
         weekend: { ...empty.weekend, ...savedTimetable.timetable_data.weekend },
       });
     } else if (savedTimetable === null) {
-      // Query ran and found nothing — reset to blank
       setTimetable(emptyTimetable());
     }
     setIsDirty(false);
@@ -296,49 +340,46 @@ export default function TimetableSection() {
   const totalCells = WEEKDAY_SLOTS.filter(s => s.type === 'lesson').length * DAYS.length;
 
   return (
-    <div className="space-y-6">
-      <Card className="border-none shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-green-600" />
-            Timetable Builder
-          </CardTitle>
-          <p className="text-sm text-gray-500 mt-1">
-            Build and manage class timetables per term. Changes are saved to the database — no file uploads needed.
-          </p>
-        </CardHeader>
+    <div className="space-y-4 sm:space-y-6 pb-[calc(88px+env(safe-area-inset-bottom))] sm:pb-0">
+      <Card className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
+        <SectionHeader
+          icon={Calendar}
+          microLabel="Schedule"
+          title="Timetable Builder"
+          description="Build and manage class timetables per term — saved directly to the database"
+        />
 
-        <CardContent className="space-y-5">
+        <CardContent className="p-3 sm:p-5 space-y-4 sm:space-y-5">
 
-          {/* Selector bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl border">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Class</Label>
+          {/* ── Selector bar ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 sm:p-4 rounded-2xl border border-[#7a1f2b]/10 bg-[#fdfbfb]">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Class</Label>
               <Select value={selectedClassId} onValueChange={v => { setSelectedClassId(v); setIsDirty(false); }}>
-                <SelectTrigger className="bg-white">
+                <SelectTrigger className="bg-white h-10 rounded-xl border-[#7a1f2b]/15">
                   <SelectValue placeholder="Select class…" />
                 </SelectTrigger>
                 <SelectContent>
                   {(classes || []).map((cls: any) => (
                     <SelectItem key={cls.id} value={cls.id}>
-                      {cls.name} <span className="text-gray-400 text-xs ml-1">({cls.grade_level})</span>
+                      {cls.name} <span className="text-muted-foreground text-xs ml-1">({cls.grade_level})</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">
                 Term
                 {currentTerm && (
-                  <span className="ml-2 text-green-600 normal-case font-normal">
-                    (Current: Term {currentTerm.term})
+                  <span className="ml-2 text-emerald-600 normal-case font-medium text-[10px]">
+                    · Current: T{currentTerm.term}
                   </span>
                 )}
               </Label>
               <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-                <SelectTrigger className="bg-white">
+                <SelectTrigger className="bg-white h-10 rounded-xl border-[#7a1f2b]/15">
                   <SelectValue placeholder="Select term…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -350,12 +391,12 @@ export default function TimetableSection() {
             </div>
 
             {/* Academic Year — auto-filled from active term, still manually editable */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">
                 Academic Year
                 {currentTerm?.academic_year && (
-                  <span className="ml-2 text-green-600 normal-case font-normal">
-                    (Active: {currentTerm.academic_year})
+                  <span className="ml-2 text-emerald-600 normal-case font-medium text-[10px]">
+                    · Active: {currentTerm.academic_year}
                   </span>
                 )}
               </Label>
@@ -363,17 +404,17 @@ export default function TimetableSection() {
                 value={selectedYear}
                 onChange={e => setSelectedYear(e.target.value)}
                 placeholder="e.g. 2026-2027"
-                className="bg-white"
+                className="bg-white h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30"
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider text-[#7a1f2b]/60 font-semibold">Actions</Label>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  className="flex-1 h-10 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 hover:text-[#7a1f2b] active:scale-[0.98]"
                   onClick={() => setMode(m => m === 'edit' ? 'view' : 'edit')}
                   disabled={!canEdit}
                 >
@@ -384,7 +425,10 @@ export default function TimetableSection() {
                 </Button>
                 <Button
                   size="sm"
-                  className={`flex-1 transition-all ${saveSuccess ? 'bg-emerald-600 hover:bg-emerald-600' : 'bg-green-600 hover:bg-green-700'}`}
+                  className={`flex-1 h-10 rounded-xl text-white border-0 active:scale-[0.98] transition-all ${
+                    saveSuccess ? 'bg-emerald-600 hover:bg-emerald-600' : ''
+                  }`}
+                  style={!saveSuccess ? GRADIENT_BTN_STYLE : undefined}
                   disabled={!canEdit || !isDirty || saveMutation.isPending}
                   onClick={() => saveMutation.mutate()}
                 >
@@ -399,70 +443,82 @@ export default function TimetableSection() {
             </div>
           </div>
 
-          {/* Status bar */}
+          {/* ── Status bar ── */}
           {canEdit && (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
               {loadingSaved ? (
-                <span className="animate-pulse text-gray-400">Loading timetable…</span>
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <span className="w-3 h-3 rounded-full border-2 border-[#7a1f2b]/20 border-t-[#7a1f2b] animate-spin" />
+                  Loading timetable…
+                </span>
               ) : (
                 <>
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="w-3.5 h-3.5" />
-                    {filledCells}/{totalCells} weekday periods filled
+                  <span className="flex items-center gap-1.5 text-[#3a1b1f]">
+                    <BookOpen className="w-3.5 h-3.5 text-[#7a1f2b]/60" />
+                    <span className="font-semibold text-[#7a1f2b]">{filledCells}</span>
+                    <span className="text-muted-foreground">/ {totalCells} weekday periods filled</span>
                   </span>
                   {isDirty && (
-                    <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                       Unsaved changes
-                    </Badge>
+                    </span>
                   )}
                   {!isDirty && savedTimetable && (
-                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                       ✓ Saved
-                    </Badge>
+                    </span>
                   )}
                   {classAssignments?.length === 0 && (
-                    <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                       <AlertTriangle className="w-3 h-3" />
-                      No teacher assignments found for this class
-                    </Badge>
+                      No teacher assignments found
+                    </span>
                   )}
                 </>
               )}
             </div>
           )}
 
-          {/* Placeholder */}
+          {/* ── Placeholder ── */}
           {!canEdit && (
-            <Card className="border-dashed">
-              <CardContent className="p-10 text-center">
-                <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                <p className="text-gray-400 font-medium">Select a class, term and academic year to get started</p>
-              </CardContent>
-            </Card>
+            <div className="rounded-2xl border border-dashed border-[#7a1f2b]/20 bg-[#fdfbfb] py-12 text-center">
+              <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+                style={{ background: 'rgba(122,31,43,0.06)' }}>
+                <Calendar className="w-6 h-6 text-[#7a1f2b]/40" />
+              </div>
+              <p className="text-[#3a1b1f] font-semibold">Select a class, term and academic year to get started</p>
+              <p className="text-sm text-muted-foreground mt-1">The timetable grid will appear here</p>
+            </div>
           )}
 
-          {/* Timetable tabs */}
+          {/* ── Timetable tabs ── */}
           {canEdit && !loadingSaved && (
             <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
-              <TabsList>
-                <TabsTrigger value="weekday">
+              <TabsList className="w-full sm:w-auto rounded-xl bg-[#7a1f2b]/5 p-1 h-auto">
+                <TabsTrigger
+                  value="weekday"
+                  className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
+                >
                   <Clock className="w-3.5 h-3.5 mr-1.5" />Weekday (Mon–Fri)
                 </TabsTrigger>
-                <TabsTrigger value="weekend">
+                <TabsTrigger
+                  value="weekend"
+                  className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
+                >
                   <Users className="w-3.5 h-3.5 mr-1.5" />Weekend (Boarding)
                 </TabsTrigger>
               </TabsList>
 
-              {/* WEEKDAY TAB */}
+              {/* ══════════ WEEKDAY TAB ══════════ */}
               <TabsContent value="weekday" className="mt-4">
-                <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <div className="overflow-x-auto rounded-2xl border border-[#7a1f2b]/10" style={{ boxShadow: CARD_SHADOW }}>
                   <table className="w-full min-w-[700px] border-collapse">
                     <thead>
-                      <tr className="bg-gradient-to-r from-green-600 to-emerald-600 text-white">
-                        <th className="text-left px-4 py-3 text-xs font-semibold w-28 rounded-tl-xl">Period</th>
-                        <th className="text-left px-3 py-3 text-xs font-semibold w-28">Time</th>
+                      <tr style={TABLE_HEAD_STYLE} className="text-white">
+                        <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider w-28 rounded-tl-xl">Period</th>
+                        <th className="text-left px-3 py-3 text-[11px] font-semibold uppercase tracking-wider w-28">Time</th>
                         {DAYS.map((day, i) => (
-                          <th key={day} className={`text-center px-2 py-3 text-xs font-semibold ${i === 4 ? 'rounded-tr-xl' : ''}`}>
+                          <th key={day} className={`text-center px-2 py-3 text-[11px] font-semibold uppercase tracking-wider ${i === 4 ? 'rounded-tr-xl' : ''}`}>
                             <span className="hidden sm:inline">{day}</span>
                             <span className="sm:hidden">{SHORT_DAYS[i]}</span>
                           </th>
@@ -477,17 +533,18 @@ export default function TimetableSection() {
 
                         if (isFixed) {
                           return (
-                            <tr key={slot.id} className={isBreak ? 'bg-amber-50' : 'bg-blue-50'}>
-                              <td className="px-4 py-2">
-                                <span className={`text-xs font-bold ${isBreak ? 'text-amber-600' : 'text-blue-600'}`}>
+                            <tr key={slot.id}
+                              style={{ background: isBreak ? 'rgba(245,158,11,0.06)' : 'rgba(122,31,43,0.03)' }}>
+                              <td className="px-4 py-2 border-b border-[#7a1f2b]/8">
+                                <span className={`text-xs font-bold ${isBreak ? 'text-amber-700' : 'text-[#7a1f2b]'}`}>
                                   {isBreak ? '☕ Break' : '🍽 Lunch'}
                                 </span>
                               </td>
-                              <td className="px-3 py-2">
-                                <span className="text-xs text-gray-400">{slot.time}</span>
+                              <td className="px-3 py-2 border-b border-[#7a1f2b]/8">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">{slot.time}</span>
                               </td>
-                              <td colSpan={5} className="px-3 py-2 text-center">
-                                <span className={`text-xs italic ${isBreak ? 'text-amber-400' : 'text-blue-400'}`}>
+                              <td colSpan={5} className="px-3 py-2 text-center border-b border-[#7a1f2b]/8">
+                                <span className={`text-xs italic ${isBreak ? 'text-amber-600/70' : 'text-[#7a1f2b]/50'}`}>
                                   {isBreak ? '— Break time —' : '— Lunch break —'}
                                 </span>
                               </td>
@@ -496,12 +553,13 @@ export default function TimetableSection() {
                         }
 
                         return (
-                          <tr key={slot.id} className={`border-b border-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+                          <tr key={slot.id}
+                            className={`border-b border-[#7a1f2b]/8 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fdfbfb]'}`}>
                             <td className="px-4 py-2">
-                              <span className="text-xs font-semibold text-gray-700">{slot.label}</span>
+                              <span className="text-xs font-semibold text-[#3a1b1f]">{slot.label}</span>
                             </td>
                             <td className="px-3 py-2">
-                              <span className="text-xs text-gray-400 whitespace-nowrap">{slot.time}</span>
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">{slot.time}</span>
                             </td>
                             {DAYS.map(day => (
                               <td key={day} className="px-1.5 py-1.5 align-top">
@@ -512,23 +570,25 @@ export default function TimetableSection() {
                                     onChange={val => updateWeekdayCell(slot.id, day, val)}
                                   />
                                 ) : (
-                                  <div className={`px-2 py-1.5 rounded text-xs min-h-[48px] flex flex-col justify-center
-                                    ${timetable.weekday[slot.id]?.[day]
-                                      ? 'bg-green-50 border border-green-100'
-                                      : 'bg-gray-50 border border-dashed border-gray-100'
+                                  <div
+                                    className={`px-2 py-1.5 rounded-lg text-xs min-h-[48px] flex flex-col justify-center border ${
+                                      timetable.weekday[slot.id]?.[day]
+                                        ? 'border-[#7a1f2b]/15'
+                                        : 'bg-[#fdfbfb] border-dashed border-[#7a1f2b]/10'
                                     }`}
+                                    style={timetable.weekday[slot.id]?.[day] ? { background: 'rgba(122,31,43,0.06)' } : undefined}
                                   >
                                     {timetable.weekday[slot.id]?.[day] ? (
                                       <>
-                                        <div className="font-semibold text-green-800">
+                                        <div className="font-semibold text-[#7a1f2b]">
                                           {timetable.weekday[slot.id][day]!.subjectCode}
                                         </div>
-                                        <div className="text-green-600 truncate">
+                                        <div className="text-[#7a1f2b]/70 truncate">
                                           {timetable.weekday[slot.id][day]!.teacherName.split(' ').slice(-1)[0]}
                                         </div>
                                       </>
                                     ) : (
-                                      <span className="text-gray-300 text-center w-full">—</span>
+                                      <span className="text-[#7a1f2b]/25 text-center w-full">—</span>
                                     )}
                                   </div>
                                 )}
@@ -542,43 +602,47 @@ export default function TimetableSection() {
                 </div>
 
                 {mode === 'edit' && (
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-400">
+                  <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-green-100 border border-green-200 inline-block" />
+                      <span className="w-3 h-3 rounded inline-block border border-[#7a1f2b]/25"
+                        style={{ background: 'rgba(122,31,43,0.08)' }} />
                       Assigned
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-gray-50 border border-dashed border-gray-200 inline-block" />
+                      <span className="w-3 h-3 rounded inline-block bg-[#fdfbfb] border border-dashed border-[#7a1f2b]/25" />
                       Empty — click to assign
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-amber-50 border border-amber-100 inline-block" />
+                      <span className="w-3 h-3 rounded inline-block border border-amber-200"
+                        style={{ background: 'rgba(245,158,11,0.10)' }} />
                       Break / Lunch (fixed)
                     </span>
                   </div>
                 )}
               </TabsContent>
 
-              {/* WEEKEND TAB */}
+              {/* ══════════ WEEKEND TAB ══════════ */}
               <TabsContent value="weekend" className="mt-4">
-                <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
+                <div className="mb-3 rounded-xl px-3 py-2.5 text-xs text-[#7a1f2b] leading-relaxed border border-[#7a1f2b]/15"
+                  style={{ background: 'rgba(122,31,43,0.04)' }}>
                   🏠 Weekend timetable is for <strong>boarding students</strong>. Type any activity freely — games, preps, meals, church, etc.
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <div className="overflow-x-auto rounded-2xl border border-[#7a1f2b]/10" style={{ boxShadow: CARD_SHADOW }}>
                   <table className="w-full min-w-[400px] border-collapse">
                     <thead>
-                      <tr className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                        <th className="text-left px-4 py-3 text-xs font-semibold w-32 rounded-tl-xl">Time</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold">Saturday</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold rounded-tr-xl">Sunday</th>
+                      <tr style={TABLE_HEAD_STYLE} className="text-white">
+                        <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider w-32 rounded-tl-xl">Time</th>
+                        <th className="text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wider">Saturday</th>
+                        <th className="text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wider rounded-tr-xl">Sunday</th>
                       </tr>
                     </thead>
                     <tbody>
                       {DEFAULT_WEEKEND_SLOTS.map((slot, idx) => (
-                        <tr key={slot.id} className={`border-b border-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+                        <tr key={slot.id}
+                          className={`border-b border-[#7a1f2b]/8 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fdfbfb]'}`}>
                           <td className="px-4 py-2">
-                            <span className="text-xs text-gray-500 whitespace-nowrap">{slot.time}</span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">{slot.time}</span>
                           </td>
                           {(['saturday', 'sunday'] as const).map(dayKey => (
                             <td key={dayKey} className="px-2 py-1.5">
@@ -587,14 +651,16 @@ export default function TimetableSection() {
                                   value={timetable.weekend[slot.id]?.[dayKey] ?? ''}
                                   onChange={e => updateWeekendCell(slot.id, dayKey, e.target.value)}
                                   placeholder="e.g. Games, Prep, Meals…"
-                                  className="h-8 text-xs bg-white"
+                                  className="h-9 text-xs bg-white rounded-lg border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30"
                                 />
                               ) : (
-                                <div className={`px-2 py-1.5 rounded text-xs min-h-[32px] flex items-center
-                                  ${timetable.weekend[slot.id]?.[dayKey]
-                                    ? 'bg-blue-50 border border-blue-100 text-blue-800'
-                                    : 'text-gray-300'
+                                <div
+                                  className={`px-2 py-1.5 rounded-lg text-xs min-h-[32px] flex items-center border ${
+                                    timetable.weekend[slot.id]?.[dayKey]
+                                      ? 'border-[#7a1f2b]/15 text-[#7a1f2b]'
+                                      : 'text-muted-foreground/40 border-transparent'
                                   }`}
+                                  style={timetable.weekend[slot.id]?.[dayKey] ? { background: 'rgba(122,31,43,0.06)' } : undefined}
                                 >
                                   {timetable.weekend[slot.id]?.[dayKey] || '—'}
                                 </div>
@@ -610,9 +676,9 @@ export default function TimetableSection() {
             </Tabs>
           )}
 
-          {/* Save error */}
+          {/* ── Save error ── */}
           {saveMutation.isError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Failed to save: {(saveMutation.error as any)?.message}
             </div>

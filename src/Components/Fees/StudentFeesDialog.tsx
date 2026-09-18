@@ -79,7 +79,7 @@ interface StudentFeesDialogProps {
   classId: string;
   className: string;
   isMobileTab: boolean;
-  currentTerm?: { term: string; academic_year: string } | null; // NEW: active term from parent
+  currentTerm?: { term: string; academic_year: string } | null;
 }
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ export default function StudentFeesDialog({
   classId,
   className,
   isMobileTab,
-  currentTerm, // NEW
+  currentTerm,
 }: StudentFeesDialogProps) {
 
   const [currentUser, setCurrentUser]           = useState<{ id: string } | null>(null);
@@ -220,10 +220,8 @@ export default function StudentFeesDialog({
     [allStudentFees]
   );
 
-  // Auto‑select term: try currentTerm first, then most recent
   useEffect(() => {
     if (termOptions.length > 0 && !studentFee) {
-      // If currentTerm is provided and matches an option, select it
       if (currentTerm) {
         const matchingOption = termOptions.find(
           opt => opt.term === currentTerm.term && opt.year === currentTerm.academic_year
@@ -234,16 +232,12 @@ export default function StudentFeesDialog({
           return;
         }
       }
-      // Otherwise fall back to the most recent term
       const mostRecent = termOptions[0];
       setSelectedTerm(mostRecent.term);
       setSelectedYear(mostRecent.year);
     }
   }, [termOptions, studentFee, currentTerm]);
 
-  // ── Fee items: fetch ALL terms in the selected academic year ──────────────
-  // We fetch fee structure items for every term record in the selected year
-  // so FeeBreakdownCard can show a full picture including arrears from prior terms.
   const {
     data: allTermFeeItems = [],
     isLoading: loadingFeeItems,
@@ -254,7 +248,6 @@ export default function StudentFeesDialog({
     queryFn: async () => {
       if (!student?.id) return [];
 
-      // Get all fee records for this student in the selected academic year
       const feesInYear = allStudentFees.filter(sf => sf.academic_year === selectedYear);
       if (feesInYear.length === 0) return [];
 
@@ -264,7 +257,6 @@ export default function StudentFeesDialog({
 
       if (structureIds.length === 0) return [];
 
-      // Fetch all fee structures at once
       const { data: structures, error } = await supabase
         .from('fee_structure')
         .select('*')
@@ -273,12 +265,11 @@ export default function StudentFeesDialog({
       if (error) throw error;
       if (!structures) return [];
 
-      // Map each structure back to its term so FeeBreakdownCard can group them
       return feesInYear.flatMap(sf => {
         const structure = structures.find(s => s.id === sf.fee_structure_id);
         if (!structure) return [];
         return [{
-          id:           structure.id + '-' + sf.term, // unique key per term
+          id:           structure.id + '-' + sf.term,
           name:         structure.name,
           amount:       structure.amount,
           category:     (structure.category ?? 'Mandatory') as 'Mandatory' | 'Optional',
@@ -293,16 +284,11 @@ export default function StudentFeesDialog({
     retry: 2,
   });
 
-  // ── Combined outstanding balance across ALL terms in the selected year ────
-  // This is what the student actually owes, not just the current term.
   const combinedOutstandingBalance = useMemo(() => {
     const feesInYear = allStudentFees.filter(sf => sf.academic_year === selectedYear);
     return feesInYear.reduce((sum, sf) => sum + (sf.outstanding_balance ?? 0), 0);
   }, [allStudentFees, selectedYear]);
 
-  // Summary cards still show the selected term in isolation so the parent can
-  // see per-term details, but the M-Pesa button and balance overview use the
-  // combined figure so the parent knows the true amount owed.
   const combinedTotalBilled = useMemo(() => {
     return allStudentFees
       .filter(sf => sf.academic_year === selectedYear)
@@ -333,9 +319,6 @@ export default function StudentFeesDialog({
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  // Pass ALL payments for the selected academic year to PaymentHistory.
-  // PaymentHistory groups them by term internally — filtering to selectedTerm
-  // here would hide cross-term payments and show 0 results.
   const mappedPayments = useMemo(
     () => payments
       .filter(p => p.academic_year === selectedYear)
@@ -343,7 +326,6 @@ export default function StudentFeesDialog({
     [payments, selectedYear]
   );
 
-  // Per-term values for the summary cards at the bottom (selected term only)
   const totalPaid          = studentFee?.total_paid          ?? 0;
   const outstandingBalance = studentFee?.outstanding_balance ?? 0;
   const creditCarried      = studentFee?.credit_carried      ?? 0;
@@ -357,7 +339,7 @@ export default function StudentFeesDialog({
   if (!currentUser) {
     return (
       <div className="flex flex-col items-center justify-center p-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-600 mb-4" />
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-maroon mb-4" />
         <p className="text-gray-600">Loading your fee statement...</p>
       </div>
     );
@@ -382,47 +364,81 @@ export default function StudentFeesDialog({
         }
       `}</style>
 
-      <div className="Fees-dialog-container animate-pop-in bg-white flex flex-col h-[90vh] md:h-[85vh] lg:h-[80vh] w-full max-w-7xl mx-auto rounded-none md:rounded-xl shadow-none md:shadow-2xl overflow-hidden select-none">
+      <div className="Fees-dialog-container animate-pop-in bg-white flex flex-col h-[90vh] md:h-[85vh] lg:h-[80vh] w-full max-w-7xl mx-auto rounded-none md:rounded-2xl shadow-none md:shadow-2xl overflow-hidden select-none">
 
-        {/* Header */}
-        <div className="fees-header-safe sticky top-0 z-40 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm flex-shrink-0">
-                <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+        {/* ===== Premium gradient header ===== */}
+        <div
+          className="fees-header-safe relative overflow-hidden flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #7a1f2b 0%, #5f1620 60%, #4a1119 100%)" }}
+        >
+          <div
+            className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full opacity-60"
+            style={{ background: "radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 65%)" }}
+          />
+          <div
+            className="pointer-events-none absolute -bottom-20 -left-10 h-44 w-44 rounded-full opacity-50"
+            style={{ background: "radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)" }}
+          />
+
+          <div className="relative px-4 sm:px-6 py-3.5 sm:py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.12] backdrop-blur-sm sm:h-11 sm:w-11">
+                  <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-lg font-bold tracking-tight text-white truncate">
+                    Fee Statement
+                  </h2>
+                  <p className="text-white/55 text-[11px] sm:text-xs truncate">
+                    {student ? `${student.first_name} ${student.last_name}` : 'Loading...'}
+                    {' '}· {student?.Reg_no ?? 'N/A'} · {className ?? 'N/A'}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Fee Statement</h2>
-                <p className="text-gray-500 text-xs sm:text-sm truncate">
-                  {student ? `${student.first_name} ${student.last_name}` : 'Loading...'}
-                  {' '}• {student?.Reg_no ?? 'N/A'} • {className ?? 'N/A'}
-                </p>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {studentFee && (
+                  <span
+                    className={`${statusConfig.color} hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-full border backdrop-blur-sm`}
+                  >
+                    {React.createElement(statusConfig.icon, { className: "w-3 h-3" })}
+                    {statusConfig.message}
+                  </span>
+                )}
+                <button
+                  onClick={handleClose}
+                  className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-sm transition-all duration-200 hover:scale-105 active:scale-95"
+                  aria-label="Close fee statement"
+                >
+                  <X className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-white" />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {studentFee && (
-                <Badge
-                  variant="outline"
-                  className={`${statusConfig.color} hidden sm:flex px-3 py-1.5 text-xs font-medium`}
-                >
-                  {React.createElement(statusConfig.icon, { className: "w-3 h-3 mr-1 inline-block" })}
-                  {statusConfig.message}
-                </Badge>
+            {/* Quick stat chips */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/85 backdrop-blur-sm">
+                <Calendar className="h-3 w-3 opacity-75" />
+                {selectedTerm} · {selectedYear}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/85 backdrop-blur-sm">
+                <Receipt className="h-3 w-3 opacity-75" />
+                {mappedPayments.length} payment{mappedPayments.length !== 1 ? 's' : ''}
+                {payments.length === PAYMENTS_PAGE_LIMIT && ' (latest 50)'}
+              </span>
+              {combinedOutstandingBalance > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-400/15 px-3 py-1 text-[11px] font-semibold text-amber-100 backdrop-blur-sm">
+                  <DollarSign className="h-3 w-3" />
+                  KES {combinedOutstandingBalance.toLocaleString()} due
+                </span>
               )}
-              <button
-                onClick={handleClose}
-                className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white hover:bg-gray-50 border border-gray-200 shadow-sm hover:shadow transition-all duration-200 hover:scale-105 active:scale-95"
-                aria-label="Close fee statement"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-              </button>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden bg-[#fdfbfb]">
           <div className="fees-safe-scroll h-full overflow-y-auto p-3 sm:p-4 md:p-6">
 
             {feesError && (
@@ -438,63 +454,77 @@ export default function StudentFeesDialog({
               />
             )}
 
-            {/* Current Term Banner */}
-            <Card className="border-0 shadow-md sm:shadow-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white mb-3 sm:mb-4">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <span className="font-medium text-sm sm:text-base truncate">
-                        Viewing: {selectedTerm} • {selectedYear}
-                      </span>
-                      {mappedPayments.length > 0 && (
-                        <p className="text-xs sm:text-sm text-white/80 truncate">
-                          {mappedPayments.length} payment{mappedPayments.length !== 1 ? 's' : ''} recorded
-                          {payments.length === PAYMENTS_PAGE_LIMIT && ' (showing latest 50)'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-white/20 text-white border-white/30 text-xs py-1">
-                      {studentFee?.status ?? 'No Fee Record'}
-                    </Badge>
+            {/* ===== Current Term Banner (refined) ===== */}
+            <div
+              className="relative overflow-hidden rounded-2xl mb-3 sm:mb-4 border border-maroon/10"
+              style={{
+                background: "linear-gradient(135deg, rgba(122,31,43,0.06) 0%, rgba(122,31,43,0.02) 100%)",
+              }}
+            >
+              <div className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-maroon/10">
+                    <Calendar className="w-4 h-4 text-maroon" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] sm:text-sm font-bold tracking-tight text-maroon truncate">
+                      Viewing: {selectedTerm} · {selectedYear}
+                    </p>
+                    {mappedPayments.length > 0 && (
+                      <p className="text-[11px] text-gray-500 truncate">
+                        {mappedPayments.length} payment{mappedPayments.length !== 1 ? 's' : ''} recorded
+                        {payments.length === PAYMENTS_PAGE_LIMIT && ' (showing latest 50)'}
+                      </p>
+                    )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Pay with M-Pesa — uses combined balance so parent sees true amount owed */}
-            {combinedOutstandingBalance > 0 && (
-              <button
-                onClick={handleOpenMpesa}
-                className="w-full mb-4 flex items-center justify-center gap-3 py-3.5 px-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 active:scale-[0.99] text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all duration-200 text-sm sm:text-base"
-              >
-                <Smartphone className="w-5 h-5" />
-                Pay with M-Pesa
-                <span className="ml-auto bg-white/20 px-2.5 py-0.5 rounded-full text-xs font-semibold">
-                  KES {combinedOutstandingBalance.toLocaleString()} due
+                <span className="inline-flex items-center rounded-full bg-maroon/[0.08] px-2.5 py-1 text-[10.5px] font-semibold text-maroon border border-maroon/15">
+                  {studentFee?.status ?? 'No Fee Record'}
                 </span>
-              </button>
-            )}
+              </div>
+            </div>
+
+            {/* ===== Pay with M-Pesa — premium CTA ===== */}
+            {combinedOutstandingBalance > 0 && (
+  <button
+    onClick={handleOpenMpesa}
+    className="relative overflow-hidden w-full mb-4 flex items-center gap-3 py-3.5 px-5 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.99] transition-all duration-200 text-sm sm:text-base"
+    style={{ background: "linear-gradient(135deg, #16a34a 0%, #059669 55%, #047857 100%)" }}
+  >
+    <span
+      className="pointer-events-none absolute -top-10 -right-6 h-28 w-28 rounded-full opacity-60"
+      style={{ background: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)" }}
+    />
+    <span
+      className="pointer-events-none absolute -bottom-12 -left-8 h-32 w-32 rounded-full opacity-50"
+      style={{ background: "radial-gradient(circle, rgba(255,255,255,0.10) 0%, transparent 70%)" }}
+    />
+    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/[0.15] backdrop-blur-sm">
+      <Smartphone className="w-4.5 h-4.5" />
+    </span>
+    <span className="relative flex-1 text-left">Pay with M-Pesa</span>
+    <span className="relative bg-white/20 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-white/20 backdrop-blur-sm">
+      KES {combinedOutstandingBalance.toLocaleString()} due
+    </span>
+  </button>
+)}
 
             {/* Tabs */}
             <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6 mb-4 sm:mb-6">
               <div className="relative">
-                <TabsList className="bg-white/80 backdrop-blur-sm shadow-sm sm:shadow-md border-0 p-1 rounded-lg sm:rounded-xl w-full overflow-x-auto flex-nowrap sm:flex-wrap">
-                  <TabsTrigger value="overview" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                <TabsList className="bg-maroon/[0.06] border-0 p-1 rounded-xl w-full overflow-x-auto flex-nowrap sm:flex-wrap">
+                  <TabsTrigger value="overview" className="flex-1 min-w-[80px] sm:min-w-0 rounded-lg data-[state=active]:bg-maroon data-[state=active]:text-white text-maroon/70 hover:text-maroon text-xs sm:text-sm px-3 py-2 font-semibold transition-all">
                     Overview
                   </TabsTrigger>
-                  <TabsTrigger value="fees" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <TabsTrigger value="fees" className="flex-1 min-w-[80px] sm:min-w-0 rounded-lg data-[state=active]:bg-maroon data-[state=active]:text-white text-maroon/70 hover:text-maroon text-xs sm:text-sm px-3 py-2 font-semibold transition-all">
                     <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
                     <span className="hidden sm:inline">Fee</span> Breakdown
                   </TabsTrigger>
-                  <TabsTrigger value="payments" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <TabsTrigger value="payments" className="flex-1 min-w-[80px] sm:min-w-0 rounded-lg data-[state=active]:bg-maroon data-[state=active]:text-white text-maroon/70 hover:text-maroon text-xs sm:text-sm px-3 py-2 font-semibold transition-all">
                     <Receipt className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
                     Payments
                   </TabsTrigger>
-                  <TabsTrigger value="bank" className="flex-1 min-w-[80px] sm:min-w-0 rounded-md sm:rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-xs sm:text-sm px-3 py-2">
+                  <TabsTrigger value="bank" className="flex-1 min-w-[80px] sm:min-w-0 rounded-lg data-[state=active]:bg-maroon data-[state=active]:text-white text-maroon/70 hover:text-maroon text-xs sm:text-sm px-3 py-2 font-semibold transition-all">
                     <Building2 className="w-3 h-3 sm:w-4 sm:h-4 mr-2 inline-block" />
                     Bank
                   </TabsTrigger>
@@ -504,7 +534,6 @@ export default function StudentFeesDialog({
               <TabsContent value="overview" className="space-y-4 sm:space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                   <div className="lg:col-span-2">
-                    {/* Pass combined figures + all fees in year so overview shows true totals */}
                     <FeeBalanceOverview
                       studentFee={studentFee}
                       allStudentFees={allStudentFees.filter(sf => sf.academic_year === selectedYear)}
@@ -512,7 +541,7 @@ export default function StudentFeesDialog({
                       combinedTotalPaid={combinedTotalPaid}
                       combinedOutstandingBalance={combinedOutstandingBalance}
                       isLoading={loadingFees}
-                      currentTerm={currentTerm} // NEW: pass down
+                      currentTerm={currentTerm}
                     />
                   </div>
                   <div>
@@ -522,7 +551,7 @@ export default function StudentFeesDialog({
                       selectedTerm={selectedTerm}
                       selectedYear={selectedYear}
                       isLoading={loadingFees}
-                      currentTerm={currentTerm} // NEW: pass down
+                      currentTerm={currentTerm}
                     />
                   </div>
                 </div>
@@ -536,13 +565,13 @@ export default function StudentFeesDialog({
                   />
                 ) : loadingFeeItems ? (
                   <div className="flex justify-center items-center h-32 sm:h-48">
-                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-t-2 border-b-2 border-emerald-600" />
+                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-t-2 border-b-2 border-maroon" />
                   </div>
                 ) : allTermFeeItems.length === 0 ? (
-                  <Card className="border-0 shadow-sm">
+                  <Card className="border border-maroon/10 rounded-2xl shadow-none">
                     <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
-                      <div className="p-3 sm:p-4 rounded-full bg-gray-100 w-fit mx-auto mb-3 sm:mb-4">
-                        <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
+                      <div className="p-3 sm:p-4 rounded-full bg-maroon/[0.05] w-fit mx-auto mb-3 sm:mb-4">
+                        <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-maroon/50" />
                       </div>
                       <h3 className="font-semibold text-gray-900 text-sm sm:text-base lg:text-lg">No fee items found</h3>
                       <p className="text-gray-500 mt-1 text-xs sm:text-sm lg:text-base">Fee structure not yet defined for this term</p>
@@ -550,14 +579,13 @@ export default function StudentFeesDialog({
                   </Card>
                 ) : (
                   <>
-                    {/* Pass allStudentFees for the year so breakdown card can show per-term balances */}
                     <FeeBreakdownCard
                       fees={mandatoryFees}
                       title="Mandatory Fees"
                       type="Mandatory"
                       totalLabel="Total Mandatory"
                       allStudentFees={allStudentFees.filter(sf => sf.academic_year === selectedYear)}
-                      currentTerm={currentTerm} // NEW: pass down (currently unused)
+                      currentTerm={currentTerm}
                     />
                     <FeeBreakdownCard
                       fees={optionalFees}
@@ -565,7 +593,7 @@ export default function StudentFeesDialog({
                       type="Optional"
                       totalLabel="Total Optional"
                       allStudentFees={allStudentFees.filter(sf => sf.academic_year === selectedYear)}
-                      currentTerm={currentTerm} // NEW: pass down (currently unused)
+                      currentTerm={currentTerm}
                     />
                   </>
                 )}
@@ -578,7 +606,7 @@ export default function StudentFeesDialog({
                   showStudentInfo={false}
                   selectedTerm={selectedTerm}
                   selectedYear={selectedYear}
-                  currentTerm={currentTerm} // NEW: pass down
+                  currentTerm={currentTerm}
                 />
               </TabsContent>
 
@@ -587,21 +615,25 @@ export default function StudentFeesDialog({
               </TabsContent>
             </Tabs>
 
-            {/* Summary Cards — show per-term selected figures at bottom */}
+            {/* Summary Cards */}
             <div className="mb-4 sm:mb-6">
               <div className="sm:hidden mb-2">
                 <button
                   onClick={() => setShowSummaryCards(prev => !prev)}
-                  className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg border border-gray-200 active:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between w-full p-3 bg-white rounded-xl border border-maroon/10 active:bg-maroon/[0.03] transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-700">Financial Summary</span>
-                    <Badge className="ml-2 bg-emerald-100 text-emerald-700">4 items</Badge>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-maroon/10">
+                      <DollarSign className="w-3.5 h-3.5 text-maroon" />
+                    </span>
+                    <span className="text-sm font-semibold text-maroon">Financial Summary</span>
+                    <span className="ml-1 rounded-full bg-maroon/[0.08] px-2 py-0.5 text-[10px] font-semibold text-maroon">
+                      4 items
+                    </span>
                   </div>
                   {showSummaryCards
-                    ? <ChevronUp   className="w-4 h-4 text-gray-500" />
-                    : <ChevronDown className="w-4 h-4 text-gray-500" />
+                    ? <ChevronUp   className="w-4 h-4 text-maroon/60" />
+                    : <ChevronDown className="w-4 h-4 text-maroon/60" />
                   }
                 </button>
               </div>
@@ -609,76 +641,72 @@ export default function StudentFeesDialog({
               <div className={`${showSummaryCards ? 'block' : 'hidden'} sm:block`}>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
-                  {/* Combined billed for the year */}
-                  <Card className="fees-no-hover-shadow border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="fees-no-hover-shadow border border-maroon/10 rounded-2xl shadow-none hover:shadow-[0_8px_24px_-16px_rgba(122,31,43,0.28)] transition-shadow overflow-hidden">
                     <CardContent className="p-4 sm:p-5">
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm text-gray-500 mb-1">Total Billed</p>
-                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 truncate">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Billed</p>
+                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 truncate tracking-tight">
                             KES {combinedTotalBilled.toLocaleString()}
                           </p>
-                          <p className="text-xs text-gray-400 mt-1">{selectedYear}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">{selectedYear}</p>
                         </div>
-                        <div className="p-2 bg-gray-50 rounded-lg flex-shrink-0 ml-2">
-                          <Receipt className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                        <div className="p-2 bg-maroon/[0.06] rounded-xl flex-shrink-0 ml-2">
+                          <Receipt className="w-5 h-5 sm:w-6 sm:h-6 text-maroon" />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Combined paid for the year */}
-                  <Card className="fees-no-hover-shadow border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="fees-no-hover-shadow border border-maroon/10 rounded-2xl shadow-none hover:shadow-[0_8px_24px_-16px_rgba(122,31,43,0.28)] transition-shadow overflow-hidden">
                     <CardContent className="p-4 sm:p-5">
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm text-gray-500 mb-1">Total Paid</p>
-                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-emerald-600 truncate">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Paid</p>
+                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-emerald-600 truncate tracking-tight">
                             KES {combinedTotalPaid.toLocaleString()}
                           </p>
-                          <p className="text-xs text-gray-400 mt-1">{selectedYear}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">{selectedYear}</p>
                         </div>
-                        <div className="p-2 bg-emerald-50 rounded-lg flex-shrink-0 ml-2">
+                        <div className="p-2 bg-emerald-50 rounded-xl flex-shrink-0 ml-2">
                           <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Combined outstanding for the year */}
-                  <Card className="fees-no-hover-shadow border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="fees-no-hover-shadow border border-maroon/10 rounded-2xl shadow-none hover:shadow-[0_8px_24px_-16px_rgba(122,31,43,0.28)] transition-shadow overflow-hidden">
                     <CardContent className="p-4 sm:p-5">
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm text-gray-500 mb-1">Balance Due</p>
-                          <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${combinedOutstandingBalance > 0 ? 'text-amber-600' : 'text-emerald-600'} truncate`}>
+                          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Balance Due</p>
+                          <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${combinedOutstandingBalance > 0 ? 'text-amber-600' : 'text-emerald-600'} truncate tracking-tight`}>
                             KES {combinedOutstandingBalance.toLocaleString()}
                           </p>
-                          <p className="text-xs text-gray-400 mt-1">All terms</p>
+                          <p className="text-[11px] text-gray-400 mt-1">All terms</p>
                         </div>
-                        <div className="p-2 bg-amber-50 rounded-lg flex-shrink-0 ml-2">
+                        <div className="p-2 bg-amber-50 rounded-xl flex-shrink-0 ml-2">
                           <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Credit on selected term */}
-                  <Card className="fees-no-hover-shadow border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="fees-no-hover-shadow border border-maroon/10 rounded-2xl shadow-none hover:shadow-[0_8px_24px_-16px_rgba(122,31,43,0.28)] transition-shadow overflow-hidden">
                     <CardContent className="p-4 sm:p-5">
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm text-gray-500 mb-1">Credit</p>
-                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600 truncate">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Credit</p>
+                          <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600 truncate tracking-tight">
                             KES {creditCarried.toLocaleString()}
                           </p>
                         </div>
-                        <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0 ml-2">
+                        <div className="p-2 bg-blue-50 rounded-xl flex-shrink-0 ml-2">
                           <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                         </div>
                       </div>
                       {creditCarried > 0 && (
-                        <p className="text-xs text-blue-600 mt-2">Applied to future terms automatically</p>
+                        <p className="text-[11px] text-blue-600 mt-2">Applied to future terms automatically</p>
                       )}
                     </CardContent>
                   </Card>
@@ -688,7 +716,7 @@ export default function StudentFeesDialog({
             </div>
 
             {/* Credit System Info */}
-            <Card className="fees-no-hover-shadow border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 hover:shadow-sm transition-shadow">
+            <Card className="fees-no-hover-shadow border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-2xl shadow-none">
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex-shrink-0">
@@ -732,7 +760,7 @@ export default function StudentFeesDialog({
     selectedTerm={selectedTerm}
     selectedYear={selectedYear}
     studentFeeId={studentFee?.id ?? null}
-    currentTerm={currentTerm} // NEW
+    currentTerm={currentTerm}
   />
 )}
     </>
