@@ -26,17 +26,18 @@ interface Announcement {
 
 interface AssignmentAnnouncementProps {
   classId: string | null;
+  isOpen?: boolean;
+  isMobileTab?: boolean;
+  onClose?: () => void;
 }
 
+type ImportMetaEnv = Record<string, unknown> & { env?: Record<string, string> };
+const _meta = import.meta as unknown as ImportMetaEnv;
+
 const ALLOWED_STORAGE_ORIGIN =
-  (import.meta as Record<string, unknown> & { env?: Record<string, string> })
-    .env?.VITE_SUPABASE_STORAGE_ORIGIN ??
-  ((import.meta as Record<string, unknown> & { env?: Record<string, string> })
-    .env?.VITE_SUPABASE_URL
-    ? new URL(
-        (import.meta as Record<string, unknown> & { env?: Record<string, string> }).env!
-          .VITE_SUPABASE_URL
-      ).origin
+  _meta.env?.VITE_SUPABASE_STORAGE_ORIGIN ??
+  (_meta.env?.VITE_SUPABASE_URL
+    ? new URL(_meta.env.VITE_SUPABASE_URL).origin
     : "");
 
 function isTrustedStorageUrl(url: string): boolean {
@@ -68,6 +69,9 @@ async function downloadFile(url: string, filename?: string): Promise<void> {
 
 export default function AssignmentAnnouncement({
   classId,
+  isOpen: _isOpen,
+  isMobileTab: _isMobileTab,
+  onClose: _onClose,
 }: AssignmentAnnouncementProps) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);

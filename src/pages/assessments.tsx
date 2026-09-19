@@ -1442,9 +1442,11 @@ export default function Assessments({
   onClose,
   attendanceData,
   academicCalendar = [],
+  isMobileTab: _isMobileTab,
 }: AssessmentsProps & {
   attendanceData?: AttendanceData;
   academicCalendar?: AcademicCalendarTerm[];
+  isMobileTab?: boolean;
 }) {
   const [assessments, setAssessments] = useState<Record<string, unknown>[]>([]);
   const [assessmentsLoading, setAssessmentsLoading] = useState(false);

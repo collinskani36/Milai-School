@@ -107,15 +107,14 @@ function AppRoutes() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Admin check logic
+  // Role check — fires for ANY logged-in user whose role hasn't been resolved yet.
+  // Previously this was gated to teacher/admin paths, which meant a teacher logging
+  // in from "/" never got their role checked before the redirect fired.
   useEffect(() => {
-    const isTeacherRelated =
-      location.pathname.includes("teacher") ||
-      location.pathname.includes("admin");
-    if (user && (isTeacherRelated || location.pathname === "/teacher-login")) {
-      if (lastCheckedId.current !== user.id) checkIfAdmin(user.id);
+    if (user && lastCheckedId.current !== user.id) {
+      checkIfAdmin(user.id);
     }
-  }, [location.pathname, user, checkIfAdmin]);
+  }, [user, checkIfAdmin]);
 
   // Deterministic redirects (The Traffic Controller)
   useEffect(() => {
@@ -146,7 +145,18 @@ function AppRoutes() {
     // Logic for Logged-In users
     else {
       if (location.pathname === "/login" || location.pathname === "/") {
-        navigate("/student-dashboard", { replace: true });
+        // Wait for the role check to finish before redirecting.
+        // isTeacher === null means the DB query is still in flight — don't redirect yet
+        // or we risk sending a teacher to the student dashboard.
+        if (isTeacher === null) return;
+        if (isTeacher === true) {
+          // Role resolved: this is a teacher or admin — send to the right dashboard
+          if (isAdmin === true) navigate("/admin-dashboard", { replace: true });
+          else navigate("/teacher-dashboard", { replace: true });
+        } else {
+          // Role resolved: not in teachers table — this is a student
+          navigate("/student-dashboard", { replace: true });
+        }
       }
       if (location.pathname === "/teacher-login") {
         if (isAdmin === true) navigate("/admin-dashboard", { replace: true });
@@ -156,7 +166,7 @@ function AppRoutes() {
         navigate("/admin-dashboard", { replace: true });
       }
     }
-  }, [loading, user, isAdmin, location.pathname, navigate]);
+  }, [loading, user, isAdmin, isTeacher, location.pathname, navigate]);
 
   // Logout — navigate to landing page directly, no race condition
   const handleLogout = async () => {
