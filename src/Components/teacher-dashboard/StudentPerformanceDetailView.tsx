@@ -264,6 +264,31 @@ const StudentPerformanceDetailView: React.FC<Props> = ({ performanceDetail }) =>
 
   const currentKJSEALevel = useMemo(() => getKJSEALevel(averageScore), [averageScore]);
 
+  // ── Trend: computed locally from the last 3 summative exams ──────────────
+  // We override the server-supplied `trend` / `recentTrend` values because the
+  // backend may use all-time averages which can mask recent improvement or decline.
+  const { localTrend, localRecentTrend } = useMemo(() => {
+    const scored = summativeAssessments
+      .filter(a => a.percentage !== null && !a.is_absent)
+      .sort((a, b) => new Date(a.assessment_date).getTime() - new Date(b.assessment_date).getTime());
+
+    if (scored.length < 2) {
+      return { localTrend: trend, localRecentTrend: recentTrend };
+    }
+
+    // Take the last 3 (or fewer if not enough data)
+    const window = scored.slice(-3);
+    const first  = window[0].percentage as number;
+    const last   = window[window.length - 1].percentage as number;
+    const delta  = Math.round(last - first);
+
+    const localTrend: StudentPerformanceDetail['trend'] =
+      delta >  2 ? 'improving' :
+      delta < -2 ? 'declining' : 'stable';
+
+    return { localTrend, localRecentTrend: delta };
+  }, [summativeAssessments, trend, recentTrend]);
+
   const insights = useMemo(() => {
     const result: { icon: React.ReactNode; title: string; description: string }[] = [];
 
@@ -277,17 +302,17 @@ const StudentPerformanceDetailView: React.FC<Props> = ({ performanceDetail }) =>
       }`,
     });
 
-    if (trend === 'improving') {
+    if (localTrend === 'improving') {
       result.push({
         icon: <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />,
         title: "Positive Momentum",
-        description: `Performance is improving by approximately ${Math.abs(recentTrend)} points. Current teaching strategies are effective.`,
+        description: `Performance is improving by approximately ${Math.abs(localRecentTrend)} points over the last 3 exams. Current teaching strategies are effective.`,
       });
-    } else if (trend === 'declining') {
+    } else if (localTrend === 'declining') {
       result.push({
         icon: <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />,
         title: "Declining Performance",
-        description: `Scores have decreased by approximately ${Math.abs(recentTrend)} points. Review recent topics and consider additional support.`,
+        description: `Scores have decreased by approximately ${Math.abs(localRecentTrend)} points over the last 3 exams. Review recent topics and consider additional support.`,
       });
     } else {
       result.push({
@@ -326,7 +351,7 @@ const StudentPerformanceDetailView: React.FC<Props> = ({ performanceDetail }) =>
     }
 
     return result;
-  }, [averageScore, trend, recentTrend, subjectAverages, summativeAssessments.length, currentKJSEALevel]);
+  }, [averageScore, localTrend, localRecentTrend, subjectAverages, summativeAssessments.length, currentKJSEALevel]);
 
   const chartScrollWidth = useMemo(
     () => Math.max(performanceOverTime.length * 100, 400),
@@ -349,8 +374,8 @@ const StudentPerformanceDetailView: React.FC<Props> = ({ performanceDetail }) =>
     setOpenFormativeTerms(p => ({ ...p, [key]: !p[key] }));
 
   const trendColorClass =
-    trend === 'improving' ? 'text-green-300' :
-    trend === 'declining' ? 'text-red-300'   : 'text-yellow-200';
+    localTrend === 'improving' ? 'text-green-300' :
+    localTrend === 'declining' ? 'text-red-300'   : 'text-yellow-200';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -402,16 +427,16 @@ const StudentPerformanceDetailView: React.FC<Props> = ({ performanceDetail }) =>
               </div>
               <div className="flex items-center justify-center sm:justify-end gap-1.5 mt-1.5">
                 <span className={trendColorClass}>
-                  {trend === 'improving' ? <TrendingUp   className="h-4 w-4 sm:h-5 sm:w-5" /> :
-                   trend === 'declining' ? <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" /> :
-                                           <Minus        className="h-4 w-4 sm:h-5 sm:w-5" />}
+                  {localTrend === 'improving' ? <TrendingUp   className="h-4 w-4 sm:h-5 sm:w-5" /> :
+                   localTrend === 'declining' ? <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" /> :
+                                                <Minus        className="h-4 w-4 sm:h-5 sm:w-5" />}
                 </span>
                 <span className="text-xs sm:text-sm capitalize text-white/85 font-medium">
-                  {trend}
+                  {localTrend}
                 </span>
-                {recentTrend !== 0 && (
+                {localRecentTrend !== 0 && (
                   <span className="text-xs text-white/60">
-                    ({recentTrend > 0 ? '+' : ''}{recentTrend})
+                    ({localRecentTrend > 0 ? '+' : ''}{localRecentTrend})
                   </span>
                 )}
               </div>

@@ -168,9 +168,11 @@ function AppRoutes() {
     }
   }, [loading, user, isAdmin, isTeacher, location.pathname, navigate]);
 
-  // Logout — navigate to landing page directly, no race condition
+  // Logout — clears React Query cache so the next user never sees stale data
+  // from the previous session, then navigates to the landing page.
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    queryClient.clear();
     navigate("/", { replace: true });
   };
 
@@ -212,7 +214,7 @@ function AppRoutes() {
 
       <Route path="/student-dashboard" element={<StudentRoute><StudentDashboard handleLogout={handleLogout} /></StudentRoute>} />
       <Route path="/teacher-dashboard" element={<TeacherRoute><TeacherDashboard handleLogout={handleLogout} /></TeacherRoute>} />
-      <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+      <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard handleLogout={handleLogout} /></AdminRoute>} />
     </Routes>
   );
 }

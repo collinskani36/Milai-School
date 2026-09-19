@@ -4,7 +4,6 @@ import { Menu, Settings, Edit, Save, Eye, EyeOff, GraduationCap, X, User } from 
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { supabase } from '@/lib/supabaseClient';
-import { useNavigate } from 'react-router-dom';
 
 import Sidebar from '../Components/Admin/Sidebar';
 import OverviewSection from '../Components/Admin/OverviewSection';
@@ -38,6 +37,10 @@ interface AdminProfile {
   phone: string;
   created_at: string;
   is_admin: boolean;
+}
+
+interface AdminDashboardProps {
+  handleLogout: () => Promise<void>;
 }
 
 interface SettingsModalProps {
@@ -417,19 +420,12 @@ const useAdminProfile = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // AdminDashboard
 // ─────────────────────────────────────────────────────────────────────────────
-export default function AdminDashboard() {
+export default function AdminDashboard({ handleLogout }: AdminDashboardProps) {
   const [activeView, setActiveView] = useState('overview');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const navigate = useNavigate();
 
   const { profile, loading: profileLoading, error: profileError } = useAdminProfile();
-
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error('Error signing out:', error.message);
-    else navigate('/');
-  };
 
   const refreshProfile = async () => {
     if (!profile?.id) return;
@@ -488,7 +484,7 @@ export default function AdminDashboard() {
           </div>
           <p className="text-[#7a1f2b] font-semibold text-sm">{profileError || 'Admin profile not found'}</p>
           <Button
-            onClick={() => navigate('/')}
+            onClick={handleLogout}
             className="mt-4 h-9 rounded-lg text-white border-0 active:scale-[0.98] text-sm"
             style={GRADIENT_BTN_STYLE}
           >
