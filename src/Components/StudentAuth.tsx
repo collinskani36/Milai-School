@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
@@ -11,25 +11,20 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const navigate = useNavigate();
+  const regRef = useRef<HTMLInputElement>(null);
+  const pinRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleFocus = (e: any) => {
-      const target = e.target;
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
-    };
-
-    const inputs = document.querySelectorAll("input");
-    inputs.forEach((input) => input.addEventListener("focus", handleFocus));
-
-    return () => {
-      inputs.forEach((input) =>
-        input.removeEventListener("focus", handleFocus)
-      );
-    };
+    requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  const scrollToInput = (ref: React.RefObject<HTMLInputElement>) => {
+    setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +36,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
       const password = pin.trim();
 
       if (!reg || !password) {
-        setError("Please enter registration number and PIN");
+        setError("Please enter your registration number and PIN");
         return;
       }
 
@@ -53,13 +48,13 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
 
       if (lookupError) throw lookupError;
       if (!profileData) {
-        setError("Invalid registration number or PIN"); // Fixed: was "Registration number not found" — avoids user enumeration
+        setError("Invalid registration number or PIN");
         return;
       }
 
       const guardianEmail = profileData.guardian_email;
       if (!guardianEmail) {
-        setError("Invalid registration number or PIN"); // Fixed: was "Guardian email not set for this student" — avoids leaking account config details
+        setError("Invalid registration number or PIN");
         return;
       }
 
@@ -75,7 +70,6 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
       }
 
       if (typeof onLogin === "function") onLogin(profileData);
-
       navigate("/student-dashboard", { replace: true });
     } catch {
       setError("Something went wrong. Please try again.");
@@ -85,78 +79,249 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#f6f2f2] via-[#fdfbfb] to-[#f3eded] p-4">
-      <div className="bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl p-6 w-full max-w-sm relative overflow-hidden">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-        {/* Subtle maroon glow */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <img
-            src="/logo.png"
-            alt="School Logo"
-            className="w-16 h-16 object-contain"
-          />
-        </div>
+        .sa-root {
+          min-height: 100dvh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #f5f1f1;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          padding: max(env(safe-area-inset-top, 0px), 24px) 24px max(env(safe-area-inset-bottom, 0px), 24px);
+          -webkit-tap-highlight-color: transparent;
+        }
 
-        {/* Title */}
-        <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">
-          Student Login
-        </h2>
-        <p className="text-[#6b4b50] text-center text-sm mb-6 font-medium">
-          Enter your credentials to access your portal
-        </p>
+        .sa-card {
+          width: 100%;
+          max-width: 360px;
+          background: #ffffff;
+          border-radius: 20px;
+          padding: 36px 28px 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+        .sa-card.in {
+          opacity: 1;
+          transform: translateY(0);
+        }
 
-        {/* Error */}
-        {error && (
-          <div className="bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 text-[#7a1f2b] p-2 rounded-xl mb-4 text-sm text-center">
-            {error}
-          </div>
-        )}
+        /* Logo */
+        .sa-logo {
+          width: 52px;
+          height: 52px;
+          object-fit: contain;
+          margin: 0 auto 24px;
+          display: block;
+        }
 
-        {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Registration Number"
-            value={registration}
-            onChange={(e) => setRegistration(e.target.value)}
-            className="w-full px-3 py-2 bg-[#f6f2f2] border border-[#7a1f2b]/20 rounded-xl text-[#3a1b1f] placeholder:text-[#9b7a7f] focus:outline-none focus:ring-2 focus:ring-[#7a1f2b]/30 focus:border-[#7a1f2b] transition-all uppercase"
-            required
-          />
-          <input
-            type="password"
-            placeholder="PIN"
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            className="w-full px-3 py-2 bg-[#f6f2f2] border border-[#7a1f2b]/20 rounded-xl text-[#3a1b1f] placeholder:text-[#9b7a7f] focus:outline-none focus:ring-2 focus:ring-[#7a1f2b]/30 focus:border-[#7a1f2b] transition-all"
-            required
-          />
+        /* Heading */
+        .sa-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1c0d10;
+          letter-spacing: -0.02em;
+          text-align: center;
+          margin-bottom: 4px;
+        }
+        .sa-subtitle {
+          font-size: 13px;
+          color: #9b7a7f;
+          text-align: center;
+          font-weight: 400;
+          margin-bottom: 28px;
+          line-height: 1.5;
+        }
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#7a1f2b] hover:bg-[#6a1a24] active:bg-[#5a161f] text-white py-2.5 rounded-xl font-bold transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2 text-sm">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Logging in...
-              </span>
-            ) : (
-              "Login to Portal"
-            )}
-          </button>
+        /* Error */
+        .sa-error {
+          font-size: 12.5px;
+          color: #7a1f2b;
+          background: #fdf3f4;
+          border: 1px solid #f0d5d8;
+          border-radius: 8px;
+          padding: 9px 12px;
+          margin-bottom: 16px;
+          line-height: 1.45;
+          font-weight: 500;
+        }
+
+        /* Fields */
+        .sa-form {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .sa-field {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .sa-label {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #6b4b50;
+          letter-spacing: 0.01em;
+        }
+        .sa-input {
+          height: 46px;
+          padding: 0 14px;
+          background: #faf7f7;
+          border: 1px solid #e8dfe0;
+          border-radius: 10px;
+          font-size: 14.5px;
+          font-weight: 500;
+          color: #1c0d10;
+          font-family: inherit;
+          outline: none;
+          transition: border-color 0.18s, box-shadow 0.18s;
+          -webkit-appearance: none;
+          user-select: text;
+        }
+        .sa-input::placeholder { color: #c4a8ad; font-weight: 400; }
+        .sa-input:focus {
+          border-color: #7a1f2b;
+          box-shadow: 0 0 0 3px rgba(122,31,43,0.08);
+          background: #fff;
+        }
+        .sa-input.uc { text-transform: uppercase; letter-spacing: 0.04em; }
+
+        /* Button */
+        .sa-btn {
+          height: 48px;
+          width: 100%;
+          margin-top: 8px;
+          background: #7a1f2b;
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 600;
+          font-family: inherit;
+          letter-spacing: 0.01em;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: background 0.15s, transform 0.1s;
+          -webkit-appearance: none;
+        }
+        .sa-btn:active:not(:disabled) {
+          background: #5c1620;
+          transform: scale(0.98);
+        }
+        .sa-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        .sa-spinner {
+          width: 16px; height: 16px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Forgot */
+        .sa-forgot {
+          text-align: center;
+          font-size: 13px;
+          font-weight: 500;
+          color: #7a1f2b;
+          cursor: pointer;
+          padding: 14px 0 0;
+          transition: opacity 0.15s;
+        }
+        .sa-forgot:active { opacity: 0.6; }
+
+        /* Footer */
+        .sa-footer {
+          text-align: center;
+          font-size: 11px;
+          color: #c4a8ad;
+          margin-top: 28px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .sa-card { transition: none; opacity: 1; transform: none; }
+        }
+      `}</style>
+
+      <div className="sa-root">
+        <div className={`sa-card${mounted ? " in" : ""}`}>
+
+          <img className="sa-logo" src="/logo.png" alt="Milai School" />
+
+          <h1 className="sa-title">Student Portal</h1>
+          <p className="sa-subtitle">Sign in to access your account</p>
+
+          {error && <div className="sa-error" role="alert">{error}</div>}
+
+          <form className="sa-form" onSubmit={handleLogin} noValidate>
+            <div className="sa-field">
+              <label className="sa-label" htmlFor="sa-reg">Registration number</label>
+              <input
+                id="sa-reg"
+                ref={regRef}
+                className="sa-input uc"
+                type="text"
+                placeholder="e.g. MIL-2024-001"
+                value={registration}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                autoComplete="username"
+                spellCheck={false}
+                onChange={(e) => setRegistration(e.target.value)}
+                onFocus={() => scrollToInput(regRef)}
+                required
+              />
+            </div>
+
+            <div className="sa-field">
+              <label className="sa-label" htmlFor="sa-pin">PIN</label>
+              <input
+                id="sa-pin"
+                ref={pinRef}
+                className="sa-input"
+                type="password"
+                placeholder="Enter your PIN"
+                value={pin}
+                autoComplete="current-password"
+                inputMode="numeric"
+                onChange={(e) => setPin(e.target.value)}
+                onFocus={() => scrollToInput(pinRef)}
+                required
+              />
+            </div>
+
+            <button className="sa-btn" type="submit" disabled={loading}>
+              {loading ? <><span className="sa-spinner" /> Signing in…</> : "Sign in"}
+            </button>
+          </form>
 
           <p
-            className="text-sm text-center text-[#7a1f2b] cursor-pointer hover:text-[#6a1a24] hover:underline mt-4 transition-colors font-medium"
-            onClick={() => navigate("/forgot-password")}
+            className="sa-forgot"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/forgot-password", { replace: true })}
+onKeyDown={(e) => e.key === "Enter" && navigate("/forgot-password", { replace: true })}
           >
-            Forgot password?
+            Forgot PIN?
           </p>
-        </form>
+        </div>
+
+        <p className="sa-footer">© 2026 Milai School</p>
       </div>
-    </div>
+    </>
   );
 }

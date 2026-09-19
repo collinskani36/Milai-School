@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
@@ -11,16 +11,19 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [mounted, setMounted] = useState(false);
   const navigate = useNavigate();
-
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  const scrollIntoView = (ref: React.RefObject<HTMLInputElement>) => {
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
+
+  const scrollToInput = (ref: React.RefObject<HTMLInputElement>) => {
     setTimeout(() => {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
+    }, 80);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -45,8 +48,6 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
         .eq("auth_id", data.user.id)
         .single();
 
-      // FIX 1: If not found in teachers table, sign out immediately so
-      // App.tsx redirect logic does not override the error message
       if (teacherError || !teacherRecord) {
         await supabase.auth.signOut();
         setError("Access denied. This account is not registered as a teacher.");
@@ -54,11 +55,6 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
       }
 
       onLogin?.(teacherRecord);
-
-      // FIX 2: Remove manual navigate() calls — App.tsx redirect controller
-      // already handles routing based on isAdmin once the session is set.
-      // Navigating here races against App.tsx and causes the white screen loop.
-
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Try again.");
     } finally {
@@ -67,135 +63,239 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
   };
 
   return (
-    <div
-      className="
-        flex min-h-screen w-full
-        items-center justify-center
-        p-4
-        bg-gradient-to-br from-[#f6f2f2] via-[#fdfbfb] to-[#f3eded]
-      "
-    >
-      <div className="relative w-full max-w-sm p-6 bg-white/90 backdrop-blur-xl border border-[#7a1f2b]/10 rounded-3xl shadow-xl">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-        {/* Subtle maroon glow */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#7a1f2b]/10 blur-3xl rounded-full" />
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <img
-            src="/logo.png"
-            alt="School Logo"
-            className="w-16 h-16 object-contain"
-          />
+        .ta-root {
+          min-height: 100dvh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #f5f1f1;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          padding: max(env(safe-area-inset-top, 0px), 24px) 24px max(env(safe-area-inset-bottom, 0px), 24px);
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .ta-card {
+          width: 100%;
+          max-width: 360px;
+          background: #ffffff;
+          border-radius: 20px;
+          padding: 36px 28px 28px;
+          display: flex;
+          flex-direction: column;
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+        .ta-card.in {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .ta-logo {
+          width: 52px;
+          height: 52px;
+          object-fit: contain;
+          margin: 0 auto 24px;
+          display: block;
+        }
+
+        .ta-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1c0d10;
+          letter-spacing: -0.02em;
+          text-align: center;
+          margin-bottom: 4px;
+        }
+        .ta-subtitle {
+          font-size: 13px;
+          color: #9b7a7f;
+          text-align: center;
+          font-weight: 400;
+          margin-bottom: 28px;
+          line-height: 1.5;
+        }
+
+        .ta-error {
+          font-size: 12.5px;
+          color: #7a1f2b;
+          background: #fdf3f4;
+          border: 1px solid #f0d5d8;
+          border-radius: 8px;
+          padding: 9px 12px;
+          margin-bottom: 16px;
+          line-height: 1.45;
+          font-weight: 500;
+        }
+
+        .ta-form {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .ta-field {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .ta-label {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #6b4b50;
+          letter-spacing: 0.01em;
+        }
+        .ta-input {
+          height: 46px;
+          padding: 0 14px;
+          background: #faf7f7;
+          border: 1px solid #e8dfe0;
+          border-radius: 10px;
+          font-size: 14.5px;
+          font-weight: 500;
+          color: #1c0d10;
+          font-family: inherit;
+          outline: none;
+          transition: border-color 0.18s, box-shadow 0.18s;
+          -webkit-appearance: none;
+          user-select: text;
+        }
+        .ta-input::placeholder { color: #c4a8ad; font-weight: 400; }
+        .ta-input:focus {
+          border-color: #7a1f2b;
+          box-shadow: 0 0 0 3px rgba(122,31,43,0.08);
+          background: #fff;
+        }
+
+        .ta-btn {
+          height: 48px;
+          width: 100%;
+          margin-top: 8px;
+          background: #7a1f2b;
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 600;
+          font-family: inherit;
+          letter-spacing: 0.01em;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: background 0.15s, transform 0.1s;
+          -webkit-appearance: none;
+        }
+        .ta-btn:active:not(:disabled) {
+          background: #5c1620;
+          transform: scale(0.98);
+        }
+        .ta-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        .ta-spinner {
+          width: 16px; height: 16px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .ta-forgot {
+          text-align: center;
+          font-size: 13px;
+          font-weight: 500;
+          color: #7a1f2b;
+          cursor: pointer;
+          padding: 14px 0 0;
+          transition: opacity 0.15s;
+        }
+        .ta-forgot:active { opacity: 0.6; }
+
+        .ta-footer {
+          text-align: center;
+          font-size: 11px;
+          color: #c4a8ad;
+          margin-top: 28px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ta-card { transition: none; opacity: 1; transform: none; }
+        }
+      `}</style>
+
+      <div className="ta-root">
+        <div className={`ta-card${mounted ? " in" : ""}`}>
+
+          <img className="ta-logo" src="/logo.png" alt="Milai School" />
+
+          <h1 className="ta-title">Teacher Portal</h1>
+          <p className="ta-subtitle">Sign in to your dashboard</p>
+
+          {error && <div className="ta-error" role="alert">{error}</div>}
+
+          <form className="ta-form" onSubmit={handleLogin} noValidate>
+            <div className="ta-field">
+              <label className="ta-label" htmlFor="ta-email">Email address</label>
+              <input
+                id="ta-email"
+                ref={emailRef}
+                className="ta-input"
+                type="email"
+                placeholder="you@milai.ac.ke"
+                value={email}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="email"
+                spellCheck={false}
+                onChange={(e) => setEmail(e.target.value)}
+                onFocus={() => scrollToInput(emailRef)}
+                required
+              />
+            </div>
+
+            <div className="ta-field">
+              <label className="ta-label" htmlFor="ta-password">Password</label>
+              <input
+                id="ta-password"
+                ref={passwordRef}
+                className="ta-input"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                autoComplete="current-password"
+                onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => scrollToInput(passwordRef)}
+                required
+              />
+            </div>
+
+            <button className="ta-btn" type="submit" disabled={loading}>
+              {loading ? <><span className="ta-spinner" /> Signing in…</> : "Sign in"}
+            </button>
+          </form>
+
+          <p
+            className="ta-forgot"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/teacher-forgot-password", { replace: true })}
+onKeyDown={(e) => e.key === "Enter" && navigate("/teacher-forgot-password", { replace: true })}
+          >
+            Forgot password?
+          </p>
         </div>
 
-        {/* Title */}
-        <h2 className="text-2xl font-extrabold text-center text-[#3a1b1f] mb-2 tracking-tight">
-          Teacher Login
-        </h2>
-        <p className="text-[#6b4b50] text-center text-sm mb-6 font-medium">
-          Access your classroom management dashboard
-        </p>
-
-        {/* Error */}
-        {error && (
-          <div className="bg-[#7a1f2b]/10 border border-[#7a1f2b]/20 text-[#7a1f2b] p-2 rounded-xl mb-4 text-sm text-center">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-          <input
-            ref={emailRef}
-            type="email"
-            placeholder="Email Address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onFocus={() => scrollIntoView(emailRef)}
-            className="
-              w-full px-3 py-2
-              bg-[#f6f2f2]
-              border border-[#7a1f2b]/20
-              rounded-xl
-              text-[#3a1b1f]
-              placeholder:text-[#9b7a7f]
-              focus:outline-none
-              focus:ring-2 focus:ring-[#7a1f2b]/30
-              focus:border-[#7a1f2b]
-              transition-all
-            "
-            required
-          />
-
-          <input
-            ref={passwordRef}
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onFocus={() => scrollIntoView(passwordRef)}
-            className="
-              w-full px-3 py-2
-              bg-[#f6f2f2]
-              border border-[#7a1f2b]/20
-              rounded-xl
-              text-[#3a1b1f]
-              placeholder:text-[#9b7a7f]
-              focus:outline-none
-              focus:ring-2 focus:ring-[#7a1f2b]/30
-              focus:border-[#7a1f2b]
-              transition-all
-            "
-            required
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="
-              w-full
-              bg-[#7a1f2b]
-              hover:bg-[#6a1a24]
-              active:bg-[#5a161f]
-              text-white
-              py-2.5
-              rounded-xl
-              font-bold
-              transition-all
-              shadow-md
-              disabled:opacity-50
-              disabled:cursor-not-allowed
-            "
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2 text-sm">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Authenticating...
-              </span>
-            ) : (
-              "Login"
-            )}
-          </button>
-        </form>
-
-        {/* Forgot password */}
-        <p
-          className="
-            text-sm text-center
-            text-[#7a1f2b]
-            cursor-pointer
-            hover:text-[#6a1a24]
-            hover:underline
-            mt-4
-            transition-colors
-            font-medium
-          "
-          onClick={() => navigate("/teacher-forgot-password")}
-        >
-          Forgot password?
-        </p>
+        <p className="ta-footer">© 2026 Milai School</p>
       </div>
-    </div>
+    </>
   );
 }
