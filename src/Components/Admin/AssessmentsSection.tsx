@@ -24,6 +24,7 @@ import {
 } from '@/Components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/Components/ui/tabs';
 import AssessmentResultsView from './AssessmentResultsView';
+import ClassPerformanceTab   from './ClassPerformanceTab';
 
 // ─── Design tokens (mirrors every other Admin section) ───────────────────────
 const MAROON = '#7a1f2b';
@@ -510,7 +511,7 @@ export default function AssessmentsSection() {
   const [viewingAssessment,       setViewingAssessment]       = useState<Assessment | null>(null);
   const [showAddModal,            setShowAddModal]            = useState(false);
   const [publishError,            setPublishError]            = useState<string | null>(null);
-  const [activeTab,               setActiveTab]               = useState<'summative' | 'formative'>('summative');
+  const [activeTab, setActiveTab] = useState<'summative' | 'formative' | 'performance'>('summative');
   const [formError,               setFormError]               = useState<string | null>(null);
   const [expandedSummClasses,     setExpandedSummClasses]     = useState<Set<string>>(new Set());
   const [expandedFormClasses,     setExpandedFormClasses]     = useState<Set<string>>(new Set());
@@ -824,23 +825,43 @@ export default function AssessmentsSection() {
 
         <CardContent className="p-3 sm:p-5">
           <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'summative' | 'formative')}>
-            <TabsList className="mb-4 w-full sm:w-auto rounded-xl bg-[#7a1f2b]/5 p-1 h-auto">
-              <TabsTrigger
-                value="summative"
-                className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
-              >
-                Exams / Summative
-                <Badge className="ml-2 bg-[#7a1f2b]/10 text-[#7a1f2b] border-[#7a1f2b]/20 text-[10px]">{assessments.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger
-                value="formative"
-                className="flex-1 sm:flex-none rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-xs sm:text-sm py-2"
-              >
-                Formative Activities
-                <Badge className="ml-2 bg-[#7a1f2b]/10 text-[#7a1f2b] border-[#7a1f2b]/20 text-[10px]">{formativeActivities.length}</Badge>
-              </TabsTrigger>
-            </TabsList>
+           <TabsList className="mb-4 w-full sm:w-auto rounded-xl bg-[#7a1f2b]/5 p-1 h-auto grid grid-cols-3 gap-1 sm:inline-flex sm:gap-0">
+  <TabsTrigger
+    value="summative"
+    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-[11px] sm:text-sm py-2 px-1.5 sm:px-3 min-w-0 flex items-center justify-center gap-1"
+  >
+    <span className="truncate">
+      <span className="sm:hidden">Summative</span>
+      <span className="hidden sm:inline">Exams / Summative</span>
+    </span>
+    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#7a1f2b]/10 text-[#7a1f2b] border border-[#7a1f2b]/20 text-[10px] font-semibold shrink-0">
+      {assessments.length}
+    </span>
+  </TabsTrigger>
 
+  <TabsTrigger
+    value="formative"
+    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-[11px] sm:text-sm py-2 px-1.5 sm:px-3 min-w-0 flex items-center justify-center gap-1"
+  >
+    <span className="truncate">
+      <span className="sm:hidden">Formative</span>
+      <span className="hidden sm:inline">Formative Activities</span>
+    </span>
+    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#7a1f2b]/10 text-[#7a1f2b] border border-[#7a1f2b]/20 text-[10px] font-semibold shrink-0">
+      {formativeActivities.length}
+    </span>
+  </TabsTrigger>
+
+  <TabsTrigger
+    value="performance"
+    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#7a1f2b] data-[state=active]:shadow-sm text-[11px] sm:text-sm py-2 px-1.5 sm:px-3 min-w-0 flex items-center justify-center"
+  >
+    <span className="truncate">
+      <span className="sm:hidden">Performance</span>
+      <span className="hidden sm:inline">Class Performance</span>
+    </span>
+  </TabsTrigger>
+</TabsList>
             {/* ══════════════ SUMMATIVE TAB ══════════════ */}
             <TabsContent value="summative">
               {assessmentsError ? (
@@ -1130,6 +1151,13 @@ export default function AssessmentsSection() {
                 </div>
               )}
             </TabsContent>
+            {/* ══════════════ CLASS PERFORMANCE TAB ══════════════ */}
+<TabsContent value="performance">
+  <ClassPerformanceTab
+    activeTerm={termLoading ? undefined : activeTerm}
+    classes={classes}
+  />
+</TabsContent>
           </Tabs>
         </CardContent>
       </Card>
