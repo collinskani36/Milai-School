@@ -230,7 +230,7 @@ export default function TeacherForgotPassword() {
                   ref={emailRef}
                   className="tfp-input"
                   type="email"
-                  placeholder="you@milai.ac.ke"
+                  
                   value={email}
                   autoCapitalize="none"
                   autoCorrect="off"

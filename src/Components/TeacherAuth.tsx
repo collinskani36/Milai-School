@@ -250,7 +250,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
                 ref={emailRef}
                 className="ta-input"
                 type="email"
-                placeholder="you@milai.ac.ke"
+                
                 value={email}
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -269,7 +269,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
                 ref={passwordRef}
                 className="ta-input"
                 type="password"
-                placeholder="Enter your password"
+                
                 value={password}
                 autoComplete="current-password"
                 onChange={(e) => setPassword(e.target.value)}

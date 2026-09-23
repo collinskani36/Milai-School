@@ -275,7 +275,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
                 ref={regRef}
                 className="sa-input uc"
                 type="text"
-                placeholder="e.g. MIL-2024-001"
+               
                 value={registration}
                 autoCapitalize="characters"
                 autoCorrect="off"
@@ -294,7 +294,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
                 ref={pinRef}
                 className="sa-input"
                 type="password"
-                placeholder="Enter your PIN"
+                
                 value={pin}
                 autoComplete="current-password"
                 inputMode="numeric"

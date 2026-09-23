@@ -248,7 +248,7 @@ export default function StudentForgotPassword() {
                   ref={regRef}
                   className="sfp-input"
                   type="text"
-                  placeholder="MIL-2024-001"
+                  
                   value={registration}
                   autoCapitalize="characters"
                   autoCorrect="off"

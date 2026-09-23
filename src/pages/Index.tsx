@@ -37,7 +37,7 @@ const Index = () => {
       <div className="feature-row">
         <div className="feat-chip"><ChartBar size={16} color={MAROON} /><span>Track progress</span></div>
         <div className="feat-chip"><FileText size={16} color={MAROON} /><span>Assignments</span></div>
-        <div className="feat-chip"><Award size={16} color={MAROON} /><span>Grades</span></div>
+        <div className="feat-chip"><DollarSign size={16} color={MAROON} /><span>Fees</span></div>
       </div>
       <button className="signin-btn" onClick={() => navigate("/login")}>
         Sign in as student
@@ -459,7 +459,6 @@ const Index = () => {
                     <div className="desk-feature-row">
                       <div className="desk-feat-chip"><ChartBar size={18} color={MAROON} /><span>Track progress</span></div>
                       <div className="desk-feat-chip"><FileText size={18} color={MAROON} /><span>Assignments</span></div>
-                      <div className="desk-feat-chip"><Award size={18} color={MAROON} /><span>Grades</span></div>
                       <div className="desk-feat-chip"><LucideDollarSign size={18} color={MAROON} /><span>Fees</span></div>
                     </div>
                     <button className="desk-signin-btn" onClick={() => navigate("/login")}>
