@@ -210,10 +210,10 @@ async function fetchClassTrend(
     const seriesMeans = points.filter((p) => p[s.key] !== undefined)
       .map((p) => ({ label: p.label, mean: p[s.key] as number }));
     if (seriesMeans.length === 0) return null;
-    const latestMean = seriesMeans[seriesMeans.length - 1]?.mean ?? null;
-    const firstMean  = seriesMeans[0]?.mean ?? null;
-    const delta = (latestMean !== null && firstMean !== null)
-      ? Number((latestMean - firstMean).toFixed(1)) : 0;
+    const latestMean   = seriesMeans[seriesMeans.length - 1]?.mean ?? null;
+    const previousMean = seriesMeans[seriesMeans.length - 2]?.mean ?? null;
+    const delta = (latestMean !== null && previousMean !== null)
+      ? Number((latestMean - previousMean).toFixed(1)) : 0;
     let trend: TrendSeries["trend"] = "insufficient";
     if (seriesMeans.length >= 2) {
       if (delta > 3) trend = "improving";
