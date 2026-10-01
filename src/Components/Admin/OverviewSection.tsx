@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   Users,
   GraduationCap,
@@ -175,19 +175,19 @@ export default function OverviewSection({ setActiveView }: OverviewSectionProps)
 
   // 📚 Classes
   const { data: classes = [], isLoading: loadingClasses } = useQuery({
-    queryKey: ['classes'],
+    queryKey: queryKeys.overview.classes,
     queryFn: () => fetchTable('classes'),
   });
 
   // 🧾 Subjects
   const { data: subjects = [], isLoading: loadingSubjects } = useQuery({
-    queryKey: ['subjects'],
+    queryKey: queryKeys.overview.subjects,
     queryFn: () => fetchTable('subjects'),
   });
 
   // 🔔 Announcements
   const { data: announcements = [], isLoading: loadingAnnouncements } = useQuery({
-    queryKey: ['announcements'],
+    queryKey: queryKeys.overview.announcements,
     queryFn: () => fetchTable('announcements', 5),
   });
 

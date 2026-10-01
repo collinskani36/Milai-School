@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Plus, FileText, Paperclip, ExternalLink, Calendar, AlertTriangle, Loader2, FileUp, X } from 'lucide-react';
@@ -93,8 +94,8 @@ export default function AssignmentsSection() {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ['assignments'],
+  const { data: assignments = [], isLoading: loadingAssignments } = useQuery({
+    queryKey: queryKeys.assignments.list,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('assignments')
@@ -112,27 +113,24 @@ export default function AssignmentsSection() {
       if (error) throw error;
       return data || [];
     },
-    initialData: [],
   });
 
   const { data: subjects = [] } = useQuery({
-    queryKey: ['subjects'],
+    queryKey: queryKeys.assignments.subjects,
     queryFn: async () => {
       const { data, error } = await supabase.from('subjects').select('id, name, code');
       if (error) throw error;
       return data || [];
     },
-    initialData: [],
   });
 
   const { data: classes = [] } = useQuery({
-    queryKey: ['classes'],
+    queryKey: queryKeys.assignments.classes,
     queryFn: async () => {
       const { data, error } = await supabase.from('classes').select('*');
       if (error) throw error;
       return data || [];
     },
-    initialData: [],
   });
 
   const createMutation = useMutation({
@@ -142,7 +140,7 @@ export default function AssignmentsSection() {
       return res;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignments'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.assignments.list });
       setShowAddModal(false);
       setFormError(null);
       setSelectedFileName(null);
@@ -153,43 +151,45 @@ export default function AssignmentsSection() {
     },
   });
 
-  const handleFileUpload = async (e: any) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploadingFile(true);
-    try {
-      const filePath = `${Date.now()}_${file.name}`;
-      const { error: storageError } = await supabase.storage
-        .from('assignments')
-        .upload(filePath, file);
-      if (storageError) throw storageError;
-      const { data: urlData } = supabase.storage.from('assignments').getPublicUrl(filePath);
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('Error uploading file:', error);
-    } finally {
-      setUploadingFile(false);
-    }
+  // Uploads a file and returns its public URL. Throws on failure so the caller can stop.
+  const uploadFile = async (file: File): Promise<string> => {
+    const safeName = file.name.replace(/[^\w.-]+/g, '_');
+    const filePath = `${Date.now()}_${safeName}`;
+    const { error: storageError } = await supabase.storage
+      .from('assignments')
+      .upload(filePath, file);
+    if (storageError) throw storageError;
+    const { data: urlData } = supabase.storage.from('assignments').getPublicUrl(filePath);
+    return urlData.publicUrl;
   };
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     setFormError(null);
-    const formData = new FormData(e.target);
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const entries = Array.from(formData.entries()).map(([k, v]) => [
       k,
       typeof v === 'string' ? v : '',
     ]);
     const data = Object.fromEntries(entries) as Record<string, any>;
-    const fileInput = e.target.querySelector('input[type="file"]');
-    if (fileInput.files[0]) {
-      const file_url = await handleFileUpload({ target: fileInput });
-      data.file_url = file_url;
+    const file = (form.querySelector('input[type="file"]') as HTMLInputElement | null)?.files?.[0];
+
+    if (file) {
+      setUploadingFile(true);
+      try {
+        data.file_url = await uploadFile(file);
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        setFormError(`File upload failed: ${error?.message || 'please try again.'} The assignment was not created.`);
+        return;
+      } finally {
+        setUploadingFile(false);
+      }
     }
 
     if (data.total_marks) {
-      (data as any).total_marks = parseFloat(data.total_marks as string);
+      data.total_marks = parseFloat(data.total_marks as string);
     }
 
     createMutation.mutate(data as any);
@@ -234,7 +234,9 @@ export default function AssignmentsSection() {
         </div>
 
         <CardContent className="p-0">
-          {assignments.length === 0 ? (
+          {loadingAssignments ? (
+            <div className="text-center py-12 px-4 text-sm text-muted-foreground">Loading assignments…</div>
+          ) : assignments.length === 0 ? (
             <div className="text-center py-12 px-4">
               <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
                 style={{ background: 'rgba(122,31,43,0.06)' }}>

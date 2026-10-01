@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import {
@@ -26,6 +27,14 @@ import {
   ClassDetailModal, PromotionModal,
 } from './modals.tsx';
 
+// Guarantees every class has subjects[] and studentCount, even if the cache holds an unexpected shape.
+const normalizeClasses = (data: ClassRecord[]): ClassRecord[] =>
+  (data ?? []).map((c) => ({
+    ...c,
+    subjects: Array.isArray(c.subjects) ? c.subjects : [],
+    studentCount: c.studentCount ?? 0,
+  }));
+
 export default function ClassesSection() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [showClassModal, setShowClassModal] = useState(false);
@@ -48,8 +57,9 @@ export default function ClassesSection() {
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: classes, isLoading: loadingClasses, error: classesError } = useQuery<ClassRecord[]>({
-    queryKey: ['classes-with-details'],
+    queryKey: queryKeys.classes.withDetails,
     staleTime: 2 * 60 * 1000,
+    select: normalizeClasses,
     queryFn: async () => {
       const [classesRes, csRes, enrollRes] = await Promise.all([
         supabase.from('classes').select('id, name, grade_level, created_at').order('grade_level').order('name'),
@@ -86,7 +96,7 @@ export default function ClassesSection() {
   });
 
   const { data: subjects, isLoading: loadingSubjects } = useQuery<SubjectRecord[]>({
-    queryKey: ['subjects'], staleTime: 5 * 60 * 1000,
+    queryKey: queryKeys.classes.subjects, staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.from('subjects').select('id, code, name').order('name');
       if (error) throw error;
@@ -95,7 +105,7 @@ export default function ClassesSection() {
   });
 
   const { data: gradeLevels, isLoading: loadingGradeLevels } = useQuery<GradeLevel[]>({
-    queryKey: ['gradeLevels'], staleTime: 10 * 60 * 1000,
+    queryKey: queryKeys.classes.gradeLevels, staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.from('grade_levels').select('id, stage, grade, created_at').order('grade');
       if (error) throw error;
@@ -165,7 +175,7 @@ export default function ClassesSection() {
   });
 
   const { data: currentTerm } = useQuery<AcademicTerm | null>({
-    queryKey: ['current-term'], staleTime: 5 * 60 * 1000,
+    queryKey: queryKeys.classes.currentTerm, staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data } = await supabase.from('academic_calendar')
         .select('id, term, academic_year, term_name, is_current')
@@ -177,43 +187,43 @@ export default function ClassesSection() {
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createClassMutation = useMutation<void, Error, { name: string; grade_level: string }>({
     mutationFn: async (data) => { const { error } = await supabase.from('classes').insert([data]); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['classes-with-details'] }); setShowClassModal(false); setEditingClass(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails }); setShowClassModal(false); setEditingClass(null); },
   });
 
   const updateClassMutation = useMutation<void, Error, { id: string; data: { name: string; grade_level: string } }>({
     mutationFn: async ({ id, data }) => { const { error } = await supabase.from('classes').update(data).eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['classes-with-details'] }); setShowClassModal(false); setEditingClass(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails }); setShowClassModal(false); setEditingClass(null); },
   });
 
   const deleteClassMutation = useMutation<void, Error, string>({
     mutationFn: async (id) => { const { error } = await supabase.from('classes').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['classes-with-details'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails }),
   });
 
   const createSubjectMutation = useMutation<void, Error, { name: string; code: string }>({
     mutationFn: async (data) => { const { error } = await supabase.from('subjects').insert([data]); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subjects'] }); setShowSubjectModal(false); setEditingSubject(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.classes.subjects }); setShowSubjectModal(false); setEditingSubject(null); },
   });
 
   const updateSubjectMutation = useMutation<void, Error, { id: string; data: { name: string; code: string } }>({
     mutationFn: async ({ id, data }) => { const { error } = await supabase.from('subjects').update(data).eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subjects'] }); setShowSubjectModal(false); setEditingSubject(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.classes.subjects }); setShowSubjectModal(false); setEditingSubject(null); },
   });
 
   const deleteSubjectMutation = useMutation<void, Error, string>({
     mutationFn: async (id) => { const { error } = await supabase.from('subjects').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['subjects'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classes.subjects }),
   });
 
   const createGradeLevelMutation = useMutation<void, Error, { stage: string; grade: string }>({
     mutationFn: async (data) => { const { error } = await supabase.from('grade_levels').insert([data]).select(); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['gradeLevels'] }); setShowGradeLevelModal(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.classes.gradeLevels }); setShowGradeLevelModal(false); },
     onError: (err) => alert('Error creating grade level: ' + err.message),
   });
 
   const deleteGradeLevelMutation = useMutation<void, Error, string>({
     mutationFn: async (id) => { const { error } = await supabase.from('grade_levels').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gradeLevels'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classes.gradeLevels }),
   });
 
   const assignSubjectsMutation = useMutation<
@@ -230,7 +240,7 @@ export default function ClassesSection() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['classes-with-details'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails });
       queryClient.invalidateQueries({ queryKey: ['assigned-subjects', selectedClass?.id] });
       setShowAssignSubjectModal(false);
       setSelectedSubjects([]);
@@ -242,7 +252,7 @@ export default function ClassesSection() {
     mutationFn: async (id) => { const { error } = await supabase.from('classes_subjects').delete().eq('id', id); if (error) throw error; },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assigned-subjects', selectedClass?.id] });
-      queryClient.invalidateQueries({ queryKey: ['classes-with-details'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails });
     },
   });
 
@@ -250,7 +260,7 @@ export default function ClassesSection() {
     mutationFn: async (enrollmentId) => { const { error } = await supabase.from('enrollments').delete().eq('id', enrollmentId); if (error) throw error; },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['class-students', selectedClass?.id] });
-      queryClient.invalidateQueries({ queryKey: ['classes-with-details'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails });
     },
   });
 
@@ -401,7 +411,7 @@ export default function ClassesSection() {
                   <CardContent className="p-6 text-center text-red-600">
                     <p className="font-semibold">Error loading classes</p>
                     <p className="text-sm mt-2">{(classesError as Error).message}</p>
-                    <Button onClick={() => queryClient.refetchQueries({ queryKey: ['classes-with-details'] })}
+                    <Button onClick={() => queryClient.refetchQueries({ queryKey: queryKeys.classes.withDetails })}
                       className="mt-4 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5" variant="outline">
                       Retry
                     </Button>
@@ -826,7 +836,7 @@ export default function ClassesSection() {
         promotionStudents={promotionStudents}
         loadingStudents={loadingPromotionStudents}
         onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ['classes-with-details'] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.classes.withDetails });
           if (promotionClass) {
             queryClient.invalidateQueries({ queryKey: ['promotion-students', promotionClass.id] });
           }

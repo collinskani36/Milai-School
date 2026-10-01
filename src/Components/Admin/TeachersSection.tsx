@@ -1660,7 +1660,7 @@ export default function TeachersAndStaffSection() {
 
       {/* ════════ BULK ADD TEACHERS MODAL ════════ */}
       <Dialog open={showBulkModal} onOpenChange={open => { if (!open) { setShowBulkModal(false); setBulkDone(false); setBulkResults([]); } }}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto max-w-[98vw] sm:max-w-6xl p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+        <DialogContent className="max-h-[92vh] flex flex-col max-w-[98vw] sm:max-w-6xl p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
           <div className="relative overflow-hidden shrink-0" style={{ background: MAROON_GRADIENT }}>
             <div className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
             <div className="relative px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
@@ -1685,9 +1685,9 @@ export default function TeachersAndStaffSection() {
             </div>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4">
+          <div className="flex flex-col flex-1 min-h-0">
             {bulkDone ? (
-              <div className="space-y-3">
+              <div className="space-y-3 p-4 sm:p-6 overflow-y-auto">
                 <div className="flex items-center gap-2 mb-4">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                   <span className="font-semibold text-[#3a1b1f]">
@@ -1716,7 +1716,7 @@ export default function TeachersAndStaffSection() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto rounded-xl border border-[#7a1f2b]/15">
+                <div className="flex-1 min-h-0 overflow-auto mx-4 sm:mx-6 mt-4 sm:mt-6 rounded-xl border border-[#7a1f2b]/15">
                   <table className="min-w-full text-sm">
                     <thead className="border-b border-[#7a1f2b]/15" style={{ background: 'rgba(122,31,43,0.04)' }}>
                       <tr>
@@ -1728,7 +1728,6 @@ export default function TeachersAndStaffSection() {
                         <th className="px-2 py-2.5 text-left text-[10px] font-semibold text-[#7a1f2b]/70 uppercase tracking-wider min-w-[120px]">Phone</th>
                         <th className="px-2 py-2.5 text-left text-[10px] font-semibold text-[#7a1f2b]/70 uppercase tracking-wider min-w-[130px]">Password</th>
                         <th className="px-2 py-2.5 text-left text-[10px] font-semibold text-[#7a1f2b]/70 uppercase tracking-wider min-w-[150px]">Department</th>
-                        <th className="px-2 py-2.5 text-left text-[10px] font-semibold text-[#7a1f2b]/70 uppercase tracking-wider min-w-[160px]">Role</th>
                         <th className="px-2 py-2.5 text-center text-[10px] font-semibold text-[#7a1f2b]/70 uppercase tracking-wider w-14">Admin</th>
                         <th className="px-2 py-2.5 w-8"></th>
                       </tr>
@@ -1754,14 +1753,6 @@ export default function TeachersAndStaffSection() {
                                 </SelectContent>
                               </Select>
                             </td>
-                            <td className="px-1 py-1">
-                              <Select value={row.department_role} onValueChange={v => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, department_role: v } : r))}>
-                                <SelectTrigger className="h-8 text-xs px-2 rounded-lg border-[#7a1f2b]/15"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {DEPARTMENT_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </td>
                             <td className="px-2 py-1 text-center">
                               <Checkbox checked={row.is_admin} onCheckedChange={c => setBulkRows(rows => rows.map((r, idx) => idx === i ? { ...r, is_admin: !!c } : r))} />
                             </td>
@@ -1777,7 +1768,7 @@ export default function TeachersAndStaffSection() {
                   </table>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-[#7a1f2b]/10">
+                <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 mt-4 border-t border-[#7a1f2b]/10 bg-white">
                   <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                     <span>
                       <span className="font-semibold text-[#7a1f2b]">

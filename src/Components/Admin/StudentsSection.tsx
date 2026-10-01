@@ -2,6 +2,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/Components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/Components/ui/input';
@@ -672,7 +673,7 @@ export default function StudentsSection() {
   };
 
   const { data: classes, isLoading: loadingClasses } = useQuery({
-    queryKey: ['classes-with-details'],
+    queryKey: queryKeys.students.classList,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('classes')
@@ -1064,7 +1065,7 @@ export default function StudentsSection() {
 
       {/* ── Add / Edit Modal ── */}
       <Dialog open={showAddModal} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl max-w-[95vw] p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
+        <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-2xl max-w-[95vw] p-0 gap-0 overflow-hidden rounded-2xl border-[#7a1f2b]/15">
           {/* Gradient header */}
           <div
             className="relative overflow-hidden shrink-0"
@@ -1092,8 +1093,8 @@ export default function StudentsSection() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-1">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 content-start">
               <div className="space-y-2">
                 <Label htmlFor="reg_no" className="text-xs font-semibold uppercase tracking-wider text-[#7a1f2b]/70">Registration Number</Label>
                 <Input id="reg_no" value={formData.reg_no} onChange={e => handleInputChange('reg_no', e.target.value)} required className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
@@ -1166,7 +1167,7 @@ export default function StudentsSection() {
                 <Input id="guardian_phone" value={formData.guardian_phone} onChange={e => handleInputChange('guardian_phone', e.target.value)} className="h-10 rounded-xl border-[#7a1f2b]/15 focus-visible:ring-[#7a1f2b]/30" />
               </div>
             </div>
-            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 mt-4 border-t border-[#7a1f2b]/10">
+            <DialogFooter className="shrink-0 flex flex-col sm:flex-row gap-3 px-4 sm:px-5 py-3 border-t border-[#7a1f2b]/10 bg-white">
               {formError && <div className="text-sm text-red-600 mr-auto w-full sm:w-auto flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" />{formError}</div>}
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} className="h-10 w-full sm:w-auto order-2 sm:order-1 rounded-xl border-[#7a1f2b]/20 text-[#7a1f2b] hover:bg-[#7a1f2b]/5 active:scale-[0.98]">Cancel</Button>

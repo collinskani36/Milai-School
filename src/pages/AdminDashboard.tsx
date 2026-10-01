@@ -17,6 +17,7 @@ import AnnouncementsSection from '../Components/Admin/AnnouncementsSection';
 import AdminFees from '../Components/Admin/Adminfees';
 import AcademicCalendar from '../Components/Admin/AcademicCalendar';
 import TimetableSection from "../Components/Admin/Timetablesection";
+import AdminErrorBoundary from '../Components/Admin/AdminErrorBoundary';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const MAROON = '#7a1f2b';
@@ -579,7 +580,9 @@ export default function AdminDashboard({ handleLogout }: AdminDashboardProps) {
         {/* ── Main content ── */}
         <main className="flex-1 min-h-0 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6 pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-6">
-            {renderContent()}
+            <AdminErrorBoundary resetKey={activeView}>
+              {renderContent()}
+            </AdminErrorBoundary>
           </div>
         </main>
 

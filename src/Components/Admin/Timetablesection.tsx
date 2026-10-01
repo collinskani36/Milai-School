@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Card, CardContent } from '@/Components/ui/card';
@@ -217,7 +218,7 @@ export default function TimetableSection() {
   });
 
   const { data: currentTerm } = useQuery({
-    queryKey: ['current-term'],
+    queryKey: queryKeys.timetable.currentTerm,
     queryFn: async () => {
       const { data } = await supabase
         .from('academic_calendar')

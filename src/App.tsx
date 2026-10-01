@@ -32,6 +32,64 @@ const queryClient = new QueryClient({
 // Helper to detect recovery flow from URL
 export const isRecoveryFlow = () => window.location.hash.includes("type=recovery");
 
+// ─── Route guards ────────────────────────────────────────────────────────────
+// Defined at module level (NOT inside AppRoutes). Components declared inside a
+// component get a new identity on every render, which makes React unmount and
+// remount the whole dashboard whenever auth or role state changes.
+function RoleLoader() {
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7a1f2b] mx-auto"></div>
+        <p className="mt-2 text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+function StudentRoute({
+  user,
+  isRecoverySession,
+  children,
+}: {
+  user: any;
+  isRecoverySession: boolean;
+  children: JSX.Element;
+}) {
+  return user && !isRecoverySession ? children : <Navigate to="/login" replace />;
+}
+
+// Waits for the role check to finish, then confirms the user exists in the teachers table
+function TeacherRoute({
+  user,
+  isTeacher,
+  children,
+}: {
+  user: any;
+  isTeacher: boolean | null;
+  children: JSX.Element;
+}) {
+  if (!user) return <Navigate to="/teacher-login" replace />;
+  if (isTeacher === null) return <RoleLoader />;
+  if (isTeacher === false) return <Navigate to="/teacher-login" replace />;
+  return children;
+}
+
+function AdminRoute({
+  user,
+  isAdmin,
+  children,
+}: {
+  user: any;
+  isAdmin: boolean | null;
+  children: JSX.Element;
+}) {
+  if (!user) return <Navigate to="/teacher-login" replace />;
+  if (isAdmin === null) return <RoleLoader />;
+  if (isAdmin === false) return <Navigate to="/teacher-dashboard" replace />;
+  return children;
+}
+
 function AppRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -176,33 +234,6 @@ function AppRoutes() {
     navigate("/", { replace: true });
   };
 
-  // Route Guarding Components
-  const StudentRoute = ({ children }: { children: JSX.Element }) =>
-    user && !recoverySession.current ? children : <Navigate to="/login" replace />;
-
-  // FIX 3: TeacherRoute now mirrors AdminRoute — waits for role to resolve,
-  // then confirms the user actually exists in the teachers table
-  const TeacherRoute = ({ children }: { children: JSX.Element }) => {
-    if (!user) return <Navigate to="/teacher-login" replace />;
-    if (isTeacher === null) return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7a1f2b] mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-    if (isTeacher === false) return <Navigate to="/teacher-login" replace />;
-    return children;
-  };
-
-  const AdminRoute = ({ children }: { children: JSX.Element }) => {
-    if (!user) return <Navigate to="/teacher-login" replace />;
-    if (isAdmin === null) return <div className="min-h-screen bg-[#020617]" />;
-    if (isAdmin === false) return <Navigate to="/teacher-dashboard" replace />;
-    return children;
-  };
-
   return (
     <Routes>
       <Route path="/" element={<Index />} />
@@ -212,9 +243,9 @@ function AppRoutes() {
       <Route path="/teacher-forgot-password" element={<TeacherForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      <Route path="/student-dashboard" element={<StudentRoute><StudentDashboard handleLogout={handleLogout} /></StudentRoute>} />
-      <Route path="/teacher-dashboard" element={<TeacherRoute><TeacherDashboard handleLogout={handleLogout} /></TeacherRoute>} />
-      <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard handleLogout={handleLogout} /></AdminRoute>} />
+      <Route path="/student-dashboard" element={<StudentRoute user={user} isRecoverySession={recoverySession.current}><StudentDashboard handleLogout={handleLogout} /></StudentRoute>} />
+      <Route path="/teacher-dashboard" element={<TeacherRoute user={user} isTeacher={isTeacher}><TeacherDashboard handleLogout={handleLogout} /></TeacherRoute>} />
+      <Route path="/admin-dashboard" element={<AdminRoute user={user} isAdmin={isAdmin}><AdminDashboard handleLogout={handleLogout} /></AdminRoute>} />
     </Routes>
   );
 }

@@ -77,7 +77,7 @@ interface Payment {
   [key: string]: unknown;
 }
 interface FeeFormData { classes: string[]; student_type: string; amount: number | string; term: string; academic_year: string; [key: string]: unknown; }
-interface PaymentFormData { amount: string; payment_method?: string; payment_date?: string; reference_number?: string; notes?: string; academic_year?: string; term?: string; }
+interface PaymentFormData { fee_id?: string; amount: string; payment_method?: string; payment_date?: string; reference_number?: string; notes?: string; academic_year?: string; term?: string; }
 interface FeeStructureFormState extends Omit<FeeStructure, 'fee_structure_classes'> { classes: string[]; }
 
 // ─── Shared SectionHeader ─────────────────────────────────────────────────────
@@ -406,7 +406,7 @@ export default function AdminFeesDashboard() {
   const paymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData & { student_id: string; term: string; academic_year: string }) => {
       if (!selectedStudentFee) throw new Error('No student fee record selected');
-      const feeRecord = selectedStudentFee.current_term_fee || (selectedStudentFee as any);
+      const feeRecord = (data.fee_id && selectedStudentFee.fee_records?.find(r => r.id === data.fee_id)) || selectedStudentFee.current_term_fee || (selectedStudentFee as any);
       const amount = parseFloat(data.amount) || 0;
       if (amount <= 0) throw new Error('Payment amount must be greater than zero.');
       if (!feeRecord.id && !feeRecord.fee_structure_id) throw new Error('Fee record is missing an ID — cannot record payment.');
@@ -1368,8 +1368,8 @@ export default function AdminFeesDashboard() {
 
       {/* ══════════ Payment Form Dialog ══════════ */}
       <Dialog open={showPaymentForm} onOpenChange={(open) => { setShowPaymentForm(open); if (!open) { setSelectedStudentFee(null); setPaymentError(null); } }}>
-        <DialogContent className="max-w-2xl max-w-[95vw] p-4 sm:p-6 rounded-2xl border-[#7a1f2b]/15">
-          <DialogHeader>
+        <DialogContent className="flex flex-col gap-0 p-0 overflow-hidden w-[95vw] sm:max-w-2xl max-h-[92dvh] rounded-2xl border-[#7a1f2b]/15">
+          <DialogHeader className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 text-left">
             <DialogTitle className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={GRADIENT_BTN_STYLE}>
                 <CreditCard className="w-4 h-4 text-white" />
@@ -1378,11 +1378,12 @@ export default function AdminFeesDashboard() {
             </DialogTitle>
           </DialogHeader>
           {paymentError && (
-            <div className="flex items-start gap-2 px-1 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            <div className="shrink-0 mx-4 sm:mx-6 mb-3 flex items-start gap-2 px-1 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 ml-1" /> {paymentError}
             </div>
           )}
           {selectedStudentFee && (
+            <div className="flex flex-col flex-1 min-h-0">
             <PaymentEntryForm
               studentFee={selectedStudentFee}
               onSave={(data: PaymentFormData) => {
@@ -1390,14 +1391,15 @@ export default function AdminFeesDashboard() {
                 paymentMutation.mutate({
                   ...data,
                   student_id:    selectedStudentFee.student_id,
-                  term:          selectedStudentFee.current_term_fee?.term || selectedStudentFee.term || (activeTerm ? termLabel(activeTerm) : 'Term 1'),
-                  academic_year: selectedStudentFee.current_term_fee?.academic_year || selectedStudentFee.academic_year || activeTerm?.academic_year || '2024-2025',
+                  term:          data.term || selectedStudentFee.current_term_fee?.term || selectedStudentFee.term || (activeTerm ? termLabel(activeTerm) : 'Term 1'),
+                  academic_year: data.academic_year || selectedStudentFee.current_term_fee?.academic_year || selectedStudentFee.academic_year || activeTerm?.academic_year || '2024-2025',
                 });
               }}
               onCancel={() => { setShowPaymentForm(false); setSelectedStudentFee(null); setPaymentError(null); }}
               isLoading={isPaymentSubmitting}
               availableCredit={selectedStudentFee.total_credit_carried || 0}
             />
+            </div>
           )}
         </DialogContent>
       </Dialog>
