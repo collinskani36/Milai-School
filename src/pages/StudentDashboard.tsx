@@ -5,13 +5,12 @@ import { Button } from "@/Components/ui/button";
 import { Navbar } from "@/Components/Navbar";
 import {
   User, BookOpen, Bell, Calendar, BarChart3, FileText, TrendingUp, Target,
-  Settings, Award, CreditCard, ShieldCheck, ShieldAlert, Mail, Phone,
-  Download, Printer, ChevronLeft, Home, Megaphone
+  Settings, Award, CreditCard, Mail, Phone,
+  Download, Printer, ChevronLeft, Home, Megaphone, Library
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle } from "@/Components/ui/dialog";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { Input } from "@/Components/ui/input";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 // Direct imports
@@ -19,6 +18,8 @@ import Assessments from "./assessments";
 import AssignmentAnnouncement from "./assignment_announcement";
 import StudentFeesDialog from "@/Components/Fees/StudentFeesDialog";
 import { calculateKJSEAGrade } from "@/utils/assessmentUtils";
+import StudentLibrary from "@/Components/Library/StudentLibrary";
+import StudentSettingsModal from "@/Components/StudentSettingsModal";
 
 export interface AcademicCalendarTerm {
   id: string;
@@ -96,27 +97,20 @@ export default function StudentDashboard({ handleLogout }) {
   const [announcementPreviews, setAnnouncementPreviews] = useState<AnnouncementPreview[]>([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "assignments" | "fees" | "library">("overview");
   const [tabVisible, setTabVisible] = useState(true);
 
   const [showAssessments, setShowAssessments] = useState(false);
   const [showAssignments, setShowAssignments] = useState(false);
   const [showFees, setShowFees] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [settingsLoading, setSettingsLoading] = useState(false);
 
   const [isFeesDialogOpen, setIsFeesDialogOpen] = useState(false);
   const [feesStudentData, setFeesStudentData] = useState<any>(null);
 
-  const handleTabSwitch = (tab: "overview" | "assessments" | "assignments" | "fees" | "settings", immediate = false) => {
+  const handleTabSwitch = (tab: "overview" | "assessments" | "assignments" | "fees" | "library", immediate = false) => {
     if (tab === activeTab && !immediate) return;
 
     if (immediate) {
@@ -124,12 +118,12 @@ export default function StudentDashboard({ handleLogout }) {
       setShowAssessments(false);
       setShowAssignments(false);
       setShowFees(false);
-      setShowSettings(false);
+      setShowLibrary(false);
 
       if (tab === "assessments") setShowAssessments(true);
       else if (tab === "assignments") setShowAssignments(true);
       else if (tab === "fees") setShowFees(true);
-      else if (tab === "settings") setShowSettings(true);
+      else if (tab === "library") setShowLibrary(true);
 
       return;
     }
@@ -140,12 +134,12 @@ export default function StudentDashboard({ handleLogout }) {
       setShowAssessments(false);
       setShowAssignments(false);
       setShowFees(false);
-      setShowSettings(false);
+      setShowLibrary(false);
 
       if (tab === "assessments") setShowAssessments(true);
       else if (tab === "assignments") setShowAssignments(true);
       else if (tab === "fees") setShowFees(true);
-      else if (tab === "settings") setShowSettings(true);
+      else if (tab === "library") setShowLibrary(true);
 
       setTabVisible(true);
     }, 120);
@@ -452,46 +446,6 @@ export default function StudentDashboard({ handleLogout }) {
     setIsFeesDialogOpen(true);
   };
 
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSettingsLoading(true);
-
-    if (newPassword !== confirmPassword) {
-      alert("New passwords do not match!");
-      setSettingsLoading(false);
-      return;
-    }
-
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (updateError) throw updateError;
-
-      alert("Password updated successfully!");
-
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setIsSettingsOpen(false);
-    } catch (error: any) {
-      alert(error.message || "An error occurred while updating password");
-    } finally {
-      setSettingsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isSettingsOpen) {
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordError(null);
-      setPasswordSuccess(null);
-    }
-  }, [isSettingsOpen]);
-
   if (loading) {
     return (
       <>
@@ -543,7 +497,18 @@ export default function StudentDashboard({ handleLogout }) {
             boxShadow: "0 6px 24px -10px rgba(122,31,43,0.35)"
           }}
         >
-          <div style={{ background: "linear-gradient(135deg, #7a1f2b 0%, #5f1620 100%)", padding: "16px 16px 14px" }}>
+          <div style={{ position: "relative", background: "linear-gradient(135deg, #7a1f2b 0%, #5f1620 100%)", padding: "16px 56px 14px 16px" }}>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              aria-label="Settings"
+              style={{
+                position: "absolute", top: 12, right: 12, width: 34, height: 34, borderRadius: 10,
+                background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"
+              }}
+            >
+              <Settings size={17} color="#fff" />
+            </button>
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
               Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}
             </p>
@@ -792,6 +757,7 @@ export default function StudentDashboard({ handleLogout }) {
                 { icon: BarChart3, label: "View Assessments", action: () => handleTabSwitch("assessments", true) },
                 { icon: Bell, label: "Assignments & Announcements", action: () => handleTabSwitch("assignments", true) },
                 { icon: CreditCard, label: "Fee Statement", action: () => handleFeesManagement() },
+                { icon: Library, label: "Library", action: () => handleTabSwitch("library", true) },
                 { icon: Settings, label: "Settings", action: () => setIsSettingsOpen(true) }
               ].map(({ icon: Icon, label, action }) => (
                 <button
@@ -963,158 +929,6 @@ export default function StudentDashboard({ handleLogout }) {
     </>
   );
 
-  const SettingsContent = () => {
-    const [mobileCurrentPassword, setMobileCurrentPassword] = useState("");
-    const [mobileNewPassword, setMobileNewPassword] = useState("");
-    const [mobileConfirmPassword, setMobileConfirmPassword] = useState("");
-    const [mobilePasswordLoading, setMobilePasswordLoading] = useState(false);
-
-    const handleMobilePasswordUpdate = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setMobilePasswordLoading(true);
-
-      if (mobileNewPassword !== mobileConfirmPassword) {
-        alert("New passwords do not match!");
-        setMobilePasswordLoading(false);
-        return;
-      }
-
-      try {
-        const { error: updateError } = await supabase.auth.updateUser({
-          password: mobileNewPassword
-        });
-
-        if (updateError) throw updateError;
-
-        alert("Password updated successfully!");
-
-        setMobileCurrentPassword("");
-        setMobileNewPassword("");
-        setMobileConfirmPassword("");
-      } catch (error: any) {
-        alert(error.message || "An error occurred while updating password");
-      } finally {
-        setMobilePasswordLoading(false);
-      }
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Account Settings</h1>
-          <p className="text-sm text-gray-600">Update your account password and security settings</p>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20">
-            <CardContent className="p-4">
-              <h4 className="font-semibold text-lg text-gray-900 mb-3 flex items-center">
-                <User className="h-5 w-5 mr-2 text-maroon" />
-                Student Information
-              </h4>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                  <span className="font-medium text-gray-700">Name:</span>
-                  <span className="text-gray-900">{profile?.first_name} {profile?.last_name}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                  <span className="font-medium text-gray-700">Student ID:</span>
-                  <span className="text-gray-900 font-mono">{profile?.reg_no}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                  <span className="font-medium text-gray-700">Class:</span>
-                  <span className="text-gray-900">{className}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                  <span className="font-medium text-gray-700">Email:</span>
-                  <span className="text-gray-900 text-sm truncate max-w-[150px]">{profile?.email}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-maroon/20 overflow-hidden shadow-lg">
-            <CardContent className="p-0">
-              <div className="bg-maroon p-4 text-white flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center">
-                  <Settings className="h-5 w-5 mr-2" />
-                  Change Password
-                </h3>
-                <ShieldAlert className="h-5 w-5 text-maroon-light opacity-50" />
-              </div>
-
-              <div className="p-4 space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start">
-                  <div className="bg-amber-100 p-1.5 rounded-full">
-                    <ShieldAlert className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Account Security</p>
-                    <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
-                      You're currently logged in. Enter your new password below to update your account credentials.
-                    </p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleMobilePasswordUpdate} className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="mobileNewPassword" className="text-sm font-medium text-gray-700 flex items-center">
-                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                      New Password
-                    </label>
-                    <Input
-                      id="mobileNewPassword"
-                      type="password"
-                      value={mobileNewPassword}
-                      onChange={(e) => setMobileNewPassword(e.target.value)}
-                      placeholder="Min. 6 characters"
-                      disabled={mobilePasswordLoading}
-                      className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="mobileConfirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
-                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                      Confirm New Password
-                    </label>
-                    <Input
-                      id="mobileConfirmPassword"
-                      type="password"
-                      value={mobileConfirmPassword}
-                      onChange={(e) => setMobileConfirmPassword(e.target.value)}
-                      placeholder="Repeat new password"
-                      disabled={mobilePasswordLoading}
-                      className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-11 text-sm"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-4 shadow-md transition-all active:scale-95 text-sm"
-                    disabled={mobilePasswordLoading}
-                  >
-                    {mobilePasswordLoading ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Updating Password...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <ShieldCheck className="h-4 w-4 mr-2" />
-                        Update Password
-                      </div>
-                    )}
-                  </Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
       <div className="sm:hidden flex flex-col touch-manipulation" style={{ height: "100dvh", overflow: "hidden", background: "#fdfbfb", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -1243,7 +1057,7 @@ export default function StudentDashboard({ handleLogout }) {
                   </div>
                 )}
 
-                {activeTab === "settings" && showSettings && <SettingsContent />}
+                {activeTab === "library" && showLibrary && <StudentLibrary classId={classId} />}
               </div>
             </div>
           )}
@@ -1257,7 +1071,7 @@ export default function StudentDashboard({ handleLogout }) {
                 { id: "assessments", icon: BarChart3, label: "Results" },
                 { id: "assignments", icon: Bell, label: "Updates" },
                 { id: "fees", icon: CreditCard, label: "Fees" },
-                { id: "settings", icon: Settings, label: "Settings" }
+                { id: "library", icon: Library, label: "Library" }
               ] as const
             ).map(({ id, icon: Icon, label }) => {
               const isActive = activeTab === id;
@@ -1357,19 +1171,19 @@ export default function StudentDashboard({ handleLogout }) {
                 </div>
               )}
             </div>
-          ) : activeTab === "settings" ? (
+          ) : activeTab === "library" ? (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-                  <p className="text-sm text-gray-600">Update your password and profile settings</p>
+                  <h1 className="text-2xl font-bold text-gray-900">Library</h1>
+                  <p className="text-sm text-gray-600">Books and animated lessons</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => handleTabSwitch("overview", true)}>
                   Back to Overview
                 </Button>
               </div>
 
-              {showSettings && <SettingsContent />}
+              {showLibrary && <StudentLibrary classId={classId} />}
             </div>
           ) : null}
         </div>
@@ -1391,126 +1205,12 @@ export default function StudentDashboard({ handleLogout }) {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[80vh] overflow-y-auto bg-white mx-2">
-            <DialogHeader className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200">
-              <DialogTitle className="flex items-center text-lg sm:text-xl font-bold text-maroon">
-                <Settings className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-maroon" />
-                Account Settings
-              </DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm text-gray-600">
-                Update your account password and security settings
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 sm:space-y-6 py-4">
-              <Card className="bg-gradient-to-r from-maroon/5 to-maroon/10 border-maroon/20">
-                <CardContent className="p-3 sm:p-4">
-                  <h4 className="font-semibold text-base sm:text-lg text-gray-900 mb-2 sm:mb-3 flex items-center">
-                    <User className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-maroon" />
-                    Student Information
-                  </h4>
-                  <div className="space-y-2 text-xs sm:text-sm">
-                    <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                      <span className="font-medium text-gray-700">Name:</span>
-                      <span className="text-gray-900">{profile?.first_name} {profile?.last_name}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                      <span className="font-medium text-gray-700">Student ID:</span>
-                      <span className="text-gray-900 font-mono">{profile?.reg_no}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                      <span className="font-medium text-gray-700">Class:</span>
-                      <span className="text-gray-900">{className}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-white/50 rounded">
-                      <span className="font-medium text-gray-700">Email:</span>
-                      <span className="text-gray-900 text-xs truncate max-w-[150px]">{profile?.email}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-maroon/20 overflow-hidden shadow-lg">
-                <CardContent className="p-0">
-                  <div className="bg-maroon p-3 sm:p-4 text-white flex items-center justify-between">
-                    <h3 className="text-base sm:text-lg font-semibold flex items-center">
-                      <Settings className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      Change Password
-                    </h3>
-                    <ShieldAlert className="h-4 w-4 sm:h-5 sm:w-5 text-maroon-light opacity-50" />
-                  </div>
-
-                  <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 items-start">
-                      <div className="bg-amber-100 p-1.5 rounded-full">
-                        <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Account Security</p>
-                        <p className="text-[10px] sm:text-[11px] text-amber-700 leading-relaxed mt-1">
-                          You're currently logged in. Enter your new password below to update your account credentials.
-                        </p>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handlePasswordUpdate} className="space-y-3 sm:space-y-4">
-                      <div className="space-y-1 sm:space-y-2">
-                        <label htmlFor="newPassword" className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
-                          <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                          New Password
-                        </label>
-                        <Input
-                          id="newPassword"
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Min. 6 characters"
-                          disabled={passwordLoading}
-                          className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-10 sm:h-11 text-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-1 sm:space-y-2">
-                        <label htmlFor="confirmPassword" className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
-                          <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                          Confirm New Password
-                        </label>
-                        <Input
-                          id="confirmPassword"
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Repeat new password"
-                          disabled={passwordLoading}
-                          className="w-full border-gray-300 focus:border-maroon focus:ring-maroon h-10 sm:h-11 text-sm"
-                        />
-                      </div>
-
-                      <Button
-                        onClick={handlePasswordUpdate}
-                        className="w-full bg-maroon hover:bg-maroon/90 text-white font-bold py-4 sm:py-6 shadow-md transition-all active:scale-95 text-sm"
-                        disabled={passwordLoading}
-                      >
-                        {passwordLoading ? (
-                          <div className="flex items-center">
-                            <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-2"></div>
-                            Updating Password...
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                            Update Password
-                          </div>
-                        )}
-                      </Button>
-                    </form>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <StudentSettingsModal
+          open={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          profile={profile}
+          classLabel={className}
+        />
       </div>
     </>
   );

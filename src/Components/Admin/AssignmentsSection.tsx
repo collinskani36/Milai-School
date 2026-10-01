@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
-import { Plus, FileText, Paperclip, ExternalLink, Calendar, AlertTriangle, Loader2, FileUp, X } from 'lucide-react';
+import { Plus, FileText, Paperclip, ExternalLink, Calendar, AlertTriangle, Loader2, FileUp, X, Library } from 'lucide-react';
 import { Card, CardContent } from '@/Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/Components/ui/table';
 import {
@@ -15,6 +15,7 @@ import { Label } from '@/Components/ui/label';
 import { Textarea } from '@/Components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
 import { format } from 'date-fns';
+import LibrarySection from './LibrarySection';
 
 // ─── Design tokens (mirrors every other Admin section) ───────────────────────
 const MAROON = '#7a1f2b';
@@ -87,7 +88,7 @@ function DialogHero({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AssignmentsSection() {
+function AssignmentsPanel() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -527,6 +528,40 @@ export default function AssignmentsSection() {
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ─── Wrapper: Assignments | Library sub-tabs ──────────────────────────────────
+export default function AssignmentsSection() {
+  const [tab, setTab] = useState<'assignments' | 'library'>('assignments');
+
+  const tabs = [
+    { id: 'assignments', label: 'Assignments', icon: FileText },
+    { id: 'library', label: 'Library', icon: Library },
+  ] as const;
+
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex p-1 gap-1 rounded-xl bg-white border border-[#7a1f2b]/15">
+        {tabs.map(({ id, label, icon: Icon }) => {
+          const active = tab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`h-9 px-4 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                active ? 'text-white' : 'text-[#7a1f2b] hover:bg-[#7a1f2b]/5'
+              }`}
+              style={active ? { background: MAROON } : undefined}
+            >
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'assignments' ? <AssignmentsPanel /> : <LibrarySection />}
     </div>
   );
 }
