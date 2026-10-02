@@ -3,13 +3,16 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Input } from '@/Components/ui/input';
-import { BookOpen, Sparkles, Download, Search, Library as LibraryIcon, Loader2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Sparkles, FileText, Download, Search, Library as LibraryIcon, Loader2, AlertTriangle } from 'lucide-react';
 import LibraryViewer, { LibraryViewerItem, downloadLibraryItem } from './LibraryViewer';
 
 const MAROON = '#7a1f2b';
 const MAROON_GRADIENT = 'linear-gradient(135deg, #7a1f2b 0%, #5f1620 100%)';
 
-type Shelf = 'lesson' | 'book';
+type Shelf = 'lesson' | 'book' | 'revision';
+
+const SHELF_ICON = { lesson: Sparkles, book: BookOpen, revision: FileText } as const;
+const SHELF_NOUN = { lesson: 'lessons', book: 'books', revision: 'past papers' } as const;
 
 interface Item extends LibraryViewerItem {
   description: string | null;
@@ -17,6 +20,7 @@ interface Item extends LibraryViewerItem {
   cover_url: string | null;
   file_size: number | null;
   created_at: string;
+  uploaded_by_name: string | null;
   subjects?: any;
 }
 
@@ -33,7 +37,7 @@ const formatBytes = (bytes?: number | null) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export default function StudentLibrary({ classId }: { classId: string | null }) {
+export default function StudentLibrary({ classId, hideHero = false }: { classId: string | null; hideHero?: boolean }) {
   const [shelf, setShelf] = useState<Shelf>('lesson');
   const [gradeChoice, setGradeChoice] = useState<string | null>(null); // null = follow the student's own grade
   const [search, setSearch] = useState('');
@@ -56,7 +60,7 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('library_items')
-        .select('id, title, description, item_type, grade_level, file_url, cover_url, file_size, created_at, subjects ( name )')
+        .select('id, title, description, item_type, grade_level, file_url, cover_url, file_size, created_at, uploaded_by_name, subjects ( name )')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data || []) as Item[];
@@ -74,6 +78,7 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
   const counts = useMemo(() => ({
     lesson: items.filter((i) => i.item_type === 'lesson').length,
     book: items.filter((i) => i.item_type === 'book').length,
+    revision: items.filter((i) => i.item_type === 'revision').length,
   }), [items]);
 
   // Items on the chosen shelf, filtered, grouped by grade
@@ -86,6 +91,13 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
     );
     const map = new Map<string, Item[]>();
     filtered.forEach((i) => map.set(i.grade_level, [...(map.get(i.grade_level) ?? []), i]));
+    // Past papers read best grouped by subject within each grade; everything else stays newest first
+    if (shelf === 'revision') {
+      const subjectOf = (i: Item) => firstRel<any>(i.subjects)?.name ?? '';
+      map.forEach((list) =>
+        list.sort((a, b) => subjectOf(a).localeCompare(subjectOf(b)) || +new Date(b.created_at) - +new Date(a.created_at)),
+      );
+    }
     return Array.from(map.entries()).sort(([a], [b]) => byGrade(a, b));
   }, [items, shelf, activeGrade, search]);
 
@@ -97,6 +109,7 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
   return (
     <div className="space-y-4">
       {/* Hero */}
+      {!hideHero && (
       <div className="relative overflow-hidden rounded-2xl px-4 py-4 text-white" style={{ background: MAROON_GRADIENT, boxShadow: '0 6px 24px -10px rgba(122,31,43,0.35)' }}>
         <div className="absolute -top-16 -right-8 w-48 h-48 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.14), transparent 70%)' }} />
@@ -107,25 +120,26 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-semibold">Learning Resources</p>
             <h2 className="text-lg font-bold leading-tight">Library</h2>
-            <p className="text-[11px] text-white/70">Books and animated lessons, open to every grade</p>
+            <p className="text-[11px] text-white/70">Books, past papers and animated lessons, open to every grade</p>
           </div>
         </div>
       </div>
+      )}
 
       {/* Shelf switch */}
-      <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-white border border-[#7a1f2b]/12">
-        {([['lesson', 'Animated Lessons', Sparkles], ['book', 'Books', BookOpen]] as const).map(([id, label, Icon]) => {
+      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-white border border-[#7a1f2b]/12">
+        {([['lesson', 'Lessons', Sparkles], ['book', 'Books', BookOpen], ['revision', 'Revision', FileText]] as const).map(([id, label, Icon]) => {
           const active = shelf === id;
           return (
             <button
               key={id}
               onClick={() => setShelf(id)}
-              className={`h-10 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors active:scale-[0.98] ${
+              className={`h-10 rounded-xl text-[11px] sm:text-xs font-semibold inline-flex items-center justify-center gap-1 transition-colors active:scale-[0.98] ${
                 active ? 'text-white' : 'text-[#7a1f2b]'
               }`}
               style={active ? { background: MAROON } : undefined}
             >
-              <Icon className="w-4 h-4" /> {label}
+              <Icon className="w-3.5 h-3.5 shrink-0" /> {label}
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20' : 'bg-[#7a1f2b]/8'}`}>{counts[id]}</span>
             </button>
           );
@@ -150,7 +164,7 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={shelf === 'lesson' ? 'Search lessons…' : 'Search books…'}
+          placeholder={`Search ${SHELF_NOUN[shelf]}…`}
           className="h-11 pl-10 rounded-xl border-[#7a1f2b]/15 bg-white focus-visible:ring-[#7a1f2b]/30"
         />
       </div>
@@ -172,10 +186,10 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
       ) : groups.length === 0 ? (
         <div className="py-12 text-center px-4">
           <div className="w-16 h-16 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: 'rgba(122,31,43,0.06)' }}>
-            {shelf === 'lesson' ? <Sparkles className="w-7 h-7 text-[#7a1f2b]/40" /> : <BookOpen className="w-7 h-7 text-[#7a1f2b]/40" />}
+            {React.createElement(SHELF_ICON[shelf], { className: 'w-7 h-7 text-[#7a1f2b]/40' })}
           </div>
           <p className="font-semibold text-[#3a1b1f]">
-            {search ? 'Nothing matches your search' : `No ${shelf === 'lesson' ? 'lessons' : 'books'} here yet`}
+            {search ? 'Nothing matches your search' : `No ${SHELF_NOUN[shelf]} here yet`}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             {activeGrade !== 'all' ? 'Try “All grades” to browse everything.' : 'Check back soon — new material is added regularly.'}
@@ -206,9 +220,10 @@ export default function StudentLibrary({ classId }: { classId: string | null }) 
 }
 
 function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
-  const Icon = item.item_type === 'lesson' ? Sparkles : BookOpen;
+  const Icon = SHELF_ICON[item.item_type];
   const subject = firstRel<any>(item.subjects);
   const meta = [subject?.name, formatBytes(item.file_size)].filter(Boolean).join(' · ');
+  const actionLabel = item.item_type === 'lesson' ? 'Start' : item.item_type === 'book' ? 'Read' : 'Open';
 
   return (
     <div className="rounded-2xl bg-white border border-[#7a1f2b]/12 overflow-hidden flex flex-col" style={{ boxShadow: '0 6px 20px -14px rgba(122,31,43,0.3)' }}>
@@ -225,6 +240,9 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
       <div className="p-2.5 flex flex-col gap-1.5 flex-1">
         <p className="text-[13px] font-semibold text-[#3a1b1f] leading-snug line-clamp-2">{item.title}</p>
         {meta && <p className="text-[10px] text-muted-foreground truncate">{meta}</p>}
+        {item.uploaded_by_name && (
+          <p className="text-[10px] text-[#7a1f2b]/70 truncate">By {item.uploaded_by_name}</p>
+        )}
 
         <div className="mt-auto pt-1 flex gap-1.5">
           <button
@@ -232,7 +250,7 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
             className="flex-1 h-9 rounded-xl text-white text-xs font-semibold active:scale-95"
             style={{ background: MAROON }}
           >
-            {item.item_type === 'lesson' ? 'Start' : 'Read'}
+            {actionLabel}
           </button>
           <button
             onClick={() => downloadLibraryItem(item)}

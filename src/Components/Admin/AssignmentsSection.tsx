@@ -15,7 +15,7 @@ import { Label } from '@/Components/ui/label';
 import { Textarea } from '@/Components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
 import { format } from 'date-fns';
-import LibrarySection from './LibrarySection';
+import LibraryManager from '@/Components/Library/LibraryManager';
 
 // ─── Design tokens (mirrors every other Admin section) ───────────────────────
 const MAROON = '#7a1f2b';
@@ -561,7 +561,7 @@ export default function AssignmentsSection() {
         })}
       </div>
 
-      {tab === 'assignments' ? <AssignmentsPanel /> : <LibrarySection />}
+      {tab === 'assignments' ? <AssignmentsPanel /> : <LibraryManager mode="admin" />}
     </div>
   );
 }

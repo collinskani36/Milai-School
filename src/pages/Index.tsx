@@ -1,4 +1,5 @@
-import { GraduationCap, Users, BookOpen, ChartBar, FileText, Award, Calendar, Edit, DollarSign, Currency, CurrencyIcon, LucideDollarSign } from "lucide-react";
+import { Users, BookOpen, ChartBar, FileText, Calendar, Edit, DollarSign, LucideDollarSign } from "lucide-react";
+import { Navbar } from "@/Components/Navbar";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
@@ -83,25 +84,6 @@ const Index = () => {
         }
 
         /* ── MOBILE ── */
-        .mob-nav {
-          background: ${MAROON};
-          padding: 12px 20px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-shrink: 0;
-        }
-        .mob-nav-icon {
-          width: 28px; height: 28px;
-          border-radius: 7px;
-          background: rgba(255,255,255,0.18);
-          display: flex; align-items: center; justify-content: center;
-        }
-        .mob-nav-title {
-          font-size: 15px; font-weight: 600; color: #fff;
-          letter-spacing: -0.01em;
-        }
-
         .mob-body {
           flex: 1;
           display: flex;
@@ -234,19 +216,6 @@ const Index = () => {
           justify-content: space-between;
           padding: 40px 36px;
         }
-        .desk-brand {
-          display: flex; align-items: center; gap: 10px; margin-bottom: 32px;
-        }
-        .desk-brand-icon {
-          width: 34px; height: 34px;
-          border-radius: 9px;
-          background: rgba(255,255,255,0.18);
-          display: flex; align-items: center; justify-content: center;
-        }
-        .desk-brand-name {
-          font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9);
-          letter-spacing: -0.01em;
-        }
         .desk-headline {
           font-size: 34px; font-weight: 700;
           color: #fff; line-height: 1.2;
@@ -323,7 +292,7 @@ const Index = () => {
         .desk-signin-btn:hover { background: #6a1a24; }
 
         @media (min-width: 768px) {
-          .mob-nav, .mob-body, .mob-footer-wrap { display: none; }
+          .mob-body, .mob-footer-wrap { display: none; }
           .desk-layout { display: flex; }
           .page { max-height: 100dvh; }
         }
@@ -335,13 +304,8 @@ const Index = () => {
 
       <div className="page">
 
-        {/* ── MOBILE NAV ── */}
-        <nav className="mob-nav">
-          <div className="mob-nav-icon">
-            <GraduationCap size={16} color="#fff" />
-          </div>
-          <span className="mob-nav-title">Milai School Portal</span>
-        </nav>
+        {/* ── NAVBAR (shared) ── */}
+        <Navbar />
 
         {/* ── MOBILE BODY ── */}
         <main className="mob-body">
@@ -349,7 +313,7 @@ const Index = () => {
           {/* Hero */}
           <div className="mob-hero">
             <div className="mob-icon-ring">
-              <GraduationCap size={28} color={MAROON} />
+              <img src="/logo.png" alt="Milai School logo" style={{ height: 38, width: 38, objectFit: "contain" }} />
             </div>
             <h1 className="mob-heading">
               Welcome to <span>Milai School</span>
@@ -400,12 +364,6 @@ const Index = () => {
           {/* Left brand panel */}
           <div className="desk-left">
             <div>
-              <div className="desk-brand">
-                <div className="desk-brand-icon">
-                  <GraduationCap size={18} color="#fff" />
-                </div>
-                <span className="desk-brand-name">Milai School Portal</span>
-              </div>
               <h1 className="desk-headline">
                 Shaping minds.<br /><span>Building futures.</span>
               </h1>

@@ -932,58 +932,7 @@ export default function StudentDashboard({ handleLogout }) {
   return (
     <>
       <div className="sm:hidden flex flex-col touch-manipulation" style={{ height: "100dvh", overflow: "hidden", background: "#fdfbfb", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-        {/* ===== PREMIUM MOBILE HEADER ===== */}
-        <div style={{
-          background: "linear-gradient(135deg, #7a1f2b 0%, #5f1620 100%)",
-          paddingTop: "env(safe-area-inset-top)",
-          flexShrink: 0,
-          boxShadow: "0 2px 14px rgba(122,31,43,0.3)",
-          borderBottom: "0.5px solid rgba(255,255,255,0.08)"
-        }}>
-          <div className="flex items-center justify-between px-4 h-14">
-            <div className="flex items-center gap-2.5">
-              <div style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.12)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0
-              }}>
-                <BookOpen size={17} color="#fff" />
-              </div>
-              <p style={{
-                fontSize: 16,
-                fontWeight: 700,
-                color: "#fff",
-                letterSpacing: "-0.02em",
-                lineHeight: 1.2
-              }}>
-                Milai School Portal
-              </p>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px 0",
-                color: "rgba(255,255,255,0.7)",
-                fontSize: 12,
-                fontWeight: 500,
-                letterSpacing: "-0.01em"
-              }}
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-        {/* ===== END HEADER ===== */}
+        <Navbar showLogout handleLogout={handleLogout} subtitle="Student Dashboard" />
 
         {/* Tab panel — overview locks to viewport height (no page scroll) */}
         <div
@@ -1092,7 +1041,7 @@ export default function StudentDashboard({ handleLogout }) {
       </div>
 
       <div className="hidden sm:block min-h-screen bg-white touch-manipulation pb-0">
-        <Navbar {...({ showLogout: true, handleLogout } as any)} />
+        <Navbar showLogout handleLogout={handleLogout} subtitle="Student Dashboard" />
 
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
           {activeTab === "overview" ? (

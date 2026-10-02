@@ -40,6 +40,7 @@ interface ClassPerformanceProps {
   perfView: "trend" | "recent";
   setPerfView: (v: "trend" | "recent") => void;
   currentAcademicYear: string | null;
+  embedded?: boolean; // true when rendered inside PerformanceAnalytics (no own card, no view toggle)
 }
 
 // ---------- Compact chip toggle ----------
@@ -90,6 +91,7 @@ export default function ClassPerformance({
   perfView,
   setPerfView,
   currentAcademicYear,
+  embedded = false,
 }: ClassPerformanceProps) {
   const [classFilter, setClassFilter] = useState<string>("__all__");
 
@@ -127,22 +129,29 @@ export default function ClassPerformance({
   const hasTrend = trendPoints.length > 0 && filteredTrendSeries.length > 0;
   const hasRecent = filteredRecentData.length > 0;
 
+  const Shell: any = embedded ? "div" : Card;
+  const shellProps = embedded
+    ? { className: "flex flex-col flex-1 min-h-0" }
+    : {
+        className: "rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden flex flex-col h-full",
+        style: { boxShadow: CARD_SHADOW },
+      };
+
   return (
-    <Card
-      className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden flex flex-col h-full"
-      style={{ boxShadow: CARD_SHADOW }}
-    >
+    <Shell {...shellProps}>
       <CardContent className="px-2.5 pt-2 pb-1.5 sm:px-4 sm:pt-3 sm:pb-2 flex-1 min-h-0 flex flex-col gap-1.5">
         {/* ── CONTROLS: single row, wrap if needed ── */}
         <div className="flex items-center justify-between gap-2 shrink-0 flex-wrap">
-          <PillToggle<"trend" | "recent">
-            value={perfView}
-            onChange={setPerfView}
-            options={[
-              { value: "trend", label: "Trend" },
-              { value: "recent", label: "Recent" },
-            ]}
-          />
+          {!embedded ? (
+            <PillToggle<"trend" | "recent">
+              value={perfView}
+              onChange={setPerfView}
+              options={[
+                { value: "trend", label: "Trend" },
+                { value: "recent", label: "Recent" },
+              ]}
+            />
+          ) : null}
 
           {uniqueClasses.length > 1 && (
             <PillToggle<string>
@@ -360,6 +369,6 @@ export default function ClassPerformance({
           </div>
         )}
       </CardContent>
-    </Card>
+    </Shell>
   );
 }

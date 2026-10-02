@@ -1,13 +1,16 @@
 // src/Components/Library/LibraryViewer.tsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { App as CapacitorApp } from '@capacitor/app';
-import { ChevronLeft, Download, Loader2, AlertTriangle, ExternalLink, BookOpen } from 'lucide-react';
+import { ChevronLeft, Download, Loader2, AlertTriangle } from 'lucide-react';
+
+// pdf.js is large, so it is only fetched when a student opens a book
+const PdfReader = lazy(() => import('./Pdfreader'));
 
 export interface LibraryViewerItem {
   id: string;
   title: string;
-  item_type: 'book' | 'lesson';
+  item_type: 'book' | 'lesson' | 'revision';
   file_url: string;
 }
 
@@ -16,7 +19,7 @@ export interface LibraryViewerItem {
 // so the browser saves a real file (a .html lesson then opens fine in Chrome).
 // '_system' hands the link to the phone's browser instead of the in-app WebView.
 export function downloadLibraryItem(item: LibraryViewerItem) {
-  const ext = item.item_type === 'book' ? '.pdf' : '.html';
+  const ext = item.item_type === 'lesson' ? '.html' : '.pdf';
   const name = `${item.title.replace(/[^\w\- ]+/g, '').trim() || 'milai-library'}${ext}`;
   const sep = item.file_url.includes('?') ? '&' : '?';
   window.open(`${item.file_url}${sep}download=${encodeURIComponent(name)}`, '_system');
@@ -71,7 +74,7 @@ export default function LibraryViewer({
 
       {/* Body */}
       <div className="flex-1 min-h-0 bg-[#fdfbfb]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {item.item_type === 'lesson' ? <LessonFrame item={item} /> : <BookPlaceholder item={item} />}
+        {item.item_type === 'lesson' ? <LessonFrame item={item} /> : <BookReader item={item} />}
       </div>
     </div>,
     document.body,
@@ -133,24 +136,18 @@ function LessonFrame({ item }: { item: LibraryViewerItem }) {
   );
 }
 
-// ─── Books: temporary until the in-app PDF reader is added ───────────────────
-function BookPlaceholder({ item }: { item: LibraryViewerItem }) {
+// ─── Books: rendered in-app with pdf.js ──────────────────────────────────────
+function BookReader({ item }: { item: LibraryViewerItem }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-3">
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(122,31,43,0.07)' }}>
-        <BookOpen className="w-6 h-6 text-[#7a1f2b]/60" />
-      </div>
-      <p className="text-sm font-semibold text-[#3a1b1f]">{item.title}</p>
-      <p className="text-xs text-muted-foreground max-w-xs">
-        The in-app PDF reader is coming next. For now you can open the book in your browser.
-      </p>
-      <button
-        onClick={() => window.open(item.file_url, '_system')}
-        className="h-10 px-5 rounded-xl text-white text-sm font-semibold inline-flex items-center gap-2 active:scale-95"
-        style={{ background: '#7a1f2b' }}
-      >
-        <ExternalLink className="w-4 h-4" /> Open book
-      </button>
-    </div>
+    <Suspense
+      fallback={
+        <div className="h-full flex flex-col items-center justify-center gap-2 text-[#7a1f2b]/70">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <p className="text-xs">Opening book…</p>
+        </div>
+      }
+    >
+      <PdfReader url={item.file_url} onOpenExternal={() => window.open(item.file_url, '_system')} />
+    </Suspense>
   );
 }

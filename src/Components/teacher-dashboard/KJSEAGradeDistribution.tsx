@@ -17,6 +17,7 @@ interface KJSEAGradeDistributionProps {
   termGradeDistributions: TermGradeDistribution[];
   currentTerm: number | null;
   currentAcademicYear: string | null;
+  embedded?: boolean; // true when rendered inside PerformanceAnalytics (no own card or header)
 }
 
 // ─── Section header (matches dashboard) ──────────────────────────────────────
@@ -180,6 +181,7 @@ export default function KJSEAGradeDistribution({
   termGradeDistributions,
   currentTerm,
   currentAcademicYear,
+  embedded = false,
 }: KJSEAGradeDistributionProps) {
   const [gradeView, setGradeView] = useState<"current" | "all">("current");
 
@@ -201,21 +203,28 @@ export default function KJSEAGradeDistribution({
 
   const hasData = termGradeDistributions.length > 0;
 
+  const Shell: any = embedded ? "div" : Card;
+  const shellProps = embedded
+    ? { className: "flex flex-col flex-1 min-h-0" }
+    : {
+        className: "rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden flex flex-col h-full",
+        style: { boxShadow: CARD_SHADOW },
+      };
+
   return (
-    <Card
-      className="rounded-2xl border border-[#7a1f2b]/10 bg-white p-0 overflow-hidden flex flex-col h-full"
-      style={{ boxShadow: CARD_SHADOW }}
-    >
-      <SectionHeader
-        icon={Target}
-        microLabel="Analytics"
-        title="KJSEA Grade Distribution"
-        description={
-          currentAcademicYear
-            ? `Kenyan Achievement Levels — ${currentAcademicYear}`
-            : "Across all assessments"
-        }
-      />
+    <Shell {...shellProps}>
+      {!embedded && (
+        <SectionHeader
+          icon={Target}
+          microLabel="Analytics"
+          title="KJSEA Grade Distribution"
+          description={
+            currentAcademicYear
+              ? `Kenyan Achievement Levels — ${currentAcademicYear}`
+              : "Across all assessments"
+          }
+        />
+      )}
 
       <CardContent className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-2">
         {hasData ? (
@@ -270,6 +279,6 @@ export default function KJSEAGradeDistribution({
           </div>
         )}
       </CardContent>
-    </Card>
+    </Shell>
   );
 }

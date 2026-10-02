@@ -2,18 +2,19 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
+import { Navbar } from "@/Components/Navbar";
 import {
   User, Settings, BookOpen, Users, TrendingUp, FileText, Mail, Phone,
-  Target, Calendar, ChevronLeft, ChevronRight, GraduationCap,
+  Library, Calendar, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import ClassPerformance from "./ClassPerformance";
+import PerformanceAnalytics from "./Performanceanalytics";
 import SettingsModal from "./SettingsModal";
 import TeacherAssignmentsAnnouncements from "./teacher_assignments_announcements";
 import ViewStudents from "./view_students";
 import TeacherMarksEntry from "./TeacherMarksEntry";
 import ClassTimetableViewer from "./ClassTimetableViewer";
-import KJSEAGradeDistribution from "./KJSEAGradeDistribution";
+import TeacherLibrary from "@/Components/Library/TeacherLibrary";
 
 // ---------- Types (UNCHANGED) ----------
 interface Teacher {
@@ -373,7 +374,7 @@ function FeatureCard({
 // ---------- Main Component ----------
 type ActiveTab =
   | "overview" | "assignments" | "students" | "marks"
-  | "timetables" | "performance" | "kjsea";
+  | "timetables" | "performance" | "library";
 
 interface TeacherDashboardProps { handleLogout: () => void; }
 
@@ -438,7 +439,6 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
   // ── UI state ──
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [perfView, setPerfView] = useState<"trend" | "recent">("trend");
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedTimetable, setSelectedTimetable] = useState<{
     className: string; term: number; academicYear: string; data: any;
@@ -480,56 +480,23 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
     );
   }
 
-  const overviewFamily: ActiveTab[] = ["overview", "timetables", "performance", "kjsea"];
+  const overviewFamily: ActiveTab[] = ["overview", "timetables", "performance", "library"];
   const isOverviewFamily = overviewFamily.includes(activeTab);
   const isOverview = activeTab === "overview";
   const isPerformance = activeTab === "performance";
-  const isKjsea = activeTab === "kjsea";
-  // Performance + KJSEA use full-height (no page scroll) layout
-  const noScrollTab = isOverview || isPerformance || isKjsea;
+  // Overview + Performance use full-height (no page scroll) layout
+  const noScrollTab = isOverview || isPerformance;
 
   return (
     <div className="h-[100dvh] sm:h-screen bg-[#fdfbfb] flex flex-col overflow-hidden">
 
-      {/* ── MOBILE HEADER ── */}
-      <header className="sm:hidden shrink-0 z-40"
-        style={{ background: MAROON_GRADIENT, paddingTop: "env(safe-area-inset-top)" }}>
-        <div className="flex items-center justify-between px-4 py-2 gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <GraduationCap className="h-4 w-4 text-white shrink-0" />
-            <span className="text-white font-semibold text-[13px] whitespace-nowrap tracking-tight">
-              Milai School Portal
-            </span>
-          </div>
-          <button onClick={handleLogout} className="text-white/90 hover:text-white text-[13px] font-medium shrink-0">
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {/* ── DESKTOP HEADER ── */}
-      <header className="hidden sm:block shrink-0 z-40" style={{ background: MAROON_GRADIENT }}>
-        <div className="max-w-7xl mx-auto px-6 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center">
-              <GraduationCap className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="text-white font-semibold text-[13px] leading-tight">Milai School Portal</p>
-              <p className="text-white/60 text-[10px] leading-tight">Teacher Dashboard</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-white/80 text-[13px]">
-              {profile.first_name} {profile.last_name}
-            </span>
-            <button onClick={handleLogout}
-              className="text-white/90 hover:text-white text-[13px] font-medium transition-colors">
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* ── NAVBAR ── */}
+      <Navbar
+        showLogout
+        handleLogout={handleLogout}
+        subtitle="Teacher Dashboard"
+        userName={`${profile.first_name} ${profile.last_name}`}
+      />
 
       {/* ── MAIN ── */}
       <main className={`flex-1 min-h-0 ${noScrollTab ? "overflow-hidden" : "overflow-y-auto"}`}>
@@ -657,11 +624,11 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
                 description="View your class schedules"
                 onClick={() => setActiveTab("timetables")} />
               <FeatureCard icon={TrendingUp} title="Performance Analytics"
-                description="Track trends across assessments"
+                description="Trends, recent results and KJSEA grades"
                 onClick={() => setActiveTab("performance")} />
-              <FeatureCard icon={Target} title="KJSEA Grades"
-                description="Grade distribution by term"
-                onClick={() => setActiveTab("kjsea")} />
+              <FeatureCard icon={Library} title="Library"
+                description="Browse materials, upload books and past papers"
+                onClick={() => setActiveTab("library")} />
               <FeatureCard className="hidden sm:flex" icon={FileText}
                 title="Assignments & Announcements"
                 description="Manage assignments and announcements"
@@ -681,36 +648,13 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
           <div className="h-full max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 pb-[calc(72px+env(safe-area-inset-bottom))] sm:pb-6 flex flex-col gap-2 sm:gap-3">
             <div className="shrink-0">
               <BackToOverview onBack={() => setActiveTab("overview")} />
-              <SubViewTitle
-                microLabel="Insights"
-                title="Performance Analytics"
-                description={
-                  currentAcademicYear
-                    ? `Assessment means across your classes — ${currentAcademicYear}`
-                    : "Assessment means across your classes"
-                }
-              />
             </div>
             <div className="flex-1 min-h-0">
-              <ClassPerformance
+              <PerformanceAnalytics
                 trendPoints={trendPoints}
                 trendSeries={trendSeries}
                 loadingTrend={loadingTrend}
                 classPerformanceData={classPerformanceData}
-                perfView={perfView}
-                setPerfView={setPerfView}
-                currentAcademicYear={currentAcademicYear}
-              />
-            </div>
-          </div>
-        ) : isKjsea ? (
-          /* ==================== KJSEA (no-scroll) ==================== */
-          <div className="h-full max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 pb-[calc(72px+env(safe-area-inset-bottom))] sm:pb-6 flex flex-col gap-2 sm:gap-3">
-            <div className="shrink-0">
-              <BackToOverview onBack={() => setActiveTab("overview")} />
-            </div>
-            <div className="flex-1 min-h-0">
-              <KJSEAGradeDistribution
                 termGradeDistributions={termGradeDistributions}
                 currentTerm={currentTerm}
                 currentAcademicYear={currentAcademicYear}
@@ -779,6 +723,16 @@ export default function TeacherDashboard({ handleLogout }: TeacherDashboardProps
               </Card>
             )}
 
+            {activeTab === "library" && (
+              <>
+                <SubViewTitle
+                  microLabel="Resources"
+                  title="Library"
+                  description="Browse learning materials and upload books and past papers for your subjects"
+                />
+                <TeacherLibrary teacherId={profile.id} teacherClasses={teacherClasses} />
+              </>
+            )}
             {activeTab === "assignments" && (
               <>
                 <SubViewTitle
