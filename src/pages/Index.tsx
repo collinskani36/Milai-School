@@ -96,10 +96,6 @@ const Index = () => {
 
         .mob-hero { text-align: center; }
         .mob-icon-ring {
-          width: 60px; height: 60px;
-          border-radius: 50%;
-          background: rgba(122,31,43,0.1);
-          border: 1.5px solid rgba(122,31,43,0.2);
           display: flex; align-items: center; justify-content: center;
           margin: 0 auto 12px;
         }
@@ -234,8 +230,18 @@ const Index = () => {
           flex: 1;
           background: #fdfbfb;
           display: flex; flex-direction: column;
+          justify-content: flex-start;
           padding: 40px 36px;
           gap: 20px;
+        }
+        .desk-brand {
+          display: flex; align-items: center; gap: 12px;
+          margin-bottom: 12px;
+        }
+        .desk-brand img { height: 44px; width: 44px; object-fit: contain; }
+        .desk-brand-name {
+          font-size: 20px; font-weight: 700;
+          color: #3a1b1f; letter-spacing: -0.02em;
         }
         .desk-right-label {
           font-size: 11px; font-weight: 600;
@@ -243,15 +249,14 @@ const Index = () => {
           text-transform: uppercase;
         }
         .desk-card-viewport {
-          flex: 1; position: relative; overflow: hidden;
+          position: relative; overflow: hidden;
         }
         .desk-portal-card {
-          position: absolute; inset: 0;
           background: #fff;
-          border: 0.5px solid rgba(122,31,43,0.15);
+          border: 1px solid #d6d1d1;
           border-radius: 16px;
-          padding: 24px;
-          display: flex; flex-direction: column; gap: 18px;
+          padding: 28px;
+          display: flex; flex-direction: column; gap: 24px;
         }
         .desk-portal-card.slide-out-left  { animation: slideOutLeft  0.28s ease forwards; }
         .desk-portal-card.slide-out-right { animation: slideOutRight 0.28s ease forwards; }
@@ -280,7 +285,7 @@ const Index = () => {
           font-size: 11px; color: #6b4b50;
         }
         .desk-signin-btn {
-          width: 100%; margin-top: auto;
+          width: 100%; margin-top: 4px;
           background: ${MAROON}; color: #fff;
           border: none; border-radius: 12px;
           padding: 14px;
@@ -292,7 +297,7 @@ const Index = () => {
         .desk-signin-btn:hover { background: #6a1a24; }
 
         @media (min-width: 768px) {
-          .mob-body, .mob-footer-wrap { display: none; }
+          .mob-nav, .mob-body, .mob-footer-wrap { display: none; }
           .desk-layout { display: flex; }
           .page { max-height: 100dvh; }
         }
@@ -304,8 +309,10 @@ const Index = () => {
 
       <div className="page">
 
-        {/* ── NAVBAR (shared) ── */}
-        <Navbar />
+        {/* ── NAVBAR (mobile only; desktop uses the brand header in the right panel) ── */}
+        <div className="mob-nav">
+          <Navbar />
+        </div>
 
         {/* ── MOBILE BODY ── */}
         <main className="mob-body">
@@ -313,7 +320,7 @@ const Index = () => {
           {/* Hero */}
           <div className="mob-hero">
             <div className="mob-icon-ring">
-              <img src="/logo.png" alt="Milai School logo" style={{ height: 38, width: 38, objectFit: "contain" }} />
+              <img src="/logo.png" alt="Milai School logo" style={{ height: 52, width: 52, objectFit: "contain" }} />
             </div>
             <h1 className="mob-heading">
               Welcome to <span>Milai School</span>
@@ -376,6 +383,11 @@ const Index = () => {
 
           {/* Right portal panel */}
           <div className="desk-right">
+            <div className="desk-brand">
+              <img src="/logo.png" alt="Milai School logo" />
+              <span className="desk-brand-name">Milai School Portal</span>
+            </div>
+
             <p className="desk-right-label">Sign in to your portal</p>
 
             {/* Toggle */}
