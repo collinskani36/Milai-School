@@ -231,7 +231,7 @@ export default function StudentForgotPassword() {
       <div className="sfp-root">
         <div className={`sfp-card${mounted ? " in" : ""}`}>
 
-          <img className="sfp-logo" src="/logo.png" alt="Milai School" />
+          <img className="sfp-logo" src="/logo.png" alt="Synkani School" />
 
           <h1 className="sfp-title">Reset PIN</h1>
           <p className="sfp-subtitle">Enter your registration number and we'll send a reset link to the guardian's email</p>
@@ -276,7 +276,7 @@ export default function StudentForgotPassword() {
           </p>
         </div>
 
-        <p className="sfp-footer">© 2026 Milai School</p>
+        <p className="sfp-footer">© 2026 Synkani School</p>
       </div>
     </>
   );

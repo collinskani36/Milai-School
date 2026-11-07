@@ -9,7 +9,7 @@ export default function BankDetailsCard() {
 
   const bankDetails = {
     bank: "KCB Bank",
-    accountName: "[Milai School]",
+    accountName: "[Synkani School]",
     accountNumber: "[Account Number]",
     branch: "[Branch Name]",
     swiftCode: "KCABORXXX"

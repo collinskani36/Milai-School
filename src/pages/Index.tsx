@@ -320,10 +320,10 @@ const Index = () => {
           {/* Hero */}
           <div className="mob-hero">
             <div className="mob-icon-ring">
-              <img src="/logo.png" alt="Milai School logo" style={{ height: 52, width: 52, objectFit: "contain" }} />
+              <img src="/logo.png" alt="Synkani School logo" style={{ height: 52, width: 52, objectFit: "contain" }} />
             </div>
             <h1 className="mob-heading">
-              Welcome to <span>Milai School</span>
+              Welcome to <span>Synkani School</span>
             </h1>
             <p className="mob-sub">Your gateway to academic excellence — access courses, track progress, and stay connected</p>
           </div>
@@ -362,7 +362,7 @@ const Index = () => {
           </div>
 
           {/* Footer */}
-          <p className="mob-footer">© 2026 Milai School · Empowering education</p>
+          <p className="mob-footer">© 2026 Synkani School · Empowering education</p>
         </main>
 
         {/* ── DESKTOP ── */}
@@ -378,14 +378,14 @@ const Index = () => {
                 Your gateway to academic excellence — access courses, track progress, and stay connected.
               </p>
             </div>
-            <p className="desk-footer">© 2026 Milai School · All rights reserved</p>
+            <p className="desk-footer">© 2026 Synkani School · All rights reserved</p>
           </div>
 
           {/* Right portal panel */}
           <div className="desk-right">
             <div className="desk-brand">
-              <img src="/logo.png" alt="Milai School logo" />
-              <span className="desk-brand-name">Milai School Portal</span>
+              <img src="/logo.png" alt="Synkani School logo" />
+              <span className="desk-brand-name">Synkani School Portal</span>
             </div>
 
             <p className="desk-right-label">Sign in to your portal</p>

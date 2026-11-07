@@ -213,7 +213,7 @@ export default function TeacherForgotPassword() {
       <div className="tfp-root">
         <div className={`tfp-card${mounted ? " in" : ""}`}>
 
-          <img className="tfp-logo" src="/logo.png" alt="Milai School" />
+          <img className="tfp-logo" src="/logo.png" alt="Synkani School" />
 
           <h1 className="tfp-title">Reset password</h1>
           <p className="tfp-subtitle">Enter your email and we'll send a reset link</p>
@@ -258,7 +258,7 @@ export default function TeacherForgotPassword() {
           </p>
         </div>
 
-        <p className="tfp-footer">© 2026 Milai School</p>
+        <p className="tfp-footer">© 2026 Synkani School</p>
       </div>
     </>
   );

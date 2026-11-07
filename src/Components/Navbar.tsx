@@ -29,12 +29,12 @@ export function Navbar({
           >
             <img
               src="/logo.png"
-              alt="Milai School logo"
+              alt="Synkani School logo"
               className="h-9 w-9 sm:h-10 sm:w-10 object-contain shrink-0"
             />
             <div className="min-w-0">
               <h1 className="text-base sm:text-xl font-bold text-foreground leading-tight truncate">
-                Milai School Portal
+                Synkani School Portal
               </h1>
               {subtitle && (
                 <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">

@@ -541,7 +541,7 @@ export default function AdminDashboard({ handleLogout }: AdminDashboardProps) {
                 <p className="text-[13px] font-semibold text-[#1a0810] leading-tight truncate">
                   {viewLabel[activeView] || 'Dashboard'}
                 </p>
-                <p className="text-[10px] text-gray-400 leading-tight">Milai School</p>
+                <p className="text-[10px] text-gray-400 leading-tight">Synkani School</p>
               </div>
             </div>
             <button

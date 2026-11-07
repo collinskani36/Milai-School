@@ -103,7 +103,7 @@ export default function Sidebar({
             </div>
             <div className="min-w-0">
               <p className="text-white font-semibold text-[13px] leading-tight truncate">
-                Milai School
+                Synkani School
               </p>
               <p className="text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.30)" }}>
                 Admin portal

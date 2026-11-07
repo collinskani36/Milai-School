@@ -235,7 +235,7 @@ export default function TeacherAuth({ onLogin }: TeacherAuthProps) {
       <div className="ta-root">
         <div className={`ta-card${mounted ? " in" : ""}`}>
 
-          <img className="ta-logo" src="/logo.png" alt="Milai School" />
+          <img className="ta-logo" src="/logo.png" alt="Synkani School" />
 
           <h1 className="ta-title">Teacher Portal</h1>
           <p className="ta-subtitle">Sign in to your dashboard</p>
@@ -294,7 +294,7 @@ onKeyDown={(e) => e.key === "Enter" && navigate("/teacher-forgot-password", { re
           </p>
         </div>
 
-        <p className="ta-footer">© 2026 Milai School</p>
+        <p className="ta-footer">© 2026 Synkani School</p>
       </div>
     </>
   );

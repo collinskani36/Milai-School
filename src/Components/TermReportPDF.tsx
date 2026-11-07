@@ -359,7 +359,7 @@ const Header = ({
       </View>
     )}
     <View style={s.headerText}>
-      <Text style={s.schoolName}>Milai School</Text>
+      <Text style={s.schoolName}>Synkani School</Text>
       <Text style={s.reportTitle}>
         End of Term {term} — {year} Academic Report
       </Text>
@@ -810,7 +810,7 @@ const TermReportPDF: React.FC<TermReportPDFProps> = ({
   return (
     <Document
       title={`Term ${term} ${year} Report — ${profile.first_name} ${profile.last_name}`}
-      author="Milai School"
+      author="Synkani School"
       subject="End of Term Report Card"
     >
       {/* ── Page 1: Student info + attendance + summative results ── */}
@@ -841,7 +841,7 @@ const TermReportPDF: React.FC<TermReportPDFProps> = ({
         {/* Footer */}
         <View style={s.footer}>
           <Text style={s.footerText}>
-            Generated: {now} · Milai School CBC Report
+            Generated: {now} · Synkani School CBC Report
           </Text>
           <Text style={s.footerText}>
             Student: {profile.first_name} {profile.last_name} ·{" "}
@@ -870,7 +870,7 @@ const TermReportPDF: React.FC<TermReportPDFProps> = ({
 
         <View style={s.footer}>
           <Text style={s.footerText}>
-            Generated: {now} · Milai School CBC Report
+            Generated: {now} · Synkani School CBC Report
           </Text>
           <Text style={s.footerText}>
             Student: {profile.first_name} {profile.last_name} ·{" "}

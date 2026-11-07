@@ -454,7 +454,7 @@ export default function StudentDashboard({ handleLogout }) {
             <BookOpen className="h-8 w-8 text-white" />
           </div>
           <div className="text-center">
-            <p className="text-white font-semibold text-base tracking-tight">Milai School</p>
+            <p className="text-white font-semibold text-base tracking-tight">Synkani School</p>
             <p className="text-white/50 text-xs mt-1">Loading your dashboard…</p>
           </div>
         </div>
@@ -724,7 +724,7 @@ export default function StudentDashboard({ handleLogout }) {
                   Welcome back, {profile.first_name}
                 </h1>
                 <p className="mt-3 text-sm text-white/55 max-w-lg leading-relaxed">
-                  Here's a snapshot of your academic journey at Milai School.
+                  Here's a snapshot of your academic journey at Synkani School.
                 </p>
 
                 <div className="mt-6 flex flex-wrap gap-2.5">

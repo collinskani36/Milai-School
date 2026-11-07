@@ -260,7 +260,7 @@ export default function StudentAuth({ onLogin }: StudentAuthProps) {
       <div className="sa-root">
         <div className={`sa-card${mounted ? " in" : ""}`}>
 
-          <img className="sa-logo" src="/logo.png" alt="Milai School" />
+          <img className="sa-logo" src="/logo.png" alt="Synkani School" />
 
           <h1 className="sa-title">Student Portal</h1>
           <p className="sa-subtitle">Sign in to access your account</p>
@@ -320,7 +320,7 @@ onKeyDown={(e) => e.key === "Enter" && navigate("/forgot-password", { replace: t
           </p>
         </div>
 
-        <p className="sa-footer">© 2026 Milai School</p>
+        <p className="sa-footer">© 2026 Synkani School</p>
       </div>
     </>
   );

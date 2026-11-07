@@ -230,7 +230,7 @@ const ExamPDF: React.FC<ExamPDFProps> = ({ examRecord, profile, className, logoU
             )}
           </View>
           <View style={styles.schoolInfo}>
-            <Text style={styles.schoolName}>Milai School</Text>
+            <Text style={styles.schoolName}>Synkani School</Text>
             <Text style={styles.schoolTagline}>Academic Excellence Through Innovation</Text>
           </View>
         </View>
@@ -405,7 +405,7 @@ const ExamPDF: React.FC<ExamPDFProps> = ({ examRecord, profile, className, logoU
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <Text>
-            Milai School — Academic Performance Report | System generated. Does not require a signature.
+            Synkani School — Academic Performance Report | System generated. Does not require a signature.
           </Text>
         </View>
         <Text
